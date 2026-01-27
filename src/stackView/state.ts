@@ -1,4 +1,3 @@
-import type { BranchReorderInfo } from '../utils/gitSpice';
 import type { BranchChangeViewModel, BranchRecord, BranchViewModel, DisplayState, TreePosition } from './types';
 
 /** Branch with computed tree position */
@@ -11,25 +10,13 @@ type BranchWithTree = {
  * Builds the display state showing ALL tracked branches (like `gs ll -a`).
  * Branches are organized in a tree structure based on parent-child relationships.
  */
-export function buildDisplayState(
-	branches: BranchRecord[],
-	error?: string,
-	pendingReorder?: BranchReorderInfo,
-): DisplayState {
+export function buildDisplayState(branches: BranchRecord[], error?: string): DisplayState {
 	const branchMap = new Map(branches.map((branch) => [branch.name, branch]));
-
-	// Show all branches, not just the current stack's focus set
-	let ordered = orderStackWithTree(branches, branchMap);
-
-	// Apply pending reorder if it exists
-	if (pendingReorder) {
-		ordered = applyPendingReorderWithTree(ordered, pendingReorder);
-	}
+	const ordered = orderStackWithTree(branches, branchMap);
 
 	return {
 		branches: ordered.map((item) => createBranchViewModel(item.branch, item.tree)),
 		error,
-		pendingReorder,
 	};
 }
 
@@ -126,37 +113,6 @@ function getChildren(
 		.map((link) => branchMap.get(link.name))
 		.filter((child): child is BranchRecord => child !== undefined && branches.includes(child))
 		.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Applies a pending reorder operation to the branches array.
- * This temporarily reorders branches to reflect the visual drag-and-drop
- * before the user confirms or cancels the operation.
- *
- * Note: Tree positions are preserved from the original computation.
- * The reorder is visual only until confirmed.
- */
-function applyPendingReorderWithTree(
-	branches: BranchWithTree[],
-	pendingReorder: BranchReorderInfo,
-): BranchWithTree[] {
-	const reordered = [...branches];
-
-	const branchIndex = reordered.findIndex((item) => item.branch.name === pendingReorder.branchName);
-
-	if (branchIndex === -1) {
-		return branches;
-	}
-
-	const [movedItem] = reordered.splice(branchIndex, 1);
-
-	// Convert SortableJS index to array index (branches displayed in reverse)
-	const actualNewIndex = reordered.length - pendingReorder.newIndex;
-	const clampedIndex = Math.max(0, Math.min(actualNewIndex, reordered.length));
-
-	reordered.splice(clampedIndex, 0, movedItem);
-
-	return reordered;
 }
 
 function createBranchViewModel(branch: BranchRecord, tree: TreePosition): BranchViewModel {

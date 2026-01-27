@@ -32,9 +32,8 @@
  *    - New state fields: extend updateState() and render functions
  */
 
-import type { BranchViewModel, DisplayState, BranchReorderInfo } from './types';
+import type { BranchViewModel, DisplayState } from './types';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
-import Sortable from 'sortablejs';
 
 interface BranchData {
 	current: boolean;
@@ -64,7 +63,6 @@ class StackView {
 	private readonly errorEl: HTMLElement;
 	private readonly emptyEl: HTMLElement;
 	private currentState: DisplayState | null = null;
-	private sortableInstance: Sortable | null = null;
 	private contextMenu: HTMLElement | null = null;
 	private currentContextBranch: string | null = null;
 	private commitContextMenu: HTMLElement | null = null;
@@ -346,12 +344,6 @@ class StackView {
 
 		// Update branch list
 		this.updateBranches(oldState?.branches ?? [], newState.branches);
-
-		// Handle pending reorder state
-		this.updatePendingReorder(newState.pendingReorder);
-
-		// Initialize SortableJS after branches are rendered
-		this.initializeSortable();
 	}
 
 	/**
@@ -432,7 +424,7 @@ class StackView {
 				const child = render(item);
 				wrapper.appendChild(child);
 
-				// Copy the branch name to the wrapper for SortableJS
+				// Copy branch name to wrapper for tree graph positioning
 				if (child.dataset.branch) {
 					wrapper.dataset.branch = child.dataset.branch;
 				}
@@ -814,92 +806,6 @@ class StackView {
 		return maxY + StackView.NODE_RADIUS * 2;
 	}
 
-	/**
-	 * Updates the UI to show or hide confirm/cancel buttons for pending reorder operations.
-	 * When a branch is dragged and dropped, this method creates buttons that allow the user
-	 * to confirm the reorder (execute stack edit) or cancel it (revert to original position).
-	 * 
-	 * @param pendingReorder - The pending reorder operation details, or undefined to clear buttons
-	 */
-	private updatePendingReorder(pendingReorder?: BranchReorderInfo): void {
-		// Validate stackList element exists
-		if (!this.stackList) {
-			console.error('❌ StackList element not found');
-			return;
-		}
-
-		// Remove existing confirm/cancel buttons
-		const existingButtons = this.stackList.querySelectorAll('.reorder-buttons');
-		existingButtons.forEach(button => {
-			if (button && button.parentNode) {
-				button.remove();
-			}
-		});
-
-		if (!pendingReorder) {
-			return;
-		}
-
-		// Validate pendingReorder object structure
-		if (typeof pendingReorder.branchName !== 'string' || pendingReorder.branchName.trim() === '') {
-			console.error('❌ Invalid branch name in pendingReorder:', pendingReorder.branchName);
-			return;
-		}
-
-		if (typeof pendingReorder.oldIndex !== 'number' || typeof pendingReorder.newIndex !== 'number') {
-			console.error('❌ Invalid indices in pendingReorder:', { oldIndex: pendingReorder.oldIndex, newIndex: pendingReorder.newIndex });
-			return;
-		}
-
-		if (pendingReorder.oldIndex < 0 || pendingReorder.newIndex < 0) {
-			console.error('❌ Negative indices in pendingReorder:', { oldIndex: pendingReorder.oldIndex, newIndex: pendingReorder.newIndex });
-			return;
-		}
-
-		// Find the branch element that was moved
-		const branchElement = this.stackList.querySelector(`[data-branch="${pendingReorder.branchName}"]`) as HTMLElement;
-
-		if (!branchElement) {
-			console.error('❌ Branch element not found for:', pendingReorder.branchName);
-			return;
-		}
-
-		// Validate branch element has a parent
-		if (!branchElement.parentNode) {
-			console.error('❌ Branch element has no parent node');
-			return;
-		}
-
-		console.log('🔄 Creating reorder buttons for branch:', pendingReorder.branchName);
-
-		// Create confirm/cancel buttons
-		const buttonsContainer = document.createElement('div');
-		buttonsContainer.className = 'reorder-buttons';
-
-		const confirmButton = document.createElement('button');
-		confirmButton.type = 'button';
-		confirmButton.className = 'reorder-confirm';
-		confirmButton.textContent = '✓ Confirm';
-		confirmButton.addEventListener('click', () => {
-			console.log('🔄 Confirm button clicked for:', pendingReorder.branchName);
-			this.vscode.postMessage({ type: 'confirmReorder', branchName: pendingReorder.branchName });
-		});
-
-		const cancelButton = document.createElement('button');
-		cancelButton.type = 'button';
-		cancelButton.className = 'reorder-cancel';
-		cancelButton.textContent = '✗ Cancel';
-		cancelButton.addEventListener('click', () => {
-			console.log('🔄 Cancel button clicked for:', pendingReorder.branchName);
-			this.vscode.postMessage({ type: 'cancelReorder', branchName: pendingReorder.branchName });
-		});
-
-		buttonsContainer.appendChild(confirmButton);
-		buttonsContainer.appendChild(cancelButton);
-
-		// Insert buttons after the moved branch
-		branchElement.parentNode.insertBefore(buttonsContainer, branchElement.nextSibling);
-	}
 
 	private renderBranch(branch: BranchViewModel): HTMLElement {
 		const card = document.createElement('article');
@@ -917,7 +823,6 @@ class StackView {
 		if (branch.restack) {
 			card.classList.add('needs-restack');
 		}
-		card.draggable = true;
 
 		// Add right-click context menu
 		card.addEventListener('contextmenu', (event: MouseEvent) => {
@@ -1346,101 +1251,6 @@ class StackView {
 		return span;
 	}
 
-	private clearDropTargets(): void {
-		this.stackList.querySelectorAll('.drop-target').forEach((el) => {
-			el.classList.remove('drop-target');
-		});
-	}
-
-	/**
-	 * Initializes SortableJS for drag-and-drop functionality on the branch list.
-	 * Destroys any existing instance before creating a new one.
-	 */
-	private initializeSortable(): void {
-		// Validate stackList element exists
-		if (!this.stackList) {
-			console.error('❌ StackList element not found for SortableJS initialization');
-			return;
-		}
-
-		// Destroy existing instance if it exists
-		if (this.sortableInstance) {
-			try {
-				this.sortableInstance.destroy();
-			} catch (error) {
-				console.warn('⚠️ Error destroying existing SortableJS instance:', error);
-			}
-			this.sortableInstance = null;
-		}
-
-		// Only initialize if we have branches
-		if (this.stackList.children.length === 0) {
-			console.log('🔄 No branches to make sortable, skipping SortableJS initialization');
-			return;
-		}
-
-		try {
-			this.sortableInstance = new Sortable(this.stackList, {
-				animation: 0,
-				ghostClass: 'sortable-ghost',
-				chosenClass: 'sortable-chosen',
-				dragClass: 'sortable-drag',
-				forceFallback: true,
-
-				onStart: () => {
-					this.stackList.classList.add('is-dragging');
-				},
-
-				onMove: (evt) => {
-					this.clearDropTargets();
-					const related = evt.related as HTMLElement;
-					if (related && related.classList.contains('stack-item')) {
-						related.classList.add('drop-target');
-					}
-					return true;
-				},
-
-				onUnchoose: () => {
-					this.clearDropTargets();
-					this.stackList.classList.remove('is-dragging');
-				},
-
-				onEnd: (evt) => {
-					this.clearDropTargets();
-					this.stackList.classList.remove('is-dragging');
-
-					if (!evt || typeof evt.oldIndex !== 'number' || typeof evt.newIndex !== 'number') {
-						return;
-					}
-
-					if (evt.oldIndex === evt.newIndex) {
-						return;
-					}
-
-					if (evt.oldIndex < 0 || evt.newIndex < 0) {
-						return;
-					}
-
-					const branchName = (evt.item as HTMLElement)?.dataset?.branch;
-					if (!branchName || branchName.trim() === '') {
-						return;
-					}
-
-					this.vscode.postMessage({
-						type: 'branchReorder',
-						oldIndex: evt.oldIndex,
-						newIndex: evt.newIndex,
-						branchName: branchName
-					});
-				}
-			});
-
-			console.log('🔄 SortableJS initialized successfully');
-		} catch (error) {
-			console.error('❌ Failed to initialize SortableJS:', error);
-			this.sortableInstance = null;
-		}
-	}
 }
 
 // Initialize the stack view when the DOM is ready

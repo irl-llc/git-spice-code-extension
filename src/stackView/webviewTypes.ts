@@ -7,10 +7,6 @@ export type WebviewMessage =
 	| { type: 'openChange'; url: string }
 	| { type: 'openCommit'; sha: string }
 	| { type: 'openCommitDiff'; sha: string }
-	| { type: 'branchDrop'; source: string; target: string }
-	| { type: 'branchReorder'; oldIndex: number; newIndex: number; branchName: string }
-	| { type: 'confirmReorder'; branchName: string }
-	| { type: 'cancelReorder'; branchName: string }
 	| { type: 'branchUntrack'; branchName: string }
 	| { type: 'branchCheckout'; branchName: string }
 	| { type: 'branchFold'; branchName: string }
