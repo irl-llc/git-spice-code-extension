@@ -1,153 +1,173 @@
 import type { BranchReorderInfo } from '../utils/gitSpice';
-import type { BranchChangeViewModel, BranchRecord, BranchViewModel, DisplayState } from './types';
+import type { BranchChangeViewModel, BranchRecord, BranchViewModel, DisplayState, TreePosition } from './types';
 
+/** Branch with computed tree position */
+type BranchWithTree = {
+	branch: BranchRecord;
+	tree: TreePosition;
+};
+
+/**
+ * Builds the display state showing ALL tracked branches (like `gs ll -a`).
+ * Branches are organized in a tree structure based on parent-child relationships.
+ */
 export function buildDisplayState(
-	branches: BranchRecord[], 
-	error?: string, 
+	branches: BranchRecord[],
+	error?: string,
 	pendingReorder?: BranchReorderInfo,
 ): DisplayState {
 	const branchMap = new Map(branches.map((branch) => [branch.name, branch]));
-	const current = branches.find((branch) => branch.current);
-	const stackBranches = current
-		? Array.from(computeFocusSet(current, branchMap))
-			.map((name) => branchMap.get(name))
-			.filter((branch): branch is BranchRecord => branch !== undefined)
-		: [];
 
-	let ordered = orderStack(stackBranches, branchMap);
+	// Show all branches, not just the current stack's focus set
+	let ordered = orderStackWithTree(branches, branchMap);
 
 	// Apply pending reorder if it exists
 	if (pendingReorder) {
-		ordered = applyPendingReorder(ordered, pendingReorder);
+		ordered = applyPendingReorderWithTree(ordered, pendingReorder);
 	}
 
 	return {
-		branches: ordered.map((branch) => createBranchViewModel(branch)),
+		branches: ordered.map((item) => createBranchViewModel(item.branch, item.tree)),
 		error,
 		pendingReorder,
 	};
 }
 
-function computeFocusSet(current: BranchRecord, branchMap: Map<string, BranchRecord>): Set<string> {
-	const set = new Set<string>();
-	let node: BranchRecord | undefined = current;
+/** Context passed during tree traversal */
+type TraversalContext = {
+	depth: number;
+	ancestorIsLast: boolean[];
+	siblingIndex: number;
+	siblingCount: number;
+	nextLane: { value: number };
+	parentLane: number;
+};
 
-	while (node) {
-		if (set.has(node.name)) {
-			break;
-		}
-		set.add(node.name);
-		const downName = node.down?.name;
-		if (!downName) {
-			break;
-		}
-		node = branchMap.get(downName);
-	}
-
-	const queue: string[] = [current.name];
-	while (queue.length > 0) {
-		const name = queue.shift()!;
-		const branch = branchMap.get(name);
-		if (!branch) {
-			continue;
-		}
-
-		for (const link of branch.ups ?? []) {
-			const child = branchMap.get(link.name);
-			if (!child) {
-				continue;
-			}
-			if (!set.has(child.name)) {
-				set.add(child.name);
-				queue.push(child.name);
-			}
-		}
-	}
-
-	return set;
-}
-
-function orderStack(branches: BranchRecord[], branchMap: Map<string, BranchRecord>): BranchRecord[] {
-	const ordered: BranchRecord[] = [];
+/**
+ * Orders branches using post-order traversal to match `gs ll -a` output.
+ * Children appear before (above) their parents, with first sibling's subtree before second's.
+ * Lane compaction: first child inherits parent's lane, additional children fork to new lanes.
+ */
+function orderStackWithTree(
+	branches: BranchRecord[],
+	branchMap: Map<string, BranchRecord>,
+): BranchWithTree[] {
+	const result: BranchWithTree[] = [];
 	const visited = new Set<string>();
+	const laneCounter = { value: 0 };
 
 	const roots = branches
 		.filter((branch) => !branch.down || !branchMap.has(branch.down.name))
 		.sort((a, b) => a.name.localeCompare(b.name));
 
-	const queue: BranchRecord[] = roots.length > 0 ? roots : branches;
+	const startingBranches = roots.length > 0 ? roots : branches;
 
-	for (const branch of queue) {
-		traverse(branch);
+	for (let i = 0; i < startingBranches.length; i++) {
+		const rootLane = laneCounter.value++;
+		postOrderTraverse(startingBranches[i], {
+			depth: 0,
+			ancestorIsLast: [],
+			siblingIndex: i,
+			siblingCount: startingBranches.length,
+			nextLane: laneCounter,
+			parentLane: rootLane,
+		});
 	}
 
-	function traverse(branch: BranchRecord): void {
+	return result;
+
+	function postOrderTraverse(branch: BranchRecord, ctx: TraversalContext): void {
 		if (visited.has(branch.name)) {
 			return;
 		}
 		visited.add(branch.name);
-		ordered.push(branch);
 
-		const children = (branch.ups ?? [])
-			.map((link) => branchMap.get(link.name))
-			.filter((child): child is BranchRecord => child !== undefined && branches.includes(child))
-			.sort((a, b) => a.name.localeCompare(b.name));
+		const children = getChildren(branch, branchMap, branches);
+		const isLastChild = ctx.siblingIndex === ctx.siblingCount - 1;
 
-		for (const child of children) {
-			traverse(child);
+		// Lane compaction: first child (index 0) inherits parent lane, others fork
+		const lane = ctx.siblingIndex === 0 ? ctx.parentLane : ctx.nextLane.value++;
+
+		// Post-order: visit children FIRST, then add this node
+		for (let i = 0; i < children.length; i++) {
+			postOrderTraverse(children[i], {
+				depth: ctx.depth + 1,
+				ancestorIsLast: [...ctx.ancestorIsLast, isLastChild],
+				siblingIndex: i,
+				siblingCount: children.length,
+				nextLane: ctx.nextLane,
+				parentLane: lane,
+			});
 		}
-	}
 
-	return ordered;
+		// Add node AFTER children (post-order)
+		result.push({
+			branch,
+			tree: {
+				depth: ctx.depth,
+				isLastChild,
+				ancestorIsLast: [...ctx.ancestorIsLast],
+				parentName: branch.down?.name,
+				siblingIndex: ctx.siblingIndex,
+				siblingCount: ctx.siblingCount,
+				lane,
+			},
+		});
+	}
+}
+
+/** Gets sorted children of a branch that are in the current branch set */
+function getChildren(
+	branch: BranchRecord,
+	branchMap: Map<string, BranchRecord>,
+	branches: BranchRecord[],
+): BranchRecord[] {
+	return (branch.ups ?? [])
+		.map((link) => branchMap.get(link.name))
+		.filter((child): child is BranchRecord => child !== undefined && branches.includes(child))
+		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
  * Applies a pending reorder operation to the branches array.
  * This temporarily reorders branches to reflect the visual drag-and-drop
  * before the user confirms or cancels the operation.
- * 
- * @param branches - The current ordered branches array
- * @param pendingReorder - The reorder operation details from SortableJS
- * @returns A new array with the branch moved to its new position
+ *
+ * Note: Tree positions are preserved from the original computation.
+ * The reorder is visual only until confirmed.
  */
-function applyPendingReorder(
-	branches: BranchRecord[], 
+function applyPendingReorderWithTree(
+	branches: BranchWithTree[],
 	pendingReorder: BranchReorderInfo,
-): BranchRecord[] {
+): BranchWithTree[] {
 	const reordered = [...branches];
-	
-	// Find the branch that was moved
-	const branchIndex = reordered.findIndex(branch => branch.name === pendingReorder.branchName);
-	
+
+	const branchIndex = reordered.findIndex((item) => item.branch.name === pendingReorder.branchName);
+
 	if (branchIndex === -1) {
-		return branches; // Branch not found, return original order
+		return branches;
 	}
-	
-	// Remove the branch from its current position
-	const [movedBranch] = reordered.splice(branchIndex, 1);
-	
-	// Convert SortableJS index to array index
-	// SortableJS indices are 0-based and refer to the DOM order (top to bottom)
-	// Since the webview displays branches in reverse order (bottom to top),
-	// we need to convert the visual position to the array position
+
+	const [movedItem] = reordered.splice(branchIndex, 1);
+
+	// Convert SortableJS index to array index (branches displayed in reverse)
 	const actualNewIndex = reordered.length - pendingReorder.newIndex;
-	
-	// Ensure the index is within valid bounds
 	const clampedIndex = Math.max(0, Math.min(actualNewIndex, reordered.length));
-	
-	// Insert the branch at its new position
-	reordered.splice(clampedIndex, 0, movedBranch);
-	
+
+	reordered.splice(clampedIndex, 0, movedItem);
+
 	return reordered;
 }
 
-function createBranchViewModel(branch: BranchRecord): BranchViewModel {
-	const restack = branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
+function createBranchViewModel(branch: BranchRecord, tree: TreePosition): BranchViewModel {
+	const restack =
+		branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
 
 	const model: BranchViewModel = {
 		name: branch.name,
 		current: branch.current === true,
 		restack,
+		tree,
 	};
 
 	if (branch.change) {
