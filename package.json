@@ -56,7 +56,8 @@
       },
       {
         "command": "git-spice.stackSubmit",
-        "title": "Git Spice: Submit Current Stack"
+        "title": "Submit Stack",
+        "icon": "$(cloud-upload)"
       }
     ],
     "keybindings": [
@@ -94,6 +95,11 @@
           "command": "git-spice.syncRepo",
           "when": "view == gitSpice.branches",
           "group": "navigation@3"
+        },
+        {
+          "command": "git-spice.stackSubmit",
+          "when": "view == gitSpice.branches",
+          "group": "navigation@4"
         }
       ]
     }

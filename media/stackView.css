@@ -270,6 +270,25 @@ button {
   text-decoration: underline;
 }
 
+.branch-submit-btn {
+  border: none;
+  background: transparent;
+  color: var(--vscode-icon-foreground);
+  cursor: pointer;
+  padding: 0.1rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.branch-submit-btn:hover {
+  opacity: 1;
+  color: var(--vscode-textLink-foreground);
+}
+
 .branch-toggle {
   border: none;
   background: transparent;

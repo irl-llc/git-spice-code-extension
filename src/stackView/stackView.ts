@@ -1178,6 +1178,18 @@ class StackView {
 			tags.appendChild(this.createTag('Restack', 'warning'));
 		}
 
+		// Submit button (submits this branch and ancestors)
+		const submitBtn = document.createElement('button');
+		submitBtn.type = 'button';
+		submitBtn.className = 'branch-submit-btn';
+		submitBtn.title = branch.change ? 'Submit branch and ancestors' : 'Create PR for branch and ancestors';
+		submitBtn.innerHTML = '<i class="codicon codicon-cloud-upload"></i>';
+		submitBtn.addEventListener('click', (event: Event) => {
+			event.stopPropagation();
+			this.vscode.postMessage({ type: 'branchSubmit', branchName: branch.name });
+		});
+		tags.appendChild(submitBtn);
+
 		if (branch.change) {
 			const button = document.createElement('button');
 			button.type = 'button';
