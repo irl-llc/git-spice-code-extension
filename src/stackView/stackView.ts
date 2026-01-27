@@ -43,6 +43,10 @@ interface BranchData {
 	hasChange: boolean;
 	changeId?: string;
 	changeStatus?: string;
+	treeDepth: number;
+	treeIsLastChild: boolean;
+	treeAncestorIsLast: string;
+	treeLane: number;
 }
 
 interface DiffListConfig<T> {
@@ -123,6 +127,7 @@ class StackView {
 			{ label: 'Squash', action: 'branchSquash', icon: 'codicon-fold-down' },
 			{ label: 'Edit', action: 'branchEdit', icon: 'codicon-edit', requiresCurrent: true },
 			{ label: 'Rename', action: 'branchRename', icon: 'codicon-tag', requiresPrompt: true },
+			{ label: 'Move onto...', action: 'branchMovePrompt', icon: 'codicon-move', requiresPrompt: true },
 			{ label: 'Restack', action: 'branchRestack', icon: 'codicon-refresh', requiresRestack: true },
 			{ label: 'Submit', action: 'branchSubmit', icon: 'codicon-git-pull-request' },
 		];
@@ -253,6 +258,12 @@ class StackView {
 			// Send message to extension to show VSCode input box
 			this.vscode.postMessage({
 				type: 'branchRenamePrompt',
+				branchName: this.currentContextBranch
+			});
+		} else if (action === 'branchMovePrompt') {
+			// Send message to extension to show branch picker
+			this.vscode.postMessage({
+				type: 'branchMovePrompt',
 				branchName: this.currentContextBranch
 			});
 		}
@@ -488,11 +499,8 @@ class StackView {
 
 		this.emptyEl.classList.add('hidden');
 
-		// Reverse to show in correct stack order (top to bottom)
-		const reversedNew = [...newBranches].reverse();
-		const reversedOld = [...oldBranches].reverse();
-
-		this.diffList(this.stackList, reversedOld, reversedNew, {
+		// Post-order traversal already gives correct top-to-bottom order (no reverse needed)
+		this.diffList(this.stackList, oldBranches, newBranches, {
 			getKey: (branch) => branch.name,
 			render: (branch) => this.renderBranch(branch),
 			update: (card, branch) => {
@@ -502,6 +510,308 @@ class StackView {
 			itemSelector: '.stack-item',
 			itemClass: 'stack-item',
 		});
+
+		// Update tree connections on stack-item wrappers
+		this.updateTreeConnections(newBranches);
+	}
+
+	// Match VSCode's scmHistory.ts dimensions
+	private static readonly LANE_WIDTH = 11; // SWIMLANE_WIDTH
+	private static readonly NODE_RADIUS = 4; // CIRCLE_RADIUS for non-current branches
+	private static readonly NODE_RADIUS_CURRENT = 5; // Larger radius for current branch
+	private static readonly NODE_STROKE = 2; // CIRCLE_STROKE_WIDTH
+	private static readonly CURVE_RADIUS = 5; // SWIMLANE_CURVE_RADIUS
+	private static readonly NODE_GAP = 7; // Gap between line endpoints and node edge
+	// Compensate for item-enter animation: items start at translateY(-8px)
+	private static readonly ANIMATION_OFFSET = 8;
+
+	/**
+	 * Draws the complete tree graph in SVG (both paths and nodes).
+	 * Uses lane assignments to create a multi-column graph showing branch divergence.
+	 */
+	private updateTreeConnections(branches: BranchViewModel[]): void {
+		const maxLane = this.computeMaxLane(branches);
+		this.updateGraphWidth(maxLane);
+		this.removeOldDomTreeNodes();
+		requestAnimationFrame(() => this.drawTreeSvg(branches));
+	}
+
+	private computeMaxLane(branches: BranchViewModel[]): number {
+		return branches.reduce((max, b) => Math.max(max, b.tree.lane), 0);
+	}
+
+	private updateGraphWidth(maxLane: number): void {
+		// VSCode: width accommodates all lanes plus padding
+		const width = StackView.LANE_WIDTH * (maxLane + 1) + StackView.NODE_RADIUS;
+		this.stackList.style.setProperty('--tree-graph-width', `${width}px`);
+	}
+
+	/**
+	 * Get X position for a lane. VSCode uses: SWIMLANE_WIDTH * (index + 1)
+	 * This centers nodes within their lane column.
+	 */
+	private getLaneX(lane: number): number {
+		return StackView.LANE_WIDTH * (lane + 1);
+	}
+
+	/** Removes legacy DOM-based tree nodes (now drawn in SVG). */
+	private removeOldDomTreeNodes(): void {
+		this.stackList.querySelectorAll('.tree-node').forEach((node) => node.remove());
+	}
+
+	private drawTreeSvg(branches: BranchViewModel[]): void {
+		this.removeExistingSvg();
+
+		const branchMap = new Map(branches.map((b) => [b.name, b]));
+		const nodePositions = this.collectNodePositions(branches);
+
+		if (nodePositions.size === 0) return;
+
+		const paths = this.buildSvgPaths(branches, branchMap, nodePositions);
+		const svg = this.createTreeSvgElement(branches, nodePositions, paths);
+		this.stackList.insertBefore(svg, this.stackList.firstChild);
+	}
+
+	private removeExistingSvg(): void {
+		const existingSvg = this.stackList.querySelector('.tree-svg');
+		if (existingSvg) existingSvg.remove();
+	}
+
+	/**
+	 * Collects node positions by finding the branch name element.
+	 * This ensures nodes align precisely with the branch name text.
+	 */
+	private collectNodePositions(branches: BranchViewModel[]): Map<string, { x: number; y: number }> {
+		const positions = new Map<string, { x: number; y: number }>();
+		const listRect = this.stackList.getBoundingClientRect();
+		const branchLanes = new Map(branches.map((b) => [b.name, b.tree.lane]));
+
+		this.stackList.querySelectorAll('.stack-item').forEach((item) => {
+			const wrapper = item as HTMLElement;
+			const branchName = wrapper.dataset.branch;
+			if (!branchName) return;
+
+			const lane = branchLanes.get(branchName);
+			if (lane === undefined) return;
+
+			// Find the branch name span for precise Y alignment, fall back to header or wrapper
+			const nameEl = wrapper.querySelector('.branch-name');
+			const headerEl = wrapper.querySelector('.branch-header');
+			const targetEl = nameEl ?? headerEl ?? wrapper;
+			const targetRect = targetEl.getBoundingClientRect();
+			// Add ANIMATION_OFFSET to compensate for item-enter animation (translateY(-8px) at start)
+			const y = targetRect.top + targetRect.height / 2 - listRect.top + StackView.ANIMATION_OFFSET;
+			const x = this.getLaneX(lane);
+
+			positions.set(branchName, { x, y });
+		});
+
+		return positions;
+	}
+
+	private createTreeSvgElement(
+		branches: BranchViewModel[],
+		nodePositions: Map<string, { x: number; y: number }>,
+		paths: Array<{ d: string; restack: boolean }>,
+	): SVGSVGElement {
+		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+		svg.classList.add('tree-svg');
+
+		const colors = this.getTreeColors();
+
+		// Draw paths first (behind nodes)
+		this.appendPaths(svg, paths, colors);
+
+		// Draw nodes on top
+		this.appendNodes(svg, branches, nodePositions, colors);
+
+		this.setSvgDimensions(svg, branches, nodePositions);
+		return svg;
+	}
+
+	private getTreeColors(): { line: string; restack: string; node: string; nodeCurrent: string; bg: string } {
+		const styles = getComputedStyle(document.documentElement);
+		return {
+			line: styles.getPropertyValue('--tree-line-color').trim() || '#888888',
+			restack: styles.getPropertyValue('--tree-line-restack-color').trim() || '#cca700',
+			node: styles.getPropertyValue('--tree-node-color').trim() || '#888888',
+			nodeCurrent: styles.getPropertyValue('--tree-node-current-color').trim() || '#3794ff',
+			bg: styles.getPropertyValue('--vscode-editor-background').trim() || '#1e1e1e',
+		};
+	}
+
+	private appendPaths(
+		svg: SVGSVGElement,
+		paths: Array<{ d: string; restack: boolean }>,
+		colors: { line: string; restack: string },
+	): void {
+		paths.forEach(({ d, restack }) => {
+			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+			path.setAttribute('d', d);
+			path.setAttribute('stroke', restack ? colors.restack : colors.line);
+			path.setAttribute('stroke-width', '1.5');
+			path.setAttribute('fill', 'none');
+			path.setAttribute('stroke-linecap', 'round');
+			path.setAttribute('stroke-linejoin', 'round');
+
+			if (restack) {
+				path.setAttribute('stroke-dasharray', '4 2');
+			}
+
+			svg.appendChild(path);
+		});
+	}
+
+	private appendNodes(
+		svg: SVGSVGElement,
+		branches: BranchViewModel[],
+		nodePositions: Map<string, { x: number; y: number }>,
+		colors: { node: string; nodeCurrent: string; bg: string; restack: string },
+	): void {
+		const branchMap = new Map(branches.map((b) => [b.name, b]));
+
+		nodePositions.forEach(({ x, y }, branchName) => {
+			const branch = branchMap.get(branchName);
+			const isCurrent = branch?.current ?? false;
+			const needsRestack = branch?.restack ?? false;
+			const circle = this.createNodeCircle(x, y, isCurrent, needsRestack, colors);
+			svg.appendChild(circle);
+		});
+	}
+
+	/**
+	 * Creates an SVG circle for a branch node.
+	 * - Current branch: hollow circle with solid stroke
+	 * - Needs restack: hollow circle with dashed stroke (warning color)
+	 * - Normal: filled circle
+	 */
+	private createNodeCircle(
+		x: number,
+		y: number,
+		isCurrent: boolean,
+		needsRestack: boolean,
+		colors: { node: string; nodeCurrent: string; bg: string; restack: string },
+	): SVGCircleElement {
+		const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+		circle.setAttribute('cx', String(x));
+		circle.setAttribute('cy', String(y));
+
+		if (needsRestack) {
+			// Hollow circle with dashed stroke (warning style)
+			circle.setAttribute('r', String(StackView.NODE_RADIUS_CURRENT));
+			circle.setAttribute('fill', colors.bg);
+			circle.setAttribute('stroke', colors.restack);
+			circle.setAttribute('stroke-width', String(StackView.NODE_STROKE));
+			circle.setAttribute('stroke-dasharray', '2 2');
+		} else if (isCurrent) {
+			// Hollow circle with solid stroke (current branch indicator)
+			circle.setAttribute('r', String(StackView.NODE_RADIUS_CURRENT));
+			circle.setAttribute('fill', colors.bg);
+			circle.setAttribute('stroke', colors.nodeCurrent);
+			circle.setAttribute('stroke-width', String(StackView.NODE_STROKE));
+		} else {
+			// Filled circle (normal branch)
+			circle.setAttribute('r', String(StackView.NODE_RADIUS));
+			circle.setAttribute('fill', colors.node);
+		}
+
+		return circle;
+	}
+
+	private setSvgDimensions(
+		svg: SVGSVGElement,
+		branches: BranchViewModel[],
+		nodePositions: Map<string, { x: number; y: number }>,
+	): void {
+		const maxY = this.computeSvgHeight(nodePositions);
+		const svgWidth = (this.computeMaxLane(branches) + 1) * StackView.LANE_WIDTH + StackView.NODE_RADIUS;
+		svg.setAttribute('width', String(svgWidth));
+		svg.setAttribute('height', String(maxY));
+		svg.style.width = `${svgWidth}px`;
+		svg.style.height = `${maxY}px`;
+	}
+
+	/** Builds SVG path data for parent-child connections. */
+	private buildSvgPaths(
+		branches: BranchViewModel[],
+		branchMap: Map<string, BranchViewModel>,
+		nodePositions: Map<string, { x: number; y: number }>,
+	): Array<{ d: string; restack: boolean }> {
+		const paths: Array<{ d: string; restack: boolean }> = [];
+
+		for (const branch of branches) {
+			if (!branch.tree.parentName) continue;
+
+			const parent = branchMap.get(branch.tree.parentName);
+			if (!parent) continue;
+
+			const childPos = nodePositions.get(branch.name);
+			const parentPos = nodePositions.get(branch.tree.parentName);
+			if (!childPos || !parentPos) continue;
+
+			const d = this.createRoundedPath(parentPos.x, parentPos.y, childPos.x, childPos.y);
+			paths.push({ d, restack: branch.restack });
+		}
+
+		return paths;
+	}
+
+	/**
+	 * Creates SVG path from parent to child using "smooth exit" pattern.
+	 * Matches VSCode's scmHistory.ts arc drawing approach.
+	 *
+	 * Paths include gaps at node boundaries so lines don't overlap the
+	 * circular nodes - creating the "halo" effect seen in VSCode.
+	 */
+	private createRoundedPath(parentX: number, parentY: number, childX: number, childY: number): string {
+		const r = StackView.CURVE_RADIUS;
+		const gap = StackView.NODE_GAP;
+
+		// Same lane: straight vertical line with gaps at both ends
+		if (parentX === childX) {
+			// Parent is at larger Y (below), child is at smaller Y (above)
+			const startY = parentY - gap; // Above parent's top edge
+			const endY = childY + gap; // Below child's bottom edge
+			return `M ${parentX} ${startY} L ${childX} ${endY}`;
+		}
+
+		// Different lanes: horizontal exit → arc → vertical to child
+		const goingRight = childX > parentX;
+
+		// Start with gap from parent's edge (horizontal exit)
+		const startX = goingRight ? parentX + gap : parentX - gap;
+
+		// End with gap from child's edge (vertical approach from below)
+		const endY = childY + gap;
+
+		// Clamp curve radius to available space
+		const dx = Math.abs(childX - startX);
+		const dy = Math.abs(parentY - endY);
+		const effectiveR = Math.min(r, dx, dy);
+
+		// SVG arc sweep: 0=counter-clockwise (going right), 1=clockwise (going left)
+		const sweep = goingRight ? 0 : 1;
+
+		// Horizontal line ends at curve start
+		const hLineEndX = goingRight ? childX - effectiveR : childX + effectiveR;
+
+		// Arc ends at child's X, effectiveR above parent's Y
+		const arcEndY = parentY - effectiveR;
+
+		return [
+			`M ${startX} ${parentY}`,
+			`L ${hLineEndX} ${parentY}`,
+			`A ${effectiveR} ${effectiveR} 0 0 ${sweep} ${childX} ${arcEndY}`,
+			`L ${childX} ${endY}`,
+		].join(' ');
+	}
+
+	private computeSvgHeight(nodePositions: Map<string, { x: number; y: number }>): number {
+		let maxY = 0;
+		nodePositions.forEach(({ y }) => {
+			if (y > maxY) maxY = y;
+		});
+		return maxY + StackView.NODE_RADIUS * 2;
 	}
 
 	/**
@@ -596,6 +906,10 @@ class StackView {
 		card.className = 'branch-card';
 		card.dataset.content = 'true';
 		card.dataset.branch = branch.name;
+		card.dataset.depth = String(branch.tree.depth);
+		if (branch.tree.parentName) {
+			card.dataset.parentBranch = branch.tree.parentName;
+		}
 
 		if (branch.current) {
 			card.classList.add('is-current');
@@ -618,22 +932,82 @@ class StackView {
 			hasChange: Boolean(branch.change),
 			changeId: branch.change?.id,
 			changeStatus: branch.change?.status,
+			treeDepth: branch.tree.depth,
+			treeIsLastChild: branch.tree.isLastChild,
+			treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
+			treeLane: branch.tree.lane,
 		} as BranchData;
 
+		// Tree connectors (left column)
+		const connectors = this.renderTreeConnectors(branch);
+		card.appendChild(connectors);
+
+		// Content wrapper (right column)
+		const content = document.createElement('div');
+		content.className = 'branch-content';
+
 		const header = this.renderBranchHeader(branch, card);
-		card.appendChild(header);
+		content.appendChild(header);
 
 		if (branch.change?.status) {
 			const meta = this.renderBranchMeta(branch);
-			card.appendChild(meta);
+			content.appendChild(meta);
 		}
 
 		if (branch.commits && branch.commits.length > 0) {
 			const commitsContainer = this.renderCommitsContainer(branch, card);
-			card.appendChild(commitsContainer);
+			content.appendChild(commitsContainer);
 		}
 
+		card.appendChild(content);
+
 		return card;
+	}
+
+	/**
+	 * Renders tree connector lines based on branch position in hierarchy.
+	 */
+	private renderTreeConnectors(branch: BranchViewModel): HTMLElement {
+		const container = document.createElement('div');
+		container.className = 'tree-connectors';
+
+		const { depth, isLastChild, ancestorIsLast } = branch.tree;
+
+		// Render pass-through lines for each ancestor level
+		for (let i = 0; i < depth; i++) {
+			const segment = document.createElement('div');
+			segment.className = 'tree-segment';
+
+			// Draw vertical line if ancestor at this level has more siblings below
+			const isAncestorLast = ancestorIsLast[i] ?? false;
+			if (!isAncestorLast) {
+				segment.classList.add('has-line');
+			}
+
+			container.appendChild(segment);
+		}
+
+		// Render connector segment to this node (if not root)
+		if (depth > 0) {
+			const connector = document.createElement('div');
+			connector.className = 'tree-segment connector has-line';
+
+			if (isLastChild) {
+				connector.classList.add('last-child');
+			}
+
+			container.appendChild(connector);
+		}
+
+		// Branch node dot
+		const dot = document.createElement('div');
+		dot.className = 'tree-node';
+		if (branch.current) {
+			dot.classList.add('current');
+		}
+		container.appendChild(dot);
+
+		return container;
 	}
 
 	private updateBranch(card: HTMLElement, branch: BranchViewModel): void {
@@ -643,6 +1017,14 @@ class StackView {
 		card.classList.toggle('is-current', Boolean(branch.current));
 		card.classList.toggle('needs-restack', Boolean(branch.restack));
 
+		// Update data attributes for tree position
+		card.dataset.depth = String(branch.tree.depth);
+		if (branch.tree.parentName) {
+			card.dataset.parentBranch = branch.tree.parentName;
+		} else {
+			delete card.dataset.parentBranch;
+		}
+
 		// Update stored data
 		(card as any)._branchData = {
 			current: branch.current,
@@ -651,6 +1033,10 @@ class StackView {
 			hasChange: Boolean(branch.change),
 			changeId: branch.change?.id,
 			changeStatus: branch.change?.status,
+			treeDepth: branch.tree.depth,
+			treeIsLastChild: branch.tree.isLastChild,
+			treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
+			treeLane: branch.tree.lane,
 		} as BranchData;
 
 		// Granular updates with targeted animations
@@ -731,13 +1117,19 @@ class StackView {
 		const oldData = (card as any)._branchData as BranchData;
 		if (!oldData) return true;
 
+		const newTreeAncestorIsLast = JSON.stringify(branch.tree.ancestorIsLast);
+
 		return (
 			oldData.current !== Boolean(branch.current) ||
 			oldData.restack !== Boolean(branch.restack) ||
 			oldData.commitsCount !== (branch.commits?.length ?? 0) ||
 			oldData.hasChange !== Boolean(branch.change) ||
 			oldData.changeId !== branch.change?.id ||
-			oldData.changeStatus !== branch.change?.status
+			oldData.changeStatus !== branch.change?.status ||
+			oldData.treeDepth !== branch.tree.depth ||
+			oldData.treeIsLastChild !== branch.tree.isLastChild ||
+			oldData.treeAncestorIsLast !== newTreeAncestorIsLast ||
+			oldData.treeLane !== branch.tree.lane
 		);
 	}
 
@@ -942,6 +1334,12 @@ class StackView {
 		return span;
 	}
 
+	private clearDropTargets(): void {
+		this.stackList.querySelectorAll('.drop-target').forEach((el) => {
+			el.classList.remove('drop-target');
+		});
+	}
+
 	/**
 	 * Initializes SortableJS for drag-and-drop functionality on the branch list.
 	 * Destroys any existing instance before creating a new one.
@@ -971,38 +1369,50 @@ class StackView {
 
 		try {
 			this.sortableInstance = new Sortable(this.stackList, {
-				animation: 150,
+				animation: 0,
 				ghostClass: 'sortable-ghost',
 				chosenClass: 'sortable-chosen',
 				dragClass: 'sortable-drag',
+				forceFallback: true,
+
+				onStart: () => {
+					this.stackList.classList.add('is-dragging');
+				},
+
+				onMove: (evt) => {
+					this.clearDropTargets();
+					const related = evt.related as HTMLElement;
+					if (related && related.classList.contains('stack-item')) {
+						related.classList.add('drop-target');
+					}
+					return true;
+				},
+
+				onUnchoose: () => {
+					this.clearDropTargets();
+					this.stackList.classList.remove('is-dragging');
+				},
+
 				onEnd: (evt) => {
-					// Validate event structure
+					this.clearDropTargets();
+					this.stackList.classList.remove('is-dragging');
+
 					if (!evt || typeof evt.oldIndex !== 'number' || typeof evt.newIndex !== 'number') {
-						console.error('❌ Invalid SortableJS event structure:', evt);
 						return;
 					}
 
-					// Check if this is actually a reorder (not just a drop in the same position)
 					if (evt.oldIndex === evt.newIndex) {
-						console.log('🔄 Branch dropped in same position, ignoring');
 						return;
 					}
 
-					// Validate indices are non-negative
 					if (evt.oldIndex < 0 || evt.newIndex < 0) {
-						console.error('❌ Negative SortableJS indices:', { oldIndex: evt.oldIndex, newIndex: evt.newIndex });
 						return;
 					}
 
-					// Get branch name from dataset
 					const branchName = (evt.item as HTMLElement)?.dataset?.branch;
-
-					if (!branchName || typeof branchName !== 'string' || branchName.trim() === '') {
-						console.error('❌ No valid branch name found in dataset for item:', evt.item);
+					if (!branchName || branchName.trim() === '') {
 						return;
 					}
-
-					console.log('🔄 SortableJS reorder detected:', { branchName, oldIndex: evt.oldIndex, newIndex: evt.newIndex });
 
 					this.vscode.postMessage({
 						type: 'branchReorder',

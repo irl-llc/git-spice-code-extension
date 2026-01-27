@@ -43,6 +43,7 @@ button {
   animation: item-enter 0.2s ease-out;
   position: relative;
   transition: transform 0.25s ease-out;
+  overflow: visible;
 }
 
 @keyframes item-enter {
@@ -160,19 +161,37 @@ button {
 }
 
 /* SortableJS styles */
+/* Hide the ghost (placeholder) completely - we don't want reordering preview */
 .sortable-ghost {
-	opacity: 0.4;
-	background-color: var(--vscode-list-hoverBackground);
+	visibility: hidden !important;
+	height: 0 !important;
+	min-height: 0 !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	border: none !important;
+	overflow: hidden !important;
 }
 
+/* Style for the element being dragged */
 .sortable-chosen {
-	transform: scale(1.02);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	opacity: 0.9;
+	z-index: 100;
 }
 
+/* The actual dragged element (clone) */
 .sortable-drag {
-	opacity: 0.8;
-	transform: rotate(2deg);
+	opacity: 0.95;
+	transform: scale(0.95);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+	border: 2px solid var(--vscode-focusBorder) !important;
+	border-radius: 8px;
+}
+
+/* Hide tree connectors on dragged element */
+.sortable-drag .tree-node,
+.sortable-drag::before,
+.sortable-drag::after {
+	display: none !important;
 }
 
 .branch-header {
@@ -484,4 +503,154 @@ button {
 
 .context-menu-item.disabled .codicon {
   opacity: 0.5;
+}
+
+/* ==========================================================================
+   Tree Visualization Styles - Multi-Lane SVG Approach
+   ========================================================================== */
+
+:root {
+  /* Match VSCode's scmHistory.ts dimensions */
+  --tree-lane-width: 11px; /* SWIMLANE_WIDTH */
+  --tree-node-radius: 4px; /* CIRCLE_RADIUS */
+  --tree-node-stroke: 2px; /* CIRCLE_STROKE_WIDTH */
+  --tree-curve-radius: 5px; /* SWIMLANE_CURVE_RADIUS */
+
+  /* Colors */
+  --tree-line-color: var(--vscode-treeIndentGuidesStroke, #888);
+  --tree-line-restack-color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+  --tree-node-color: var(--vscode-descriptionForeground, #888);
+  --tree-node-current-color: var(--vscode-textLink-foreground, #3794ff);
+
+  /* Layout */
+  --tree-connector-width: 1.5px;
+  --tree-graph-padding: 8px;
+}
+
+/* Stack list contains SVG tree and items */
+.stack-list {
+  position: relative;
+  /* Dynamic padding: graph width + gap to cards */
+  padding-left: calc(var(--tree-graph-width, 30px) + var(--tree-graph-padding));
+}
+
+/* SVG container for tree lines */
+.tree-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
+.tree-svg path {
+  fill: none;
+  stroke: var(--tree-line-color, #888888);
+  stroke-width: var(--tree-connector-width);
+}
+
+/* Stack item positions the graph node */
+.stack-item {
+  position: relative;
+}
+
+/* Graph node (dot) positioned based on lane */
+.stack-item .tree-node {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  /* Diameter = 2 * radius */
+  width: calc(var(--tree-node-radius) * 2);
+  height: calc(var(--tree-node-radius) * 2);
+  border-radius: 50%;
+  background: var(--tree-node-color);
+  z-index: 2;
+  /* Left position set dynamically via style attribute */
+}
+
+/* Current branch: hollow circle with stroke (matching VSCode graph view) */
+.stack-item .tree-node.current {
+  /* Current node is slightly larger: radius + stroke on each side */
+  width: calc((var(--tree-node-radius) + var(--tree-node-stroke)) * 2);
+  height: calc((var(--tree-node-radius) + var(--tree-node-stroke)) * 2);
+  background: var(--vscode-editor-background, #1e1e1e);
+  border: var(--tree-node-stroke) solid var(--tree-node-current-color);
+  box-sizing: border-box;
+}
+
+/* Branch card - back to simple flex layout */
+.branch-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Hide the old tree-connectors div (no longer needed inside card) */
+.tree-connectors {
+  display: none;
+}
+
+/* Branch content area */
+.branch-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* Ensure header styling */
+.branch-content .branch-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Commits container */
+.branch-content .branch-commits {
+  margin-left: 0;
+}
+
+/* ==========================================================================
+   Drag-and-Drop Feedback
+   ========================================================================== */
+
+/* Highlight potential drop target during drag */
+.stack-item.drop-target .branch-card {
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 3px var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground);
+  transition: all 0.15s ease;
+}
+
+.stack-item.drop-target .tree-node {
+  background: var(--vscode-focusBorder);
+  border-color: var(--vscode-focusBorder);
+  transform: translate(-50%, -50%) scale(1.3);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+
+/* Add a label showing "Drop here" */
+.stack-item.drop-target .branch-card::after {
+  content: 'Drop to reorder';
+  position: absolute;
+  top: -1.5rem;
+  right: 0;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  background: var(--vscode-focusBorder);
+  color: var(--vscode-editor-background);
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* Dim non-target items during drag */
+.stack-list.is-dragging .stack-item:not(.drop-target):not(.sortable-chosen) {
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+}
+
+.stack-list.is-dragging .stack-item.drop-target {
+  opacity: 1;
 }
