@@ -14,6 +14,7 @@ import {
 	execBranchRename,
 	execBranchRestack,
 	execBranchSubmit,
+	execBranchMove,
 	execCommitFixup,
 	execBranchSplit,
 	execRepoSync,
@@ -145,6 +146,16 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				case 'commitSplit':
 					if (typeof message.sha === 'string' && typeof message.branchName === 'string') {
 						void this.handleCommitSplit(message.sha, message.branchName);
+					}
+					return;
+				case 'branchMovePrompt':
+					if (typeof message.branchName === 'string') {
+						void this.handleBranchMovePrompt(message.branchName);
+					}
+					return;
+				case 'branchMove':
+					if (typeof message.branchName === 'string' && typeof message.newParent === 'string') {
+						void this.handleBranchMove(message.branchName, message.newParent);
 					}
 					return;
 				default:
@@ -696,6 +707,78 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				console.error('🔄 Unexpected error during branch rename:', message);
 				void vscode.window.showErrorMessage(`Unexpected error during branch rename: ${message}`);
 			}
+		});
+	}
+
+	/**
+	 * Prompts user to select a new parent branch for the move operation
+	 */
+	private async handleBranchMovePrompt(branchName: string): Promise<void> {
+		if (typeof branchName !== 'string' || branchName.trim() === '') {
+			console.error('❌ Invalid branch name provided to handleBranchMovePrompt:', branchName);
+			return;
+		}
+
+		// Get available branches (excluding current branch and its descendants)
+		const availableParents = this.branches
+			.filter((b) => b.name !== branchName)
+			.map((b) => b.name);
+
+		if (availableParents.length === 0) {
+			void vscode.window.showWarningMessage('No other branches available to move onto.');
+			return;
+		}
+
+		const selected = await vscode.window.showQuickPick(availableParents, {
+			placeHolder: `Select new parent for '${branchName}'`,
+			title: 'Move Branch Onto...',
+		});
+
+		if (selected) {
+			void this.handleBranchMove(branchName, selected);
+		}
+	}
+
+	/**
+	 * Moves a branch to a new parent (reparents it)
+	 */
+	private async handleBranchMove(branchName: string, newParent: string): Promise<void> {
+		if (typeof branchName !== 'string' || branchName.trim() === '') {
+			console.error('❌ Invalid branch name provided to handleBranchMove:', branchName);
+			void vscode.window.showErrorMessage('Invalid branch name provided for move.');
+			return;
+		}
+
+		if (typeof newParent !== 'string' || newParent.trim() === '') {
+			console.error('❌ Invalid parent name provided to handleBranchMove:', newParent);
+			void vscode.window.showErrorMessage('Invalid parent name provided for move.');
+			return;
+		}
+
+		if (!this.workspaceFolder) {
+			console.error('❌ No workspace folder available for branch move');
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		console.log('🔄 Executing branch move for:', branchName, 'onto:', newParent);
+
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: `Moving branch: ${branchName} → ${newParent}`,
+			cancellable: false,
+		}, async () => {
+			const result = await execBranchMove(this.workspaceFolder!, branchName, newParent);
+
+			if ('error' in result) {
+				console.error('🔄 Branch move failed:', result.error);
+				void vscode.window.showErrorMessage(`Failed to move branch: ${result.error}`);
+			} else {
+				console.log('🔄 Branch move successful');
+				void vscode.window.showInformationMessage(`Branch ${branchName} moved onto ${newParent} successfully.`);
+			}
+
+			await this.refresh();
 		});
 	}
 

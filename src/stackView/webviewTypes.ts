@@ -22,7 +22,9 @@ export type WebviewMessage =
 	| { type: 'branchSubmit'; branchName: string }
 	| { type: 'commitCopySha'; sha: string }
 	| { type: 'commitFixup'; sha: string }
-	| { type: 'commitSplit'; sha: string; branchName: string };
+	| { type: 'commitSplit'; sha: string; branchName: string }
+	| { type: 'branchMovePrompt'; branchName: string }
+	| { type: 'branchMove'; branchName: string; newParent: string };
 
 // Messages from extension to webview
 export type ExtensionMessage =

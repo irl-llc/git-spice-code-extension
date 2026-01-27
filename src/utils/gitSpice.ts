@@ -383,6 +383,30 @@ export async function execBranchSplit(folder: vscode.WorkspaceFolder, branchName
 }
 
 /**
+ * Moves a branch to a new parent using `gs branch onto`.
+ * This changes the base branch without rebasing commits.
+ */
+export async function execBranchMove(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+	newParent: string,
+): Promise<BranchCommandResult> {
+	const normalizedBranch = normalizeNonEmpty(branchName, 'Branch name');
+	if ('error' in normalizedBranch) {
+		return { error: `Branch move: ${normalizedBranch.error}` };
+	}
+	const normalizedParent = normalizeNonEmpty(newParent, 'New parent name');
+	if ('error' in normalizedParent) {
+		return { error: `Branch move: ${normalizedParent.error}` };
+	}
+	return runGitSpiceCommand(
+		folder,
+		['branch', 'onto', normalizedParent.value, '--branch', normalizedBranch.value],
+		'Branch move',
+	);
+}
+
+/**
  * Navigation commands - simple wrappers around git-spice navigation
  */
 
