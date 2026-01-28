@@ -32,7 +32,7 @@
  *    - New state fields: extend updateState() and render functions
  */
 
-import type { BranchViewModel, DisplayState } from './types';
+import type { BranchViewModel, CommitFileChange, DisplayState } from './types';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
 
 interface BranchData {
@@ -63,6 +63,8 @@ class StackView {
 	private readonly errorEl: HTMLElement;
 	private readonly emptyEl: HTMLElement;
 	private currentState: DisplayState | null = null;
+	private fileCache: Map<string, CommitFileChange[]> = new Map();
+	private expandedCommits: Set<string> = new Set();
 
 	private static readonly COMMIT_CHUNK = 10;
 	private static readonly ANIMATION_DURATION = 200;
@@ -85,6 +87,8 @@ class StackView {
 			}
 			if (message.type === 'state') {
 				this.updateState(message.payload);
+			} else if (message.type === 'commitFiles') {
+				this.handleCommitFilesResponse(message.sha, message.files);
 			}
 		});
 	}
@@ -1004,8 +1008,11 @@ class StackView {
 	}
 
 	private renderCommitItem(commit: NonNullable<BranchViewModel['commits']>[0], branchName?: string): HTMLElement {
-		const row = document.createElement('button');
-		row.type = 'button';
+		const container = document.createElement('div');
+		container.className = 'commit-container';
+		container.dataset.sha = commit.sha;
+
+		const row = document.createElement('div');
 		row.className = 'commit-item';
 		row.dataset.content = 'true';
 
@@ -1014,14 +1021,17 @@ class StackView {
 			row.dataset.vscodeContext = this.buildCommitContext(commit.sha, branchName);
 		}
 
-		row.addEventListener('click', (event: Event) => {
+		// Toggle chevron for file list
+		const toggle = document.createElement('i');
+		const isExpanded = this.expandedCommits.has(commit.sha);
+		toggle.className = `commit-toggle codicon codicon-chevron-${isExpanded ? 'down' : 'right'}`;
+		toggle.role = 'button';
+		toggle.tabIndex = 0;
+		toggle.addEventListener('click', (event: Event) => {
 			event.stopPropagation();
-			if (typeof commit.sha !== 'string' || commit.sha.length === 0) {
-				console.error('❌ Invalid commit SHA provided for diff request:', commit);
-				return;
-			}
-			this.vscode.postMessage({ type: 'openCommitDiff', sha: commit.sha });
+			this.toggleCommitExpand(commit.sha, container);
 		});
+		row.appendChild(toggle);
 
 		const subject = document.createElement('span');
 		subject.className = 'commit-subject';
@@ -1032,6 +1042,162 @@ class StackView {
 		sha.className = 'commit-sha';
 		sha.textContent = commit.shortSha;
 		row.appendChild(sha);
+
+		// Click on commit row (not toggle) opens the full diff
+		row.addEventListener('click', (event: Event) => {
+			event.stopPropagation();
+			const target = event.target as HTMLElement;
+			if (target.classList.contains('commit-toggle')) {
+				return;
+			}
+			if (typeof commit.sha !== 'string' || commit.sha.length === 0) {
+				console.error('❌ Invalid commit SHA provided for diff request:', commit);
+				return;
+			}
+			this.vscode.postMessage({ type: 'openCommitDiff', sha: commit.sha });
+		});
+
+		container.appendChild(row);
+
+		// File list container (hidden by default unless expanded)
+		const fileList = document.createElement('div');
+		fileList.className = 'commit-files';
+		if (!isExpanded) {
+			fileList.classList.add('hidden');
+		}
+
+		// If we have cached files and it's expanded, render them
+		if (isExpanded && this.fileCache.has(commit.sha)) {
+			this.renderFileChanges(fileList, this.fileCache.get(commit.sha)!, commit.sha);
+		}
+
+		container.appendChild(fileList);
+
+		return container;
+	}
+
+	/**
+	 * Toggles expansion of a commit's file list.
+	 */
+	private toggleCommitExpand(sha: string, container: HTMLElement): void {
+		const isExpanded = this.expandedCommits.has(sha);
+		const toggle = container.querySelector('.commit-toggle') as HTMLElement;
+		const fileList = container.querySelector('.commit-files') as HTMLElement;
+
+		if (isExpanded) {
+			this.expandedCommits.delete(sha);
+			toggle.classList.remove('codicon-chevron-down');
+			toggle.classList.add('codicon-chevron-right');
+			fileList.classList.add('hidden');
+		} else {
+			this.expandedCommits.add(sha);
+			toggle.classList.remove('codicon-chevron-right');
+			toggle.classList.add('codicon-chevron-down');
+			fileList.classList.remove('hidden');
+
+			// Fetch files if not cached
+			if (!this.fileCache.has(sha)) {
+				fileList.innerHTML = '<div class="commit-files-loading">Loading...</div>';
+				this.vscode.postMessage({ type: 'getCommitFiles', sha });
+			} else {
+				this.renderFileChanges(fileList, this.fileCache.get(sha)!, sha);
+			}
+		}
+	}
+
+	/**
+	 * Handles the response containing file changes for a commit.
+	 */
+	private handleCommitFilesResponse(sha: string, files: CommitFileChange[]): void {
+		this.fileCache.set(sha, files);
+
+		// Find the container for this commit and render the files
+		const container = this.stackList.querySelector(`.commit-container[data-sha="${sha}"]`);
+		if (!container) {
+			return;
+		}
+
+		const fileList = container.querySelector('.commit-files') as HTMLElement;
+		if (fileList && this.expandedCommits.has(sha)) {
+			this.renderFileChanges(fileList, files, sha);
+		}
+	}
+
+	/**
+	 * Renders the file changes list for a commit.
+	 */
+	private renderFileChanges(container: HTMLElement, files: CommitFileChange[], sha: string): void {
+		container.innerHTML = '';
+
+		if (files.length === 0) {
+			container.innerHTML = '<div class="commit-files-empty">No files changed</div>';
+			return;
+		}
+
+		for (const file of files) {
+			const row = this.renderFileChangeRow(file, sha);
+			container.appendChild(row);
+		}
+	}
+
+	/**
+	 * Renders a single file change row.
+	 */
+	private renderFileChangeRow(file: CommitFileChange, sha: string): HTMLElement {
+		const row = document.createElement('div');
+		row.className = 'file-change';
+
+		// File icon
+		const icon = document.createElement('i');
+		icon.className = `file-icon codicon codicon-file`;
+		row.appendChild(icon);
+
+		// Extract file name and folder path
+		const lastSlash = file.path.lastIndexOf('/');
+		const fileName = lastSlash >= 0 ? file.path.slice(lastSlash + 1) : file.path;
+		const folderPath = lastSlash >= 0 ? file.path.slice(0, lastSlash) : '';
+
+		// File name
+		const nameSpan = document.createElement('span');
+		nameSpan.className = 'file-name';
+		nameSpan.textContent = fileName;
+		row.appendChild(nameSpan);
+
+		// Folder path
+		const folderSpan = document.createElement('span');
+		folderSpan.className = 'file-folder';
+		folderSpan.textContent = folderPath;
+		row.appendChild(folderSpan);
+
+		// Status indicator
+		const statusSpan = document.createElement('span');
+		statusSpan.className = `file-status status-${file.status.toLowerCase()}`;
+		statusSpan.textContent = file.status;
+		row.appendChild(statusSpan);
+
+		// Open current file button (hidden for deleted files)
+		if (file.status !== 'D') {
+			const openBtn = document.createElement('button');
+			openBtn.type = 'button';
+			openBtn.className = 'open-file-btn';
+			openBtn.title = 'Open current file';
+			openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
+			openBtn.addEventListener('click', (event: Event) => {
+				event.stopPropagation();
+				this.vscode.postMessage({ type: 'openCurrentFile', path: file.path });
+			});
+			row.appendChild(openBtn);
+		}
+
+		// Click on row opens the diff for this file
+		row.addEventListener('click', (event: Event) => {
+			const target = event.target as HTMLElement;
+			if (target.closest('.open-file-btn')) {
+				return;
+			}
+			event.stopPropagation();
+			this.vscode.postMessage({ type: 'openFileDiff', sha, path: file.path });
+		});
 
 		return row;
 	}

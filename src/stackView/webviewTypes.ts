@@ -1,4 +1,4 @@
-import type { DisplayState } from './types';
+import type { CommitFileChange, DisplayState } from './types';
 
 // Messages from webview to extension
 export type WebviewMessage =
@@ -24,11 +24,15 @@ export type WebviewMessage =
 	| { type: 'branchMovePrompt'; branchName: string }
 	| { type: 'branchMove'; branchName: string; newParent: string }
 	| { type: 'upstackMovePrompt'; branchName: string }
-	| { type: 'upstackMove'; branchName: string; newParent: string };
+	| { type: 'upstackMove'; branchName: string; newParent: string }
+	| { type: 'getCommitFiles'; sha: string }
+	| { type: 'openFileDiff'; sha: string; path: string }
+	| { type: 'openCurrentFile'; path: string };
 
 // Messages from extension to webview
 export type ExtensionMessage =
-	| { type: 'state'; payload: DisplayState };
+	| { type: 'state'; payload: DisplayState }
+	| { type: 'commitFiles'; sha: string; files: CommitFileChange[] };
 
 // VSCode webview API type declaration
 declare global {

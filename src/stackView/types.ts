@@ -8,6 +8,17 @@ export type BranchCommitViewModel = {
 	subject: string;
 };
 
+/** Git file change status indicator. */
+export type FileChangeStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T';
+
+/** Represents a single file change within a commit. */
+export type CommitFileChange = {
+	status: FileChangeStatus;
+	path: string;
+	/** Original path for renames/copies. */
+	oldPath?: string;
+};
+
 export type BranchChangeViewModel = {
 	id: string;
 	url?: string;

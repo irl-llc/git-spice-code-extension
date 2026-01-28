@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { buildDisplayState } from './state';
-import type { BranchRecord } from './types';
+import type { BranchRecord, CommitFileChange, FileChangeStatus } from './types';
 import type { WebviewMessage } from './webviewTypes';
 import {
 	execGitSpice,
@@ -156,6 +156,21 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				case 'upstackMove':
 					if (typeof message.branchName === 'string' && typeof message.newParent === 'string') {
 						void this.handleUpstackMove(message.branchName, message.newParent);
+					}
+					return;
+				case 'getCommitFiles':
+					if (typeof message.sha === 'string') {
+						void this.handleGetCommitFiles(message.sha);
+					}
+					return;
+				case 'openFileDiff':
+					if (typeof message.sha === 'string' && typeof message.path === 'string') {
+						void this.handleOpenFileDiff(message.sha, message.path);
+					}
+					return;
+				case 'openCurrentFile':
+					if (typeof message.path === 'string') {
+						void this.handleOpenCurrentFile(message.path);
 					}
 					return;
 				default:
@@ -953,6 +968,132 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
 			}
 		});
+	}
+
+	/**
+	 * Fetches the list of files changed in a commit and sends it to the webview.
+	 */
+	private async handleGetCommitFiles(sha: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			return;
+		}
+
+		try {
+			const files = await this.fetchCommitFiles(sha);
+			void this.view.webview.postMessage({ type: 'commitFiles', sha, files });
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error fetching commit files:', message);
+			void this.view.webview.postMessage({ type: 'commitFiles', sha, files: [] });
+		}
+	}
+
+	/**
+	 * Parses git diff-tree output and returns file changes.
+	 */
+	private async fetchCommitFiles(sha: string): Promise<CommitFileChange[]> {
+		const { execFile } = await import('node:child_process');
+		const { promisify } = await import('node:util');
+		const execFileAsync = promisify(execFile);
+
+		const { stdout } = await execFileAsync(
+			'git',
+			['diff-tree', '--no-commit-id', '--name-status', '-r', sha],
+			{ cwd: this.workspaceFolder!.uri.fsPath }
+		);
+
+		const lines = stdout.trim().split('\n').filter(l => l.length > 0);
+		const files: CommitFileChange[] = [];
+
+		for (const line of lines) {
+			const match = line.match(/^([A-Z])\t(.+)$/);
+			if (!match) {
+				continue;
+			}
+
+			const [, statusChar, filePath] = match;
+			files.push({
+				status: statusChar as FileChangeStatus,
+				path: filePath,
+			});
+		}
+
+		return files;
+	}
+
+	/**
+	 * Opens a diff view for a single file in a commit.
+	 */
+	private async handleOpenFileDiff(sha: string, filePath: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		try {
+			const path = await import('node:path');
+			const absolutePath = path.join(this.workspaceFolder.uri.fsPath, filePath);
+			const fileUri = vscode.Uri.file(absolutePath);
+
+			const parentRef = `${sha}^`;
+			const emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+			// Determine file status to handle added/deleted files properly
+			const files = await this.fetchCommitFiles(sha);
+			const fileChange = files.find(f => f.path === filePath);
+			const status = fileChange?.status ?? 'M';
+
+			let leftUri: vscode.Uri;
+			let rightUri: vscode.Uri;
+
+			if (status === 'A') {
+				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: emptyTree });
+				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: sha });
+				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
+				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
+			} else if (status === 'D') {
+				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: parentRef });
+				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: emptyTree });
+				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
+				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
+			} else {
+				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: parentRef });
+				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: sha });
+				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
+				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
+			}
+
+			const fileName = path.basename(filePath);
+			const title = `${fileName} (${sha.substring(0, 7)})`;
+
+			await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error opening file diff:', message);
+			void vscode.window.showErrorMessage(`Failed to open file diff: ${message}`);
+		}
+	}
+
+	/**
+	 * Opens the current version of a file in the editor.
+	 */
+	private async handleOpenCurrentFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		try {
+			const path = await import('node:path');
+			const absolutePath = path.join(this.workspaceFolder.uri.fsPath, filePath);
+			const fileUri = vscode.Uri.file(absolutePath);
+
+			await vscode.window.showTextDocument(fileUri);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error opening current file:', message);
+			void vscode.window.showErrorMessage(`Failed to open file: ${message}`);
+		}
 	}
 
 	private setupFileWatcher(): void {
