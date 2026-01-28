@@ -129,6 +129,7 @@ class StackView {
 			{ label: 'Move with children onto...', action: 'upstackMovePrompt', icon: 'codicon-type-hierarchy', requiresPrompt: true },
 			{ label: 'Restack', action: 'branchRestack', icon: 'codicon-refresh', requiresRestack: true },
 			{ label: 'Submit', action: 'branchSubmit', icon: 'codicon-git-pull-request' },
+			{ label: 'Delete', action: 'branchDelete', icon: 'codicon-trash' },
 		];
 
 		menuItems.forEach(item => {

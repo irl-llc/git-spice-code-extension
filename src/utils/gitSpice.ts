@@ -80,6 +80,18 @@ export async function execBranchUntrack(folder: vscode.WorkspaceFolder, branchNa
 	return runGitSpiceCommand(folder, ['branch', 'untrack', normalized.value], 'Branch untrack');
 }
 
+/**
+ * Deletes a branch using `gs branch delete`.
+ * This untracks the branch and deletes the local git branch.
+ */
+export async function execBranchDelete(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+	const normalized = normalizeNonEmpty(branchName, 'Branch name');
+	if ('error' in normalized) {
+		return { error: `Branch delete: ${normalized.error}` };
+	}
+	return runGitSpiceCommand(folder, ['branch', 'delete', '--force', normalized.value], 'Branch delete');
+}
+
 export async function execBranchCheckout(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {

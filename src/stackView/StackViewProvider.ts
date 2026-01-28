@@ -6,6 +6,7 @@ import type { WebviewMessage } from './webviewTypes';
 import {
 	execGitSpice,
 	execBranchUntrack,
+	execBranchDelete,
 	execBranchCheckout,
 	execBranchFold,
 	execBranchSquash,
@@ -70,6 +71,11 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				case 'branchUntrack':
 					if (typeof message.branchName === 'string') {
 						void this.handleBranchCommandInternal('untrack', message.branchName, execBranchUntrack);
+					}
+					return;
+				case 'branchDelete':
+					if (typeof message.branchName === 'string') {
+						void this.handleBranchDelete(message.branchName);
 					}
 					return;
 				case 'branchCheckout':
@@ -427,6 +433,54 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				console.error(`🔄 Unexpected error during branch ${commandName}:`, message);
 				void vscode.window.showErrorMessage(`Unexpected error during branch ${commandName}: ${message}`);
 			}
+		});
+	}
+
+	/**
+	 * Handles branch deletion with confirmation dialog
+	 */
+	private async handleBranchDelete(branchName: string): Promise<void> {
+		const trimmedName = typeof branchName === 'string' ? branchName.trim() : '';
+		if (trimmedName.length === 0) {
+			console.error('❌ Invalid branch name provided to handleBranchDelete:', branchName);
+			void vscode.window.showErrorMessage('Invalid branch name provided for delete.');
+			return;
+		}
+
+		if (!this.workspaceFolder) {
+			console.error('❌ No workspace folder available for branch delete');
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		const confirmed = await vscode.window.showWarningMessage(
+			`Delete branch '${trimmedName}'? This will untrack it and delete the local branch.`,
+			{ modal: true },
+			'Delete'
+		);
+
+		if (confirmed !== 'Delete') {
+			return;
+		}
+
+		console.log('🔄 Executing branch delete for:', trimmedName);
+
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: `Deleting branch: ${trimmedName}`,
+			cancellable: false,
+		}, async () => {
+			const result = await execBranchDelete(this.workspaceFolder!, trimmedName);
+
+			if ('error' in result) {
+				console.error('🔄 Branch delete failed:', result.error);
+				void vscode.window.showErrorMessage(`Failed to delete branch: ${result.error}`);
+			} else {
+				console.log('🔄 Branch delete successful');
+				void vscode.window.showInformationMessage(`Branch ${trimmedName} deleted successfully.`);
+			}
+
+			await this.refresh();
 		});
 	}
 
