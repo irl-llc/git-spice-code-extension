@@ -75,6 +75,7 @@ class StackView {
 	private expandedStagedSection = true;
 	private expandedUnstagedSection = true;
 	private commitMessageValue = '';
+	private pendingTreeDraw: ReturnType<typeof setTimeout> | undefined;
 
 	private static readonly COMMIT_CHUNK = 10;
 	private static readonly ANIMATION_DURATION = 200;
@@ -154,8 +155,8 @@ class StackView {
 		// Position uncommitted card relative to the current branch
 		this.updateUncommittedCard(newState.uncommitted, newState.branches);
 
-		// Draw tree once with all nodes in final positions
-		this.updateTreeConnections(newState.branches);
+		// Draw tree after entrance animations settle into final positions
+		this.updateTreeConnections(newState.branches, /* waitForAnimations */ true);
 	}
 
 	/**
@@ -368,7 +369,7 @@ class StackView {
 	 * Draws the complete tree graph in SVG (both paths and nodes).
 	 * Uses lane assignments to create a multi-column graph showing branch divergence.
 	 */
-	private updateTreeConnections(branches: BranchViewModel[]): void {
+	private updateTreeConnections(branches: BranchViewModel[], waitForAnimations = false): void {
 		const hasUncommitted = !!this.stackList.querySelector('.uncommitted-item');
 		const branchMaxLane = this.computeMaxLane(branches);
 		// Only fork to a new lane if the current branch has children (divergence)
@@ -376,10 +377,20 @@ class StackView {
 		const maxLane = needsDivergenceLane ? branchMaxLane + 1 : branchMaxLane;
 		this.updateGraphWidth(maxLane);
 		this.removeOldDomTreeNodes();
-		// Double-rAF ensures layout is complete before measuring positions
-		requestAnimationFrame(() => {
+		this.scheduleTreeDraw(branches, waitForAnimations);
+	}
+
+	/** Schedules the SVG tree draw, cancelling any pending draw first. */
+	private scheduleTreeDraw(branches: BranchViewModel[], waitForAnimations: boolean): void {
+		if (this.pendingTreeDraw !== undefined) {
+			clearTimeout(this.pendingTreeDraw);
+		}
+		// Wait for entrance animations (200ms) before measuring positions,
+		// or draw immediately (setTimeout 0) for redraws with no new animations.
+		const delay = waitForAnimations ? StackView.ANIMATION_DURATION : 0;
+		this.pendingTreeDraw = setTimeout(() => {
 			requestAnimationFrame(() => this.drawTreeSvg(branches));
-		});
+		}, delay);
 	}
 
 	private computeMaxLane(branches: BranchViewModel[]): number {
