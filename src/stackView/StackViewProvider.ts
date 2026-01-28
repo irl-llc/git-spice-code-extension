@@ -68,6 +68,11 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 						void this.handleOpenCommitDiff(message.sha);
 					}
 					return;
+				case 'branchContextMenu':
+					if (typeof message.branchName === 'string') {
+						void this.handleBranchContextMenu(message.branchName);
+					}
+					return;
 				case 'branchUntrack':
 					if (typeof message.branchName === 'string') {
 						void this.handleBranchCommandInternal('untrack', message.branchName, execBranchUntrack);
@@ -437,9 +442,94 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	/**
+	 * Shows a native VSCode QuickPick menu for branch actions
+	 */
+	private async handleBranchContextMenu(branchName: string): Promise<void> {
+		const branch = this.branches.find((b) => b.name === branchName);
+		if (!branch) {
+			return;
+		}
+
+		const isCurrent = branch.current === true;
+		const needsRestack = branch.down?.needsRestack === true ||
+			(branch.ups ?? []).some((link) => link.needsRestack === true);
+		const hasPR = Boolean(branch.change);
+
+		type MenuItem = { label: string; action: string; description?: string };
+		const items: MenuItem[] = [
+			{ label: '$(git-branch) Checkout', action: 'checkout' },
+			{ label: '$(tag) Rename...', action: 'rename' },
+			{ label: '$(move) Move onto...', action: 'move' },
+			{ label: '$(type-hierarchy) Move with children onto...', action: 'upstackMove' },
+		];
+
+		if (isCurrent) {
+			items.push({ label: '$(edit) Edit', action: 'edit' });
+		}
+
+		if (needsRestack) {
+			items.push({ label: '$(refresh) Restack', action: 'restack', description: 'Needs restack' });
+		}
+
+		items.push({
+			label: hasPR ? '$(cloud-upload) Submit' : '$(git-pull-request) Submit (create PR)',
+			action: 'submit'
+		});
+
+		items.push({ label: '$(fold) Fold', action: 'fold' });
+		items.push({ label: '$(fold-down) Squash', action: 'squash' });
+		items.push({ label: '$(eye-closed) Untrack', action: 'untrack' });
+		items.push({ label: '$(trash) Delete', action: 'delete' });
+
+		const selected = await vscode.window.showQuickPick(items, {
+			placeHolder: `Actions for branch '${branchName}'`,
+		});
+
+		if (!selected) {
+			return;
+		}
+
+		switch (selected.action) {
+			case 'checkout':
+				void this.handleBranchCommandInternal('checkout', branchName, execBranchCheckout);
+				break;
+			case 'rename':
+				void this.handleBranchRenamePrompt(branchName);
+				break;
+			case 'move':
+				void this.handleBranchMovePrompt(branchName);
+				break;
+			case 'upstackMove':
+				void this.handleUpstackMovePrompt(branchName);
+				break;
+			case 'edit':
+				void this.handleBranchCommandInternal('edit', branchName, execBranchEdit);
+				break;
+			case 'restack':
+				void this.handleBranchCommandInternal('restack', branchName, execBranchRestack);
+				break;
+			case 'submit':
+				void this.handleBranchCommandInternal('submit', branchName, execBranchSubmit);
+				break;
+			case 'fold':
+				void this.handleBranchCommandInternal('fold', branchName, execBranchFold);
+				break;
+			case 'squash':
+				void this.handleBranchCommandInternal('squash', branchName, execBranchSquash);
+				break;
+			case 'untrack':
+				void this.handleBranchCommandInternal('untrack', branchName, execBranchUntrack);
+				break;
+			case 'delete':
+				void this.handleBranchDelete(branchName);
+				break;
+		}
+	}
+
+	/**
 	 * Handles branch deletion with confirmation dialog
 	 */
-	private async handleBranchDelete(branchName: string): Promise<void> {
+	public async handleBranchDelete(branchName: string): Promise<void> {
 		const trimmedName = typeof branchName === 'string' ? branchName.trim() : '';
 		if (trimmedName.length === 0) {
 			console.error('❌ Invalid branch name provided to handleBranchDelete:', branchName);
@@ -581,7 +671,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Prompts user to select a new parent branch for the move operation
 	 */
-	private async handleBranchMovePrompt(branchName: string): Promise<void> {
+	public async handleBranchMovePrompt(branchName: string): Promise<void> {
 		if (typeof branchName !== 'string' || branchName.trim() === '') {
 			console.error('❌ Invalid branch name provided to handleBranchMovePrompt:', branchName);
 			return;
@@ -653,7 +743,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Prompts user to select a new parent branch for moving with children
 	 */
-	private async handleUpstackMovePrompt(branchName: string): Promise<void> {
+	public async handleUpstackMovePrompt(branchName: string): Promise<void> {
 		if (typeof branchName !== 'string' || branchName.trim() === '') {
 			console.error('❌ Invalid branch name provided to handleUpstackMovePrompt:', branchName);
 			return;
@@ -726,7 +816,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Handles copying a commit SHA to the clipboard
 	 */
-	private async handleCommitCopySha(sha: string): Promise<void> {
+	public async handleCommitCopySha(sha: string): Promise<void> {
 		// Validate input
 		if (typeof sha !== 'string' || sha.trim() === '') {
 			console.error('❌ Invalid SHA provided to handleCommitCopySha:', sha);
@@ -794,7 +884,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Handles splitting a branch at the specified commit
 	 */
-	private async handleCommitSplit(sha: string, branchName: string): Promise<void> {
+	public async handleCommitSplit(sha: string, branchName: string): Promise<void> {
 		// Validate input
 		if (typeof sha !== 'string' || sha.trim() === '') {
 			console.error('❌ Invalid SHA provided to handleCommitSplit:', sha);

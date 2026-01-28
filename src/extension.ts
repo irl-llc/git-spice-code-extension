@@ -154,6 +154,76 @@ export function activate(context: vscode.ExtensionContext): void {
 				await provider.refresh();
 			});
 		}),
+
+		// Branch context menu commands (receive context from webview)
+		vscode.commands.registerCommand('git-spice.branchCheckout', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('checkout', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchRename', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchRenamePrompt(ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchMove', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchMovePrompt(ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchMoveWithChildren', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleUpstackMovePrompt(ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchEdit', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('edit', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchRestack', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('restack', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchSubmit', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('submit', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchFold', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('fold', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchSquash', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('squash', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchUntrack', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchCommand('untrack', ctx.branchName);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.branchDelete', (ctx: { branchName?: string }) => {
+			if (ctx?.branchName) {
+				void provider.handleBranchDelete(ctx.branchName);
+			}
+		}),
+
+		// Commit context menu commands
+		vscode.commands.registerCommand('git-spice.commitCopySha', (ctx: { sha?: string }) => {
+			if (ctx?.sha) {
+				void provider.handleCommitCopySha(ctx.sha);
+			}
+		}),
+		vscode.commands.registerCommand('git-spice.commitSplit', (ctx: { sha?: string; branchName?: string }) => {
+			if (ctx?.sha && ctx?.branchName) {
+				void provider.handleCommitSplit(ctx.sha, ctx.branchName);
+			}
+		}),
+
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {
 			provider.setWorkspaceFolder(vscode.workspace.workspaceFolders?.[0]);
 			void provider.refresh();

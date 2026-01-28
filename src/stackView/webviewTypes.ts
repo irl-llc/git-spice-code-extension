@@ -7,6 +7,7 @@ export type WebviewMessage =
 	| { type: 'openChange'; url: string }
 	| { type: 'openCommit'; sha: string }
 	| { type: 'openCommitDiff'; sha: string }
+	| { type: 'branchContextMenu'; branchName: string }
 	| { type: 'branchUntrack'; branchName: string }
 	| { type: 'branchDelete'; branchName: string }
 	| { type: 'branchCheckout'; branchName: string }

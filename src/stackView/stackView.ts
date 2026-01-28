@@ -63,10 +63,6 @@ class StackView {
 	private readonly errorEl: HTMLElement;
 	private readonly emptyEl: HTMLElement;
 	private currentState: DisplayState | null = null;
-	private contextMenu: HTMLElement | null = null;
-	private currentContextBranch: string | null = null;
-	private commitContextMenu: HTMLElement | null = null;
-	private currentContextCommit: { sha: string; branchName: string } | null = null;
 
 	private static readonly COMMIT_CHUNK = 10;
 	private static readonly ANIMATION_DURATION = 200;
@@ -78,8 +74,6 @@ class StackView {
 		this.emptyEl = document.getElementById('empty')!;
 
 		this.setupEventListeners();
-		this.createContextMenu();
-		this.createCommitContextMenu();
 		this.vscode.postMessage({ type: 'ready' });
 	}
 
@@ -93,241 +87,31 @@ class StackView {
 				this.updateState(message.payload);
 			}
 		});
+	}
 
-		// Hide context menus when clicking elsewhere
-		document.addEventListener('click', () => {
-			this.hideContextMenu();
-			this.hideCommitContextMenu();
-		});
-
-		// Prevent context menus from closing when clicking inside them
-		document.addEventListener('click', (event) => {
-			if (this.contextMenu && this.contextMenu.contains(event.target as Node)) {
-				event.stopPropagation();
-			}
-			if (this.commitContextMenu && this.commitContextMenu.contains(event.target as Node)) {
-				event.stopPropagation();
-			}
+	/**
+	 * Builds the data-vscode-context JSON for branch cards.
+	 */
+	private buildBranchContext(branch: BranchViewModel): string {
+		return JSON.stringify({
+			webviewSection: 'branch',
+			branchName: branch.name,
+			webviewBranchIsCurrent: branch.current,
+			webviewBranchNeedsRestack: branch.restack,
+			preventDefaultContextMenuItems: true,
 		});
 	}
 
-	private createContextMenu(): void {
-		this.contextMenu = document.createElement('div');
-		this.contextMenu.className = 'context-menu';
-		this.contextMenu.style.display = 'none';
-		document.body.appendChild(this.contextMenu);
-
-		// Create menu items with codicon icons
-		const menuItems = [
-			{ label: 'Untrack', action: 'branchUntrack', icon: 'codicon-eye-closed' },
-			{ label: 'Checkout', action: 'branchCheckout', icon: 'codicon-git-branch' },
-			{ label: 'Fold', action: 'branchFold', icon: 'codicon-fold' },
-			{ label: 'Squash', action: 'branchSquash', icon: 'codicon-fold-down' },
-			{ label: 'Edit', action: 'branchEdit', icon: 'codicon-edit', requiresCurrent: true },
-			{ label: 'Rename', action: 'branchRename', icon: 'codicon-tag', requiresPrompt: true },
-			{ label: 'Move onto...', action: 'branchMovePrompt', icon: 'codicon-move', requiresPrompt: true },
-			{ label: 'Move with children onto...', action: 'upstackMovePrompt', icon: 'codicon-type-hierarchy', requiresPrompt: true },
-			{ label: 'Restack', action: 'branchRestack', icon: 'codicon-refresh', requiresRestack: true },
-			{ label: 'Submit', action: 'branchSubmit', icon: 'codicon-git-pull-request' },
-			{ label: 'Delete', action: 'branchDelete', icon: 'codicon-trash' },
-		];
-
-		menuItems.forEach(item => {
-			const menuItem = document.createElement('div');
-			menuItem.className = 'context-menu-item';
-			menuItem.dataset.action = item.action;
-			menuItem.innerHTML = `
-				<i class="codicon ${item.icon}"></i>
-				<span>${item.label}</span>
-			`;
-			menuItem.addEventListener('click', () => {
-				if (item.requiresPrompt) {
-					this.handlePromptAction(item.action);
-				} else {
-					this.executeBranchAction(item.action);
-				}
-				this.hideContextMenu();
-			});
-			this.contextMenu!.appendChild(menuItem);
+	/**
+	 * Builds the data-vscode-context JSON for commit items.
+	 */
+	private buildCommitContext(sha: string, branchName: string): string {
+		return JSON.stringify({
+			webviewSection: 'commit',
+			sha,
+			branchName,
+			preventDefaultContextMenuItems: true,
 		});
-	}
-
-	private createCommitContextMenu(): void {
-		this.commitContextMenu = document.createElement('div');
-		this.commitContextMenu.className = 'context-menu';
-		this.commitContextMenu.style.display = 'none';
-		document.body.appendChild(this.commitContextMenu);
-
-		// Create menu items for commit actions
-		const menuItems = [
-			{ label: 'Copy SHA', action: 'commitCopySha', icon: 'codicon-copy' },
-			// { label: 'Fixup', action: 'commitFixup', icon: 'codicon-edit' }, // Experimental feature - disabled for now
-			{ label: 'Split Branch', action: 'commitSplit', icon: 'codicon-split-horizontal' },
-		];
-
-		menuItems.forEach(item => {
-			const menuItem = document.createElement('div');
-			menuItem.className = 'context-menu-item';
-			menuItem.dataset.action = item.action;
-			menuItem.innerHTML = `
-				<i class="codicon ${item.icon}"></i>
-				<span>${item.label}</span>
-			`;
-			menuItem.addEventListener('click', () => {
-				this.executeCommitAction(item.action);
-				this.hideCommitContextMenu();
-			});
-			this.commitContextMenu!.appendChild(menuItem);
-		});
-	}
-
-	private showContextMenu(event: MouseEvent, branchName: string): void {
-		if (!this.contextMenu) return;
-
-		event.preventDefault();
-		event.stopPropagation();
-
-		// Close commit context menu if open
-		this.hideCommitContextMenu();
-
-		this.currentContextBranch = branchName;
-
-		// Update menu items based on current branch
-		this.updateContextMenuItems(branchName);
-
-		// Position the context menu
-		this.contextMenu.style.left = `${event.clientX}px`;
-		this.contextMenu.style.top = `${event.clientY}px`;
-		this.contextMenu.style.display = 'block';
-	}
-
-	private updateContextMenuItems(branchName: string): void {
-		if (!this.contextMenu) return;
-
-		const branch = this.currentState?.branches.find(b => b.name === branchName);
-		const menuItems = this.contextMenu.querySelectorAll('.context-menu-item');
-		menuItems.forEach((item) => {
-			const menuItem = item as HTMLElement;
-			const action = menuItem.dataset.action;
-
-			// Disable edit for non-current branches
-			if (action === 'branchEdit') {
-				const isCurrent = branch?.current;
-				if (!isCurrent) {
-					menuItem.classList.add('disabled');
-					menuItem.style.opacity = '0.5';
-					menuItem.style.pointerEvents = 'none';
-				} else {
-					menuItem.classList.remove('disabled');
-					menuItem.style.opacity = '1';
-					menuItem.style.pointerEvents = 'auto';
-				}
-			}
-
-			// Disable restack for branches that don't need restacking
-			if (action === 'branchRestack') {
-				const needsRestack = branch?.restack;
-				if (!needsRestack) {
-					menuItem.classList.add('disabled');
-					menuItem.style.opacity = '0.5';
-					menuItem.style.pointerEvents = 'none';
-				} else {
-					menuItem.classList.remove('disabled');
-					menuItem.style.opacity = '1';
-					menuItem.style.pointerEvents = 'auto';
-				}
-			}
-
-			// Update submit icon and label based on PR existence
-			if (action === 'branchSubmit') {
-				const icon = menuItem.querySelector('.codicon');
-				const label = menuItem.querySelector('span');
-				if (icon && label) {
-					const hasPR = Boolean(branch?.change);
-					icon.className = hasPR ? 'codicon codicon-cloud-upload' : 'codicon codicon-git-pull-request';
-					label.textContent = hasPR ? 'Submit' : 'Submit (create PR)';
-				}
-			}
-		});
-	}
-
-	private handlePromptAction(action: string): void {
-		if (!this.currentContextBranch) return;
-
-		if (action === 'branchRename') {
-			// Send message to extension to show VSCode input box
-			this.vscode.postMessage({
-				type: 'branchRenamePrompt',
-				branchName: this.currentContextBranch
-			});
-		} else if (action === 'branchMovePrompt') {
-			// Send message to extension to show branch picker
-			this.vscode.postMessage({
-				type: 'branchMovePrompt',
-				branchName: this.currentContextBranch
-			});
-		} else if (action === 'upstackMovePrompt') {
-			// Send message to extension to show branch picker for upstack move
-			this.vscode.postMessage({
-				type: 'upstackMovePrompt',
-				branchName: this.currentContextBranch
-			});
-		}
-	}
-
-	private hideContextMenu(): void {
-		if (this.contextMenu) {
-			this.contextMenu.style.display = 'none';
-			this.currentContextBranch = null;
-		}
-	}
-
-	private executeBranchAction(action: string): void {
-		if (!this.currentContextBranch) return;
-
-		this.vscode.postMessage({
-			type: action as any,
-			branchName: this.currentContextBranch
-		});
-	}
-
-	private showCommitContextMenu(event: MouseEvent, sha: string, branchName: string): void {
-		if (!this.commitContextMenu) return;
-
-		event.preventDefault();
-		event.stopPropagation();
-
-		// Close branch context menu if open
-		this.hideContextMenu();
-
-		this.currentContextCommit = { sha, branchName };
-
-		// Position the context menu
-		this.commitContextMenu.style.left = `${event.clientX}px`;
-		this.commitContextMenu.style.top = `${event.clientY}px`;
-		this.commitContextMenu.style.display = 'block';
-	}
-
-	private hideCommitContextMenu(): void {
-		if (this.commitContextMenu) {
-			this.commitContextMenu.style.display = 'none';
-			this.currentContextCommit = null;
-		}
-	}
-
-	private executeCommitAction(action: string): void {
-		if (!this.currentContextCommit) return;
-
-		const { sha, branchName } = this.currentContextCommit;
-
-		if (action === 'commitCopySha') {
-			// Copy SHA to clipboard
-			this.vscode.postMessage({ type: 'commitCopySha', sha });
-		} else if (action === 'commitFixup') {
-			this.vscode.postMessage({ type: 'commitFixup', sha });
-		} else if (action === 'commitSplit') {
-			this.vscode.postMessage({ type: 'commitSplit', sha, branchName });
-		}
 	}
 
 	private updateState(newState: DisplayState): void {
@@ -825,17 +609,15 @@ class StackView {
 			card.dataset.parentBranch = branch.tree.parentName;
 		}
 
+		// Add VSCode native context menu support
+		card.dataset.vscodeContext = this.buildBranchContext(branch);
+
 		if (branch.current) {
 			card.classList.add('is-current');
 		}
 		if (branch.restack) {
 			card.classList.add('needs-restack');
 		}
-
-		// Add right-click context menu
-		card.addEventListener('contextmenu', (event: MouseEvent) => {
-			this.showContextMenu(event, branch.name);
-		});
 
 		// Store branch data for diffing
 		(card as any)._branchData = {
@@ -929,6 +711,9 @@ class StackView {
 		// Update classes
 		card.classList.toggle('is-current', Boolean(branch.current));
 		card.classList.toggle('needs-restack', Boolean(branch.restack));
+
+		// Update VSCode context menu data
+		card.dataset.vscodeContext = this.buildBranchContext(branch);
 
 		// Update data attributes for tree position
 		card.dataset.depth = String(branch.tree.depth);
@@ -1223,6 +1008,12 @@ class StackView {
 		row.type = 'button';
 		row.className = 'commit-item';
 		row.dataset.content = 'true';
+
+		// Add VSCode native context menu support
+		if (branchName) {
+			row.dataset.vscodeContext = this.buildCommitContext(commit.sha, branchName);
+		}
+
 		row.addEventListener('click', (event: Event) => {
 			event.stopPropagation();
 			if (typeof commit.sha !== 'string' || commit.sha.length === 0) {
@@ -1230,13 +1021,6 @@ class StackView {
 				return;
 			}
 			this.vscode.postMessage({ type: 'openCommitDiff', sha: commit.sha });
-		});
-
-		// Add right-click context menu for commits
-		row.addEventListener('contextmenu', (event: MouseEvent) => {
-			if (branchName) {
-				this.showCommitContextMenu(event, commit.sha, branchName);
-			}
 		});
 
 		const subject = document.createElement('span');

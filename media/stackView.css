@@ -89,7 +89,6 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  cursor: grab;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 

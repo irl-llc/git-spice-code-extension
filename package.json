@@ -58,6 +58,71 @@
         "command": "git-spice.stackSubmit",
         "title": "Submit Stack",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "git-spice.branchCheckout",
+        "title": "Checkout",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "git-spice.branchRename",
+        "title": "Rename...",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "git-spice.branchMove",
+        "title": "Move onto...",
+        "icon": "$(move)"
+      },
+      {
+        "command": "git-spice.branchMoveWithChildren",
+        "title": "Move with children onto...",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "git-spice.branchEdit",
+        "title": "Edit",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "git-spice.branchRestack",
+        "title": "Restack",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "git-spice.branchSubmit",
+        "title": "Submit",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "git-spice.branchFold",
+        "title": "Fold",
+        "icon": "$(fold)"
+      },
+      {
+        "command": "git-spice.branchSquash",
+        "title": "Squash",
+        "icon": "$(fold-down)"
+      },
+      {
+        "command": "git-spice.branchUntrack",
+        "title": "Untrack",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "git-spice.branchDelete",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "git-spice.commitCopySha",
+        "title": "Copy SHA",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "git-spice.commitSplit",
+        "title": "Split Branch",
+        "icon": "$(split-horizontal)"
       }
     ],
     "keybindings": [
@@ -100,6 +165,73 @@
           "command": "git-spice.stackSubmit",
           "when": "view == gitSpice.branches",
           "group": "navigation@4"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "git-spice.branchCheckout",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "1_branch@1"
+        },
+        {
+          "command": "git-spice.branchRename",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "1_branch@2"
+        },
+        {
+          "command": "git-spice.branchMove",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "2_move@1"
+        },
+        {
+          "command": "git-spice.branchMoveWithChildren",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "2_move@2"
+        },
+        {
+          "command": "git-spice.branchEdit",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch' && webviewBranchIsCurrent == true",
+          "group": "3_actions@1"
+        },
+        {
+          "command": "git-spice.branchRestack",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch' && webviewBranchNeedsRestack == true",
+          "group": "3_actions@2"
+        },
+        {
+          "command": "git-spice.branchSubmit",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "3_actions@3"
+        },
+        {
+          "command": "git-spice.branchFold",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "4_modify@1"
+        },
+        {
+          "command": "git-spice.branchSquash",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "4_modify@2"
+        },
+        {
+          "command": "git-spice.branchUntrack",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "5_danger@1"
+        },
+        {
+          "command": "git-spice.branchDelete",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "5_danger@2"
+        },
+        {
+          "command": "git-spice.commitCopySha",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'commit'",
+          "group": "1_commit@1"
+        },
+        {
+          "command": "git-spice.commitSplit",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'commit'",
+          "group": "1_commit@2"
         }
       ]
     }
