@@ -314,8 +314,8 @@ button {
 .commit-item {
   font-size: 0.7rem;
   display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.25rem;
   color: var(--vscode-descriptionForeground);
   border: none;
   background: transparent;
@@ -560,13 +560,6 @@ button {
 .commit-container {
   display: flex;
   flex-direction: column;
-}
-
-/* Commit item row with toggle */
-.commit-item {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
 }
 
 /* Commit toggle chevron */

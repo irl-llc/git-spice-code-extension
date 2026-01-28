@@ -310,8 +310,15 @@ class StackView {
 	private static readonly NODE_STROKE = 2; // CIRCLE_STROKE_WIDTH
 	private static readonly CURVE_RADIUS = 5; // SWIMLANE_CURVE_RADIUS
 	private static readonly NODE_GAP = 7; // Gap between line endpoints and node edge
-	// Compensate for item-enter animation: items start at translateY(-8px)
-	private static readonly ANIMATION_OFFSET = 8;
+
+	/**
+	 * Redraws the tree using the current state.
+	 */
+	private redrawTree(): void {
+		if (this.currentState?.branches) {
+			this.updateTreeConnections(this.currentState.branches);
+		}
+	}
 
 	/**
 	 * Draws the complete tree graph in SVG (both paths and nodes).
@@ -321,7 +328,10 @@ class StackView {
 		const maxLane = this.computeMaxLane(branches);
 		this.updateGraphWidth(maxLane);
 		this.removeOldDomTreeNodes();
-		requestAnimationFrame(() => this.drawTreeSvg(branches));
+		// Double-rAF ensures layout is complete before measuring positions
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => this.drawTreeSvg(branches));
+		});
 	}
 
 	private computeMaxLane(branches: BranchViewModel[]): number {
@@ -387,8 +397,7 @@ class StackView {
 			const headerEl = wrapper.querySelector('.branch-header');
 			const targetEl = nameEl ?? headerEl ?? wrapper;
 			const targetRect = targetEl.getBoundingClientRect();
-			// Add ANIMATION_OFFSET to compensate for item-enter animation (translateY(-8px) at start)
-			const y = targetRect.top + targetRect.height / 2 - listRect.top + StackView.ANIMATION_OFFSET;
+			const y = targetRect.top + targetRect.height / 2 - listRect.top;
 			const x = this.getLaneX(lane);
 
 			positions.set(branchName, { x, y });
@@ -860,6 +869,10 @@ class StackView {
 				}
 				card.classList.toggle('expanded');
 				toggle.classList.toggle('expanded');
+				// Redraw tree after CSS transition completes (200ms)
+				setTimeout(() => {
+					this.redrawTree();
+				}, StackView.ANIMATION_DURATION);
 			});
 		} else {
 			const spacer = document.createElement('span');
@@ -1103,6 +1116,9 @@ class StackView {
 				this.renderFileChanges(fileList, this.fileCache.get(sha)!, sha);
 			}
 		}
+
+		// Redraw tree after DOM update
+		requestAnimationFrame(() => this.redrawTree());
 	}
 
 	/**
@@ -1120,6 +1136,8 @@ class StackView {
 		const fileList = container.querySelector('.commit-files') as HTMLElement;
 		if (fileList && this.expandedCommits.has(sha)) {
 			this.renderFileChanges(fileList, files, sha);
+			// Redraw tree after files are rendered
+			requestAnimationFrame(() => this.redrawTree());
 		}
 	}
 
