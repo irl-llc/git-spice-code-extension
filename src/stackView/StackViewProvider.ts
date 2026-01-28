@@ -14,6 +14,7 @@ import {
 	execBranchRestack,
 	execBranchSubmit,
 	execBranchMove,
+	execUpstackMove,
 	execCommitFixup,
 	execBranchSplit,
 	execRepoSync,
@@ -134,6 +135,16 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				case 'branchMove':
 					if (typeof message.branchName === 'string' && typeof message.newParent === 'string') {
 						void this.handleBranchMove(message.branchName, message.newParent);
+					}
+					return;
+				case 'upstackMovePrompt':
+					if (typeof message.branchName === 'string') {
+						void this.handleUpstackMovePrompt(message.branchName);
+					}
+					return;
+				case 'upstackMove':
+					if (typeof message.branchName === 'string' && typeof message.newParent === 'string') {
+						void this.handleUpstackMove(message.branchName, message.newParent);
 					}
 					return;
 				default:
@@ -579,6 +590,79 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 			} else {
 				console.log('🔄 Branch move successful');
 				void vscode.window.showInformationMessage(`Branch ${branchName} moved onto ${newParent} successfully.`);
+			}
+
+			await this.refresh();
+		});
+	}
+
+	/**
+	 * Prompts user to select a new parent branch for moving with children
+	 */
+	private async handleUpstackMovePrompt(branchName: string): Promise<void> {
+		if (typeof branchName !== 'string' || branchName.trim() === '') {
+			console.error('❌ Invalid branch name provided to handleUpstackMovePrompt:', branchName);
+			return;
+		}
+
+		const availableParents = this.branches
+			.filter((b) => b.name !== branchName)
+			.map((b) => b.name);
+
+		if (availableParents.length === 0) {
+			void vscode.window.showWarningMessage('No other branches available to move onto.');
+			return;
+		}
+
+		const selected = await vscode.window.showQuickPick(availableParents, {
+			placeHolder: `Select new parent for '${branchName}' and its children`,
+			title: 'Move Branch with Children Onto...',
+		});
+
+		if (selected) {
+			void this.handleUpstackMove(branchName, selected);
+		}
+	}
+
+	/**
+	 * Moves a branch and all its descendants to a new parent
+	 */
+	private async handleUpstackMove(branchName: string, newParent: string): Promise<void> {
+		if (typeof branchName !== 'string' || branchName.trim() === '') {
+			console.error('❌ Invalid branch name provided to handleUpstackMove:', branchName);
+			void vscode.window.showErrorMessage('Invalid branch name provided for move.');
+			return;
+		}
+
+		if (typeof newParent !== 'string' || newParent.trim() === '') {
+			console.error('❌ Invalid parent name provided to handleUpstackMove:', newParent);
+			void vscode.window.showErrorMessage('Invalid parent name provided for move.');
+			return;
+		}
+
+		if (!this.workspaceFolder) {
+			console.error('❌ No workspace folder available for upstack move');
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		console.log('🔄 Executing upstack move for:', branchName, 'onto:', newParent);
+
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: `Moving branch with children: ${branchName} → ${newParent}`,
+			cancellable: false,
+		}, async () => {
+			const result = await execUpstackMove(this.workspaceFolder!, branchName, newParent);
+
+			if ('error' in result) {
+				console.error('🔄 Upstack move failed:', result.error);
+				void vscode.window.showErrorMessage(`Failed to move branch with children: ${result.error}`);
+			} else {
+				console.log('🔄 Upstack move successful');
+				void vscode.window.showInformationMessage(
+					`Branch ${branchName} and children moved onto ${newParent} successfully.`
+				);
 			}
 
 			await this.refresh();

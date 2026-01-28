@@ -195,6 +195,7 @@ export async function execBranchSplit(folder: vscode.WorkspaceFolder, branchName
 /**
  * Moves a branch to a new parent using `gs branch onto`.
  * This changes the base branch without rebasing commits.
+ * Only moves the specified branch; children remain where they are.
  */
 export async function execBranchMove(
 	folder: vscode.WorkspaceFolder,
@@ -213,6 +214,30 @@ export async function execBranchMove(
 		folder,
 		['branch', 'onto', normalizedParent.value, '--branch', normalizedBranch.value],
 		'Branch move',
+	);
+}
+
+/**
+ * Moves a branch and all its descendants to a new parent using `gs upstack onto`.
+ * This rebases the entire upstack (branch + children) onto the new parent.
+ */
+export async function execUpstackMove(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+	newParent: string,
+): Promise<BranchCommandResult> {
+	const normalizedBranch = normalizeNonEmpty(branchName, 'Branch name');
+	if ('error' in normalizedBranch) {
+		return { error: `Upstack move: ${normalizedBranch.error}` };
+	}
+	const normalizedParent = normalizeNonEmpty(newParent, 'New parent name');
+	if ('error' in normalizedParent) {
+		return { error: `Upstack move: ${normalizedParent.error}` };
+	}
+	return runGitSpiceCommand(
+		folder,
+		['upstack', 'onto', normalizedParent.value, '--branch', normalizedBranch.value],
+		'Upstack move',
 	);
 }
 

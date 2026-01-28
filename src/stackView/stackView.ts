@@ -126,6 +126,7 @@ class StackView {
 			{ label: 'Edit', action: 'branchEdit', icon: 'codicon-edit', requiresCurrent: true },
 			{ label: 'Rename', action: 'branchRename', icon: 'codicon-tag', requiresPrompt: true },
 			{ label: 'Move onto...', action: 'branchMovePrompt', icon: 'codicon-move', requiresPrompt: true },
+			{ label: 'Move with children onto...', action: 'upstackMovePrompt', icon: 'codicon-type-hierarchy', requiresPrompt: true },
 			{ label: 'Restack', action: 'branchRestack', icon: 'codicon-refresh', requiresRestack: true },
 			{ label: 'Submit', action: 'branchSubmit', icon: 'codicon-git-pull-request' },
 		];
@@ -262,6 +263,12 @@ class StackView {
 			// Send message to extension to show branch picker
 			this.vscode.postMessage({
 				type: 'branchMovePrompt',
+				branchName: this.currentContextBranch
+			});
+		} else if (action === 'upstackMovePrompt') {
+			// Send message to extension to show branch picker for upstack move
+			this.vscode.postMessage({
+				type: 'upstackMovePrompt',
 				branchName: this.currentContextBranch
 			});
 		}
