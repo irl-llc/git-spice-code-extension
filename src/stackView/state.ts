@@ -1,4 +1,4 @@
-import type { BranchChangeViewModel, BranchRecord, BranchViewModel, DisplayState, TreePosition } from './types';
+import type { BranchChangeViewModel, BranchRecord, BranchViewModel, DisplayState, TreePosition, UncommittedState } from './types';
 
 /** Branch with computed tree position */
 type BranchWithTree = {
@@ -10,12 +10,20 @@ type BranchWithTree = {
  * Builds the display state showing ALL tracked branches (like `gs ll -a`).
  * Branches are organized in a tree structure based on parent-child relationships.
  */
-export function buildDisplayState(branches: BranchRecord[], error?: string): DisplayState {
+export function buildDisplayState(
+	branches: BranchRecord[],
+	error?: string,
+	uncommitted?: UncommittedState,
+): DisplayState {
 	const branchMap = new Map(branches.map((branch) => [branch.name, branch]));
 	const ordered = orderStackWithTree(branches, branchMap);
 
+	const hasUncommittedChanges = uncommitted &&
+		(uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
+
 	return {
 		branches: ordered.map((item) => createBranchViewModel(item.branch, item.tree)),
+		uncommitted: hasUncommittedChanges ? uncommitted : undefined,
 		error,
 	};
 }

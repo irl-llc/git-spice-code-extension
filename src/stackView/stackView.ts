@@ -15,7 +15,7 @@
  *    - Keyed reconciliation prevents unnecessary re-renders
  * 
  * 3. RENDERING PIPELINE
- *    - updateState() → updateBranches() → diffList()
+ *    - updateState() → updateBranchItems() → diffList()
  *    - Each branch tracks its own data for change detection
  *    - Commits can be expanded/animated independently
  *    - All animations are CSS-based for performance
@@ -32,8 +32,15 @@
  *    - New state fields: extend updateState() and render functions
  */
 
-import type { BranchViewModel, CommitFileChange, DisplayState } from './types';
+import type { BranchViewModel, CommitFileChange, DisplayState, UncommittedState, WorkingCopyChange } from './types';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
+
+/** Action button configuration for file rows. */
+type FileRowAction = {
+	icon: string;
+	title: string;
+	onClick: () => void;
+};
 
 interface BranchData {
 	current: boolean;
@@ -65,6 +72,9 @@ class StackView {
 	private currentState: DisplayState | null = null;
 	private fileCache: Map<string, CommitFileChange[]> = new Map();
 	private expandedCommits: Set<string> = new Set();
+	private expandedStagedSection = true;
+	private expandedUnstagedSection = true;
+	private commitMessageValue = '';
 
 	private static readonly COMMIT_CHUNK = 10;
 	private static readonly ANIMATION_DURATION = 200;
@@ -138,8 +148,44 @@ class StackView {
 		this.errorEl.classList.toggle('hidden', !newState.error);
 		this.errorEl.textContent = newState.error ?? '';
 
-		// Update branch list
-		this.updateBranches(oldState?.branches ?? [], newState.branches);
+		// Render branches first so DOM elements exist for positioning
+		this.updateBranchItems(oldState?.branches ?? [], newState.branches);
+
+		// Position uncommitted card relative to the current branch
+		this.updateUncommittedCard(newState.uncommitted, newState.branches);
+
+		// Draw tree once with all nodes in final positions
+		this.updateTreeConnections(newState.branches);
+	}
+
+	/**
+	 * Updates the uncommitted changes card, positioned above the current branch.
+	 */
+	private updateUncommittedCard(uncommitted: UncommittedState | undefined, branches: BranchViewModel[]): void {
+		// Always remove first so re-insertion positions correctly after branch switches
+		this.stackList.querySelector('.uncommitted-item')?.remove();
+
+		const hasChanges = uncommitted &&
+			(uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
+		if (!hasChanges) return;
+
+		const newCard = this.renderUncommittedCard(uncommitted);
+		const insertionPoint = this.findCurrentBranchElement(branches);
+
+		if (insertionPoint) {
+			this.stackList.insertBefore(newCard, insertionPoint);
+		} else {
+			this.stackList.appendChild(newCard);
+		}
+	}
+
+	/** Finds the DOM element for the current branch. */
+	private findCurrentBranchElement(branches: BranchViewModel[]): HTMLElement | null {
+		const currentBranch = branches.find((b) => b.current);
+		if (!currentBranch) {
+			return null;
+		}
+		return this.stackList.querySelector(`.stack-item[data-key="${currentBranch.name}"]`);
 	}
 
 	/**
@@ -268,7 +314,8 @@ class StackView {
 		});
 	}
 
-	private updateBranches(oldBranches: BranchViewModel[], newBranches: BranchViewModel[]): void {
+	/** Renders/updates branch DOM elements without drawing the tree. */
+	private updateBranchItems(oldBranches: BranchViewModel[], newBranches: BranchViewModel[]): void {
 		if (newBranches.length === 0) {
 			this.emptyEl.textContent = this.currentState?.error ?? 'No branches in the current stack.';
 			this.emptyEl.classList.remove('hidden');
@@ -298,9 +345,6 @@ class StackView {
 			itemSelector: '.stack-item',
 			itemClass: 'stack-item',
 		});
-
-		// Update tree connections on stack-item wrappers
-		this.updateTreeConnections(newBranches);
 	}
 
 	// Match VSCode's scmHistory.ts dimensions
@@ -325,7 +369,11 @@ class StackView {
 	 * Uses lane assignments to create a multi-column graph showing branch divergence.
 	 */
 	private updateTreeConnections(branches: BranchViewModel[]): void {
-		const maxLane = this.computeMaxLane(branches);
+		const hasUncommitted = !!this.stackList.querySelector('.uncommitted-item');
+		const branchMaxLane = this.computeMaxLane(branches);
+		// Only fork to a new lane if the current branch has children (divergence)
+		const needsDivergenceLane = hasUncommitted && !this.currentBranchIsStackTip(branches);
+		const maxLane = needsDivergenceLane ? branchMaxLane + 1 : branchMaxLane;
 		this.updateGraphWidth(maxLane);
 		this.removeOldDomTreeNodes();
 		// Double-rAF ensures layout is complete before measuring positions
@@ -336,6 +384,13 @@ class StackView {
 
 	private computeMaxLane(branches: BranchViewModel[]): number {
 		return branches.reduce((max, b) => Math.max(max, b.tree.lane), 0);
+	}
+
+	/** Whether the current branch has children — if not, it's the stack tip. */
+	private currentBranchIsStackTip(branches: BranchViewModel[]): boolean {
+		const current = branches.find((b) => b.current);
+		if (!current) return true;
+		return !branches.some((b) => b.tree.parentName === current.name);
 	}
 
 	private updateGraphWidth(maxLane: number): void {
@@ -384,15 +439,23 @@ class StackView {
 		const listRect = this.stackList.getBoundingClientRect();
 		const branchLanes = new Map(branches.map((b) => [b.name, b.tree.lane]));
 
+		// Tip of stack: same lane as current branch; otherwise fork to a new lane
+		const currentBranch = branches.find((b) => b.current);
+		const isTip = this.currentBranchIsStackTip(branches);
+		const uncommittedLane = isTip
+			? (currentBranch?.tree.lane ?? 0)
+			: this.computeMaxLane(branches) + 1;
+
 		this.stackList.querySelectorAll('.stack-item').forEach((item) => {
 			const wrapper = item as HTMLElement;
 			const branchName = wrapper.dataset.branch;
 			if (!branchName) return;
 
-			const lane = branchLanes.get(branchName);
+			const isUncommitted = branchName === '__uncommitted__';
+			const lane = isUncommitted ? uncommittedLane : branchLanes.get(branchName);
 			if (lane === undefined) return;
 
-			// Find the branch name span for precise Y alignment, fall back to header or wrapper
+			// Find the branch name span for precise Y alignment
 			const nameEl = wrapper.querySelector('.branch-name');
 			const headerEl = wrapper.querySelector('.branch-header');
 			const targetEl = nameEl ?? headerEl ?? wrapper;
@@ -409,7 +472,7 @@ class StackView {
 	private createTreeSvgElement(
 		branches: BranchViewModel[],
 		nodePositions: Map<string, { x: number; y: number }>,
-		paths: Array<{ d: string; restack: boolean }>,
+		paths: Array<{ d: string; restack: boolean; uncommitted?: boolean }>,
 	): SVGSVGElement {
 		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 		svg.classList.add('tree-svg');
@@ -422,7 +485,7 @@ class StackView {
 		// Draw nodes on top
 		this.appendNodes(svg, branches, nodePositions, colors);
 
-		this.setSvgDimensions(svg, branches, nodePositions);
+		this.setSvgDimensions(svg, nodePositions);
 		return svg;
 	}
 
@@ -439,20 +502,25 @@ class StackView {
 
 	private appendPaths(
 		svg: SVGSVGElement,
-		paths: Array<{ d: string; restack: boolean }>,
-		colors: { line: string; restack: string },
+		paths: Array<{ d: string; restack: boolean; uncommitted?: boolean }>,
+		colors: { line: string; restack: string; nodeCurrent: string },
 	): void {
-		paths.forEach(({ d, restack }) => {
+		paths.forEach(({ d, restack, uncommitted }) => {
 			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 			path.setAttribute('d', d);
-			path.setAttribute('stroke', restack ? colors.restack : colors.line);
 			path.setAttribute('stroke-width', '1.5');
 			path.setAttribute('fill', 'none');
 			path.setAttribute('stroke-linecap', 'round');
 			path.setAttribute('stroke-linejoin', 'round');
 
-			if (restack) {
+			if (uncommitted) {
+				path.setAttribute('stroke', colors.nodeCurrent);
 				path.setAttribute('stroke-dasharray', '4 2');
+			} else if (restack) {
+				path.setAttribute('stroke', colors.restack);
+				path.setAttribute('stroke-dasharray', '4 2');
+			} else {
+				path.setAttribute('stroke', colors.line);
 			}
 
 			svg.appendChild(path);
@@ -468,12 +536,39 @@ class StackView {
 		const branchMap = new Map(branches.map((b) => [b.name, b]));
 
 		nodePositions.forEach(({ x, y }, branchName) => {
+			// Handle uncommitted node specially
+			if (branchName === '__uncommitted__') {
+				const circle = this.createUncommittedNodeCircle(x, y, colors);
+				svg.appendChild(circle);
+				return;
+			}
+
 			const branch = branchMap.get(branchName);
 			const isCurrent = branch?.current ?? false;
 			const needsRestack = branch?.restack ?? false;
 			const circle = this.createNodeCircle(x, y, isCurrent, needsRestack, colors);
 			svg.appendChild(circle);
 		});
+	}
+
+	/**
+	 * Creates an SVG circle for the uncommitted changes node.
+	 * Dashed blue hollow circle.
+	 */
+	private createUncommittedNodeCircle(
+		x: number,
+		y: number,
+		colors: { nodeCurrent: string; bg: string },
+	): SVGCircleElement {
+		const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+		circle.setAttribute('cx', String(x));
+		circle.setAttribute('cy', String(y));
+		circle.setAttribute('r', String(StackView.NODE_RADIUS_CURRENT));
+		circle.setAttribute('fill', colors.bg);
+		circle.setAttribute('stroke', colors.nodeCurrent);
+		circle.setAttribute('stroke-width', String(StackView.NODE_STROKE));
+		circle.setAttribute('stroke-dasharray', '2 2');
+		return circle;
 	}
 
 	/**
@@ -517,15 +612,22 @@ class StackView {
 
 	private setSvgDimensions(
 		svg: SVGSVGElement,
-		branches: BranchViewModel[],
 		nodePositions: Map<string, { x: number; y: number }>,
 	): void {
 		const maxY = this.computeSvgHeight(nodePositions);
-		const svgWidth = (this.computeMaxLane(branches) + 1) * StackView.LANE_WIDTH + StackView.NODE_RADIUS;
-		svg.setAttribute('width', String(svgWidth));
+		const maxX = this.computeSvgWidth(nodePositions);
+		svg.setAttribute('width', String(maxX));
 		svg.setAttribute('height', String(maxY));
-		svg.style.width = `${svgWidth}px`;
+		svg.style.width = `${maxX}px`;
 		svg.style.height = `${maxY}px`;
+	}
+
+	private computeSvgWidth(nodePositions: Map<string, { x: number; y: number }>): number {
+		let maxX = 0;
+		for (const { x } of nodePositions.values()) {
+			maxX = Math.max(maxX, x);
+		}
+		return maxX + StackView.NODE_RADIUS;
 	}
 
 	/** Builds SVG path data for parent-child connections. */
@@ -533,8 +635,19 @@ class StackView {
 		branches: BranchViewModel[],
 		branchMap: Map<string, BranchViewModel>,
 		nodePositions: Map<string, { x: number; y: number }>,
-	): Array<{ d: string; restack: boolean }> {
-		const paths: Array<{ d: string; restack: boolean }> = [];
+	): Array<{ d: string; restack: boolean; uncommitted?: boolean }> {
+		const paths: Array<{ d: string; restack: boolean; uncommitted?: boolean }> = [];
+
+		// Add uncommitted connector if present
+		const uncommittedPos = nodePositions.get('__uncommitted__');
+		const currentBranch = branches.find((b) => b.current);
+		if (uncommittedPos && currentBranch) {
+			const currentPos = nodePositions.get(currentBranch.name);
+			if (currentPos) {
+				const d = this.createRoundedPath(currentPos.x, currentPos.y, uncommittedPos.x, uncommittedPos.y);
+				paths.push({ d, restack: false, uncommitted: true });
+			}
+		}
 
 		for (const branch of branches) {
 			if (!branch.tree.parentName) continue;
@@ -1158,66 +1271,63 @@ class StackView {
 		}
 	}
 
-	/**
-	 * Renders a single file change row.
-	 */
-	private renderFileChangeRow(file: CommitFileChange, sha: string): HTMLElement {
+	/** Creates a file-change row with icon, name, and folder. */
+	private createFileRow(path: string): HTMLDivElement {
 		const row = document.createElement('div');
 		row.className = 'file-change';
+		this.appendFileIdentity(row, path);
+		return row;
+	}
 
-		// File icon
+	/** Appends file icon, name, and folder path to a row. */
+	private appendFileIdentity(row: HTMLElement, path: string): void {
 		const icon = document.createElement('i');
-		icon.className = `file-icon codicon codicon-file`;
+		icon.className = 'file-icon codicon codicon-file';
 		row.appendChild(icon);
 
-		// Extract file name and folder path
-		const lastSlash = file.path.lastIndexOf('/');
-		const fileName = lastSlash >= 0 ? file.path.slice(lastSlash + 1) : file.path;
-		const folderPath = lastSlash >= 0 ? file.path.slice(0, lastSlash) : '';
+		const lastSlash = path.lastIndexOf('/');
+		const fileName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+		const folderPath = lastSlash >= 0 ? path.slice(0, lastSlash) : '';
 
-		// File name
 		const nameSpan = document.createElement('span');
 		nameSpan.className = 'file-name';
 		nameSpan.textContent = fileName;
 		row.appendChild(nameSpan);
 
-		// Folder path
 		const folderSpan = document.createElement('span');
 		folderSpan.className = 'file-folder';
 		folderSpan.textContent = folderPath;
 		row.appendChild(folderSpan);
+	}
 
-		// Open current file button (hidden for deleted files)
+	/** Appends a file status badge (e.g., M, A, D, U). */
+	private appendFileStatus(row: HTMLElement, status: string): void {
+		const span = document.createElement('span');
+		span.className = `file-status status-${status.toLowerCase()}`;
+		span.textContent = status;
+		row.appendChild(span);
+	}
+
+	/** Renders a single commit file change row. */
+	private renderFileChangeRow(file: CommitFileChange, sha: string): HTMLElement {
+		const row = this.createFileRow(file.path);
+
 		if (file.status !== 'D') {
-			const openBtn = document.createElement('button');
-			openBtn.type = 'button';
-			openBtn.className = 'open-file-btn';
-			openBtn.title = 'Open current file';
-			openBtn.innerHTML = '<i class="codicon codicon-go-to-file"></i>';
-			openBtn.addEventListener('click', (event: Event) => {
-				event.stopPropagation();
+			const openBtn = this.createFileActionButton('codicon-go-to-file', 'Open current file', () => {
 				this.vscode.postMessage({ type: 'openCurrentFile', path: file.path });
 			});
 			row.appendChild(openBtn);
 		}
 
-		// Status indicator (always last)
-		const statusSpan = document.createElement('span');
-		statusSpan.className = `file-status status-${file.status.toLowerCase()}`;
-		statusSpan.textContent = file.status;
-		row.appendChild(statusSpan);
-
-		// Click on row opens the diff for this file
-		row.addEventListener('click', (event: Event) => {
-			const target = event.target as HTMLElement;
-			if (target.closest('.open-file-btn')) {
-				return;
-			}
-			event.stopPropagation();
-			this.vscode.postMessage({ type: 'openFileDiff', sha, path: file.path });
-		});
-
+		this.appendFileStatus(row, file.status);
+		row.addEventListener('click', (e) => this.handleCommitFileClick(e, sha, file.path));
 		return row;
+	}
+
+	private handleCommitFileClick(event: Event, sha: string, path: string): void {
+		if ((event.target as HTMLElement).closest('button')) return;
+		event.stopPropagation();
+		this.vscode.postMessage({ type: 'openFileDiff', sha, path });
 	}
 
 	private createTag(label: string, variant: string): HTMLElement {
@@ -1225,6 +1335,261 @@ class StackView {
 		span.className = 'tag' + (variant ? ' tag-' + variant : '');
 		span.textContent = label;
 		return span;
+	}
+
+	/** Renders the uncommitted changes card wrapper. */
+	private renderUncommittedCard(uncommitted: UncommittedState): HTMLElement {
+		const wrapper = document.createElement('li');
+		wrapper.className = 'stack-item uncommitted-item';
+		wrapper.dataset.branch = '__uncommitted__';
+
+		const node = document.createElement('div');
+		node.className = 'tree-node uncommitted';
+		wrapper.appendChild(node);
+
+		const card = document.createElement('article');
+		card.className = 'branch-card uncommitted expanded';
+		card.appendChild(this.renderUncommittedContent(uncommitted));
+		wrapper.appendChild(card);
+
+		return wrapper;
+	}
+
+	/** Renders the inner content of the uncommitted card. */
+	private renderUncommittedContent(uncommitted: UncommittedState): HTMLElement {
+		const content = document.createElement('div');
+		content.className = 'branch-content';
+		content.appendChild(this.renderUncommittedHeader());
+		content.appendChild(this.renderChangesSections(uncommitted));
+		content.appendChild(this.renderCommitForm());
+		return content;
+	}
+
+	/** Renders staged and unstaged sections container. */
+	private renderChangesSections(uncommitted: UncommittedState): HTMLElement {
+		const container = document.createElement('div');
+		container.className = 'uncommitted-sections';
+
+		if (uncommitted.staged.length > 0) {
+			container.appendChild(this.renderChangesSection(
+				'Staged Changes', uncommitted.staged, this.expandedStagedSection, true,
+			));
+		}
+		if (uncommitted.unstaged.length > 0) {
+			container.appendChild(this.renderChangesSection(
+				'Changes', uncommitted.unstaged, this.expandedUnstagedSection, false,
+			));
+		}
+
+		return container;
+	}
+
+	private renderUncommittedHeader(): HTMLElement {
+		const header = document.createElement('div');
+		header.className = 'branch-header';
+
+		const spacer = document.createElement('span');
+		spacer.className = 'branch-toggle-spacer';
+		header.appendChild(spacer);
+
+		const nameSpan = document.createElement('span');
+		nameSpan.className = 'branch-name';
+		nameSpan.textContent = 'Uncommitted Changes';
+		header.appendChild(nameSpan);
+
+		const tags = document.createElement('div');
+		tags.className = 'branch-tags';
+		header.appendChild(tags);
+
+		return header;
+	}
+
+	/** Renders a collapsible section for staged or unstaged changes. */
+	private renderChangesSection(
+		title: string,
+		files: WorkingCopyChange[],
+		expanded: boolean,
+		isStaged: boolean,
+	): HTMLElement {
+		const section = document.createElement('div');
+		section.className = 'changes-section';
+
+		const fileList = this.renderFileList(files, isStaged, expanded);
+		const header = this.renderChangesSectionHeader(title, files.length, fileList, isStaged);
+
+		section.appendChild(header);
+		section.appendChild(fileList);
+		return section;
+	}
+
+	private renderChangesSectionHeader(
+		title: string,
+		count: number,
+		fileList: HTMLElement,
+		isStaged: boolean,
+	): HTMLElement {
+		const header = document.createElement('div');
+		header.className = 'changes-section-header';
+
+		const toggle = document.createElement('i');
+		toggle.className = `codicon codicon-chevron-${fileList.classList.contains('hidden') ? 'right' : 'down'}`;
+		header.appendChild(toggle);
+
+		const titleSpan = document.createElement('span');
+		titleSpan.textContent = `${title} (${count})`;
+		header.appendChild(titleSpan);
+
+		header.addEventListener('click', () => this.toggleChangesSection(toggle, fileList, isStaged));
+		return header;
+	}
+
+	private toggleChangesSection(toggle: HTMLElement, fileList: HTMLElement, isStaged: boolean): void {
+		const isExpanded = toggle.classList.contains('codicon-chevron-down');
+		toggle.classList.toggle('codicon-chevron-down', !isExpanded);
+		toggle.classList.toggle('codicon-chevron-right', isExpanded);
+		fileList.classList.toggle('hidden', isExpanded);
+
+		if (isStaged) {
+			this.expandedStagedSection = !isExpanded;
+		} else {
+			this.expandedUnstagedSection = !isExpanded;
+		}
+	}
+
+	private renderFileList(files: WorkingCopyChange[], isStaged: boolean, expanded: boolean): HTMLElement {
+		const fileList = document.createElement('div');
+		fileList.className = 'commit-files' + (expanded ? '' : ' hidden');
+
+		for (const file of files) {
+			fileList.appendChild(this.renderWorkingCopyFileRow(file, isStaged));
+		}
+		return fileList;
+	}
+
+	/** Renders a file row for working copy changes with appropriate actions. */
+	private renderWorkingCopyFileRow(file: WorkingCopyChange, isStaged: boolean): HTMLElement {
+		const row = this.createFileRow(file.path);
+		this.appendWorkingCopyActions(row, file, isStaged);
+		this.appendFileStatus(row, file.status);
+		row.addEventListener('click', (e) => this.handleWorkingCopyFileClick(e, file.path, isStaged));
+		return row;
+	}
+
+	private appendWorkingCopyActions(row: HTMLElement, file: WorkingCopyChange, isStaged: boolean): void {
+		if (isStaged) {
+			row.appendChild(this.createFileActionButton('codicon-remove', 'Unstage', () => {
+				this.vscode.postMessage({ type: 'unstageFile', path: file.path });
+			}));
+		} else {
+			row.appendChild(this.createFileActionButton('codicon-discard', 'Discard Changes', () => {
+				this.vscode.postMessage({ type: 'discardFile', path: file.path });
+			}));
+			row.appendChild(this.createFileActionButton('codicon-add', 'Stage', () => {
+				this.vscode.postMessage({ type: 'stageFile', path: file.path });
+			}));
+		}
+
+		if (file.status !== 'D') {
+			row.appendChild(this.createFileActionButton('codicon-go-to-file', 'Open File', () => {
+				this.vscode.postMessage({ type: 'openCurrentFile', path: file.path });
+			}));
+		}
+	}
+
+	private handleWorkingCopyFileClick(event: Event, path: string, staged: boolean): void {
+		if ((event.target as HTMLElement).closest('button')) return;
+		event.stopPropagation();
+		this.vscode.postMessage({ type: 'openWorkingCopyDiff', path, staged });
+	}
+
+	private createFileActionButton(iconClass: string, title: string, onClick: () => void): HTMLButtonElement {
+		const btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = 'file-action-btn';
+		btn.title = title;
+		btn.innerHTML = `<i class="codicon ${iconClass}"></i>`;
+		btn.addEventListener('click', (event: Event) => {
+			event.stopPropagation();
+			onClick();
+		});
+		return btn;
+	}
+
+	/** Renders the commit message input and action buttons. */
+	private renderCommitForm(): HTMLElement {
+		const form = document.createElement('div');
+		form.className = 'commit-form';
+
+		const createBranchBtn = this.createCommitButton('Create new branch', 'commit-btn-primary');
+		const commitBtn = this.createCommitButton('Add to current branch', 'commit-btn-secondary');
+		const buttons = [createBranchBtn, commitBtn];
+
+		const input = this.createCommitInput(buttons);
+		form.appendChild(input);
+
+		const actions = document.createElement('div');
+		actions.className = 'commit-actions';
+
+		createBranchBtn.addEventListener('click', () => {
+			this.submitCommitMessage(input, 'createBranch');
+		});
+		actions.appendChild(createBranchBtn);
+
+		commitBtn.addEventListener('click', () => {
+			this.submitCommitMessage(input, 'commitChanges');
+		});
+		actions.appendChild(commitBtn);
+
+		form.appendChild(actions);
+		return form;
+	}
+
+	private createCommitInput(buttons: HTMLButtonElement[]): HTMLInputElement {
+		const input = document.createElement('input');
+		input.type = 'text';
+		input.className = 'commit-message-input';
+		input.placeholder = 'Message (press Enter to commit)';
+		input.value = this.commitMessageValue;
+
+		input.addEventListener('input', () => this.handleCommitInputChange(input, buttons));
+		input.addEventListener('keydown', (e: KeyboardEvent) => this.handleCommitKeydown(e, input));
+
+		this.syncCommitButtonStates(input, buttons);
+		return input;
+	}
+
+	private handleCommitInputChange(input: HTMLInputElement, buttons: HTMLButtonElement[]): void {
+		this.commitMessageValue = input.value;
+		this.syncCommitButtonStates(input, buttons);
+	}
+
+	private handleCommitKeydown(event: KeyboardEvent, input: HTMLInputElement): void {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		this.submitCommitMessage(input, 'createBranch');
+	}
+
+	private syncCommitButtonStates(input: HTMLInputElement, buttons: HTMLButtonElement[]): void {
+		const hasMessage = input.value.trim().length > 0;
+		buttons.forEach((btn) => { btn.disabled = !hasMessage; });
+	}
+
+	private createCommitButton(label: string, variant: string): HTMLButtonElement {
+		const btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = `commit-btn ${variant}`;
+		btn.textContent = label;
+		btn.disabled = true;
+		return btn;
+	}
+
+	private submitCommitMessage(input: HTMLInputElement, type: 'createBranch' | 'commitChanges'): void {
+		const message = input.value.trim();
+		if (!message) return;
+
+		this.vscode.postMessage({ type, message });
+		this.commitMessageValue = '';
+		input.value = '';
 	}
 
 }

@@ -1,4 +1,4 @@
-import type { CommitFileChange, DisplayState } from './types';
+import type { CommitFileChange, DisplayState, UncommittedState } from './types';
 
 // Messages from webview to extension
 export type WebviewMessage =
@@ -27,7 +27,14 @@ export type WebviewMessage =
 	| { type: 'upstackMove'; branchName: string; newParent: string }
 	| { type: 'getCommitFiles'; sha: string }
 	| { type: 'openFileDiff'; sha: string; path: string }
-	| { type: 'openCurrentFile'; path: string };
+	| { type: 'openCurrentFile'; path: string }
+	// Working copy operations
+	| { type: 'stageFile'; path: string }
+	| { type: 'unstageFile'; path: string }
+	| { type: 'discardFile'; path: string }
+	| { type: 'openWorkingCopyDiff'; path: string; staged: boolean }
+	| { type: 'commitChanges'; message: string }
+	| { type: 'createBranch'; message: string };
 
 // Messages from extension to webview
 export type ExtensionMessage =

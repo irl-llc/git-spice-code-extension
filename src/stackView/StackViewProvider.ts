@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { buildDisplayState } from './state';
-import type { BranchRecord, CommitFileChange, FileChangeStatus } from './types';
+import type { BranchRecord, CommitFileChange, FileChangeStatus, UncommittedState, WorkingCopyChange } from './types';
 import type { WebviewMessage } from './webviewTypes';
 import {
 	execGitSpice,
@@ -19,6 +19,7 @@ import {
 	execCommitFixup,
 	execBranchSplit,
 	execRepoSync,
+	execBranchCreate,
 	type BranchCommandResult,
 } from '../utils/gitSpice';
 import { readMediaFile, readDistFile } from '../utils/readFileSync';
@@ -26,8 +27,12 @@ import { readMediaFile, readDistFile } from '../utils/readFileSync';
 export class StackViewProvider implements vscode.WebviewViewProvider {
 	private view!: vscode.WebviewView; // definite assignment assertion - set in resolveWebviewView
 	private branches: BranchRecord[] = [];
+	private uncommitted: UncommittedState | undefined;
 	private lastError: string | undefined;
-	private fileWatcher: vscode.FileSystemWatcher | undefined;
+	private gitWatcher: vscode.FileSystemWatcher | undefined;
+	private workspaceWatcher: vscode.FileSystemWatcher | undefined;
+	private saveListener: vscode.Disposable | undefined;
+	private refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(private workspaceFolder: vscode.WorkspaceFolder | undefined, private readonly extensionUri: vscode.Uri) {
 		// No initialization here - everything happens after resolveWebviewView
@@ -173,6 +178,36 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 						void this.handleOpenCurrentFile(message.path);
 					}
 					return;
+				case 'stageFile':
+					if (typeof message.path === 'string') {
+						void this.handleStageFile(message.path);
+					}
+					return;
+				case 'unstageFile':
+					if (typeof message.path === 'string') {
+						void this.handleUnstageFile(message.path);
+					}
+					return;
+				case 'discardFile':
+					if (typeof message.path === 'string') {
+						void this.handleDiscardFile(message.path);
+					}
+					return;
+				case 'openWorkingCopyDiff':
+					if (typeof message.path === 'string' && typeof message.staged === 'boolean') {
+						void this.handleOpenWorkingCopyDiff(message.path, message.staged);
+					}
+					return;
+				case 'commitChanges':
+					if (typeof message.message === 'string') {
+						void this.handleCommitChanges(message.message);
+					}
+					return;
+				case 'createBranch':
+					if (typeof message.message === 'string') {
+						void this.handleCreateBranch(message.message);
+					}
+					return;
 				default:
 					return;
 			}
@@ -191,20 +226,26 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	async refresh(): Promise<void> {
 		if (!this.workspaceFolder) {
 			this.branches = [];
+			this.uncommitted = undefined;
 			this.lastError = 'Open a workspace folder to view git-spice stacks.';
 			this.pushState();
 			return;
 		}
 
-		const result = await execGitSpice(this.workspaceFolder);
-		if ('error' in result) {
+		const [branchResult, uncommittedResult] = await Promise.all([
+			execGitSpice(this.workspaceFolder),
+			this.fetchWorkingCopyChanges(),
+		]);
+
+		if ('error' in branchResult) {
 			this.branches = [];
-			this.lastError = result.error;
+			this.lastError = branchResult.error;
 		} else {
-			this.branches = result.value;
+			this.branches = branchResult.value;
 			this.lastError = undefined;
 		}
 
+		this.uncommitted = uncommittedResult;
 		this.pushState();
 	}
 
@@ -265,7 +306,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 
 	private pushState(): void {
 		// No undefined check needed - only called when view exists
-		const state = buildDisplayState(this.branches, this.lastError);
+		const state = buildDisplayState(this.branches, this.lastError, this.uncommitted);
 		void this.view.webview.postMessage({ type: 'state', payload: state });
 	}
 
@@ -1096,34 +1137,383 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	private setupFileWatcher(): void {
-		// Dispose existing watcher if any
-		this.fileWatcher?.dispose();
-		this.fileWatcher = undefined;
+	/**
+	 * Fetches the current working copy changes (staged and unstaged).
+	 */
+	private async fetchWorkingCopyChanges(): Promise<UncommittedState> {
+		if (!this.workspaceFolder) {
+			return { staged: [], unstaged: [] };
+		}
 
-		if (!this.workspaceFolder || !this.view) {
+		try {
+			const { execFile } = await import('node:child_process');
+			const { promisify } = await import('node:util');
+			const execFileAsync = promisify(execFile);
+
+			const { stdout } = await execFileAsync(
+				'git',
+				['status', '--porcelain=v1', '--untracked-files=all'],
+				{ cwd: this.workspaceFolder.uri.fsPath }
+			);
+
+			return this.parseGitStatusOutput(stdout);
+		} catch (error) {
+			console.error('❌ Error fetching working copy changes:', error);
+			return { staged: [], unstaged: [] };
+		}
+	}
+
+	/**
+	 * Parses git status --porcelain output into staged and unstaged changes.
+	 * Format: XY PATH where X = staged status, Y = unstaged status
+	 */
+	private parseGitStatusOutput(stdout: string): UncommittedState {
+		const staged: WorkingCopyChange[] = [];
+		const unstaged: WorkingCopyChange[] = [];
+
+		for (const line of stdout.split('\n')) {
+			if (line.length < 3) {
+				continue;
+			}
+
+			const stagedStatus = line[0];
+			const unstagedStatus = line[1];
+			const filePath = line.slice(3);
+
+			if (stagedStatus !== ' ' && stagedStatus !== '?') {
+				staged.push({
+					path: filePath,
+					status: this.mapGitStatusChar(stagedStatus),
+				});
+			}
+
+			if (unstagedStatus !== ' ') {
+				unstaged.push({
+					path: filePath,
+					status: this.mapGitStatusChar(unstagedStatus),
+				});
+			}
+		}
+
+		return { staged, unstaged };
+	}
+
+	private mapGitStatusChar(char: string): FileChangeStatus {
+		const statusMap: Record<string, FileChangeStatus> = {
+			'A': 'A', 'M': 'M', 'D': 'D', 'R': 'R', 'C': 'C', 'T': 'T', '?': 'U',
+		};
+		return statusMap[char] ?? 'M';
+	}
+
+	/**
+	 * Stages a file using git add.
+	 */
+	private async handleStageFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) {
 			return;
 		}
 
-		// Watch for git-spice metadata changes and Git HEAD changes
-		// git-spice stores its data in .git/refs/spice/data
-		// HEAD changes indicate branch switches
-		const gitDir = vscode.Uri.joinPath(this.workspaceFolder.uri, '.git');
-		const pattern = new vscode.RelativePattern(gitDir, '{refs/spice/data,HEAD,refs/heads/**}');
+		try {
+			const { execFile } = await import('node:child_process');
+			const { promisify } = await import('node:util');
+			const execFileAsync = promisify(execFile);
 
-		this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+			await execFileAsync('git', ['add', '--', filePath], {
+				cwd: this.workspaceFolder.uri.fsPath,
+			});
 
-		const refreshHandler = () => {
-			void this.refresh();
-		};
+			await this.refresh();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error staging file:', message);
+			void vscode.window.showErrorMessage(`Failed to stage file: ${message}`);
+		}
+	}
 
-		this.fileWatcher.onDidChange(refreshHandler);
-		this.fileWatcher.onDidCreate(refreshHandler);
-		this.fileWatcher.onDidDelete(refreshHandler);
+	/**
+	 * Unstages a file using git restore --staged.
+	 */
+	private async handleUnstageFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			return;
+		}
+
+		try {
+			const { execFile } = await import('node:child_process');
+			const { promisify } = await import('node:util');
+			const execFileAsync = promisify(execFile);
+
+			await execFileAsync('git', ['restore', '--staged', '--', filePath], {
+				cwd: this.workspaceFolder.uri.fsPath,
+			});
+
+			await this.refresh();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error unstaging file:', message);
+			void vscode.window.showErrorMessage(`Failed to unstage file: ${message}`);
+		}
+	}
+
+	/**
+	 * Discards changes to a file using git restore (with confirmation).
+	 */
+	private async handleDiscardFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			return;
+		}
+
+		const confirmed = await vscode.window.showWarningMessage(
+			`Discard changes to '${filePath}'? This cannot be undone.`,
+			{ modal: true },
+			'Discard'
+		);
+
+		if (confirmed !== 'Discard') {
+			return;
+		}
+
+		try {
+			const { execFile } = await import('node:child_process');
+			const { promisify } = await import('node:util');
+			const execFileAsync = promisify(execFile);
+
+			await execFileAsync('git', ['restore', '--', filePath], {
+				cwd: this.workspaceFolder.uri.fsPath,
+			});
+
+			await this.refresh();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error discarding file:', message);
+			void vscode.window.showErrorMessage(`Failed to discard changes: ${message}`);
+		}
+	}
+
+	/**
+	 * Opens a diff for a working copy file.
+	 */
+	private async handleOpenWorkingCopyDiff(filePath: string, staged: boolean): Promise<void> {
+		if (!this.workspaceFolder) {
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		try {
+			const path = await import('node:path');
+			const absolutePath = path.join(this.workspaceFolder.uri.fsPath, filePath);
+			const fileUri = vscode.Uri.file(absolutePath);
+
+			let leftUri: vscode.Uri;
+			let rightUri: vscode.Uri;
+			const fileName = path.basename(filePath);
+
+			if (staged) {
+				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: 'HEAD' });
+				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: '~' });
+				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
+				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
+				await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, `${fileName} (Staged)`);
+			} else {
+				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: '~' });
+				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
+				rightUri = fileUri;
+				await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, `${fileName} (Working Copy)`);
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error opening working copy diff:', message);
+			void vscode.window.showErrorMessage(`Failed to open diff: ${message}`);
+		}
+	}
+
+	/**
+	 * Ensures there are staged changes before committing.
+	 * If nothing is staged but unstaged changes exist, prompts to stage all.
+	 * @returns true if staged changes are ready, false if the user cancelled.
+	 */
+	private async ensureStagedChanges(): Promise<boolean> {
+		const hasStagedChanges = (this.uncommitted?.staged.length ?? 0) > 0;
+		if (hasStagedChanges) return true;
+
+		const hasUnstagedChanges = (this.uncommitted?.unstaged.length ?? 0) > 0;
+		if (!hasUnstagedChanges) {
+			void vscode.window.showInformationMessage('There are no changes to commit.');
+			return false;
+		}
+
+		return this.promptStageAll();
+	}
+
+	/** Prompts to stage all unstaged changes. Returns true if staged. */
+	private async promptStageAll(): Promise<boolean> {
+		const choice = await vscode.window.showWarningMessage(
+			'There are no staged changes to commit.\n\nWould you like to stage all your changes and commit them directly?',
+			{ modal: true },
+			'Yes',
+		);
+		if (choice !== 'Yes') return false;
+
+		return this.stageAllChanges();
+	}
+
+	/** Stages all changes via `git add -A`. */
+	private async stageAllChanges(): Promise<boolean> {
+		try {
+			const { execFile } = await import('node:child_process');
+			const { promisify } = await import('node:util');
+			const execFileAsync = promisify(execFile);
+			await execFileAsync('git', ['add', '-A'], {
+				cwd: this.workspaceFolder!.uri.fsPath,
+			});
+			return true;
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			console.error('❌ Error staging all changes:', msg);
+			void vscode.window.showErrorMessage(`Failed to stage changes: ${msg}`);
+			return false;
+		}
+	}
+
+	/**
+	 * Commits staged changes with the given message.
+	 */
+	private async handleCommitChanges(message: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		const trimmedMessage = message.trim();
+		if (trimmedMessage.length === 0) {
+			void vscode.window.showErrorMessage('Commit message cannot be empty.');
+			return;
+		}
+
+		const ready = await this.ensureStagedChanges();
+		if (!ready) return;
+
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: 'Committing changes...',
+			cancellable: false,
+		}, async () => {
+			try {
+				const { execFile } = await import('node:child_process');
+				const { promisify } = await import('node:util');
+				const execFileAsync = promisify(execFile);
+
+				await execFileAsync('git', ['commit', '-m', trimmedMessage], {
+					cwd: this.workspaceFolder!.uri.fsPath,
+				});
+
+				void vscode.window.showInformationMessage('Changes committed successfully.');
+				await this.refresh();
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error('❌ Error committing changes:', message);
+				void vscode.window.showErrorMessage(`Failed to commit: ${message}`);
+			}
+		});
+	}
+
+	/**
+	 * Creates a new branch with the given commit message.
+	 */
+	private async handleCreateBranch(message: string): Promise<void> {
+		if (!this.workspaceFolder) {
+			void vscode.window.showErrorMessage('No workspace folder available.');
+			return;
+		}
+
+		const trimmedMessage = message.trim();
+		if (trimmedMessage.length === 0) {
+			void vscode.window.showErrorMessage('Commit message cannot be empty.');
+			return;
+		}
+
+		const ready = await this.ensureStagedChanges();
+		if (!ready) return;
+
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: 'Creating new branch...',
+			cancellable: false,
+		}, async () => {
+			const result = await execBranchCreate(this.workspaceFolder!, trimmedMessage);
+
+			if ('error' in result) {
+				console.error('❌ Error creating branch:', result.error);
+				void vscode.window.showErrorMessage(`Failed to create branch: ${result.error}`);
+			} else {
+				void vscode.window.showInformationMessage('Branch created successfully.');
+			}
+
+			await this.refresh();
+		});
+	}
+
+	/** Debounced refresh — coalesces rapid file-system events into a single refresh. */
+	private debouncedRefresh(): void {
+		if (this.refreshTimer) clearTimeout(this.refreshTimer);
+		this.refreshTimer = setTimeout(() => { void this.refresh(); }, 300);
+	}
+
+	private setupFileWatcher(): void {
+		this.disposeWatchers();
+
+		if (!this.workspaceFolder || !this.view) return;
+
+		this.setupGitWatcher();
+		this.setupWorkspaceWatcher();
+		this.setupSaveListener();
+	}
+
+	/** Watches .git internals for branch/index/spice-data changes. */
+	private setupGitWatcher(): void {
+		const gitDir = vscode.Uri.joinPath(this.workspaceFolder!.uri, '.git');
+		const pattern = new vscode.RelativePattern(gitDir, '{refs/spice/data,HEAD,refs/heads/**,index}');
+		this.gitWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+		const handler = () => this.debouncedRefresh();
+		this.gitWatcher.onDidChange(handler);
+		this.gitWatcher.onDidCreate(handler);
+		this.gitWatcher.onDidDelete(handler);
+	}
+
+	/** Watches workspace files for working-copy changes (edits, creates, deletes). */
+	private setupWorkspaceWatcher(): void {
+		const pattern = new vscode.RelativePattern(this.workspaceFolder!.uri, '**/*');
+		this.workspaceWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+		const handler = () => this.debouncedRefresh();
+		this.workspaceWatcher.onDidChange(handler);
+		this.workspaceWatcher.onDidCreate(handler);
+		this.workspaceWatcher.onDidDelete(handler);
+	}
+
+	/** Listens for in-editor document saves (more reliable than FS watcher for edits). */
+	private setupSaveListener(): void {
+		this.saveListener = vscode.workspace.onDidSaveTextDocument(() => {
+			this.debouncedRefresh();
+		});
+	}
+
+	private disposeWatchers(): void {
+		this.gitWatcher?.dispose();
+		this.gitWatcher = undefined;
+		this.workspaceWatcher?.dispose();
+		this.workspaceWatcher = undefined;
+		this.saveListener?.dispose();
+		this.saveListener = undefined;
+		if (this.refreshTimer) {
+			clearTimeout(this.refreshTimer);
+			this.refreshTimer = undefined;
+		}
 	}
 
 	dispose(): void {
-		this.fileWatcher?.dispose();
+		this.disposeWatchers();
 	}
 
 	private async renderHtml(webview: vscode.Webview): Promise<string> {

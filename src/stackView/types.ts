@@ -9,7 +9,7 @@ export type BranchCommitViewModel = {
 };
 
 /** Git file change status indicator. */
-export type FileChangeStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T';
+export type FileChangeStatus = 'A' | 'M' | 'D' | 'R' | 'C' | 'T' | 'U';
 
 /** Represents a single file change within a commit. */
 export type CommitFileChange = {
@@ -17,6 +17,20 @@ export type CommitFileChange = {
 	path: string;
 	/** Original path for renames/copies. */
 	oldPath?: string;
+};
+
+/** Represents a file change in the working copy (staged or unstaged). */
+export type WorkingCopyChange = {
+	path: string;
+	status: FileChangeStatus;
+	/** Original path for renames/copies. */
+	oldPath?: string;
+};
+
+/** Uncommitted changes state with staged and unstaged files. */
+export type UncommittedState = {
+	staged: WorkingCopyChange[];
+	unstaged: WorkingCopyChange[];
 };
 
 export type BranchChangeViewModel = {
@@ -57,5 +71,6 @@ export type BranchViewModel = {
 
 export type DisplayState = {
 	branches: BranchViewModel[];
+	uncommitted?: UncommittedState;
 	error?: string;
 };

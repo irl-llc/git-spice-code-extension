@@ -697,3 +697,175 @@ button {
   opacity: 1 !important;
 }
 
+/* ============================================
+   Uncommitted Changes Card
+   ============================================ */
+
+/* Uncommitted card - dashed blue border */
+.branch-card.uncommitted {
+  border-style: dashed;
+  border-color: var(--vscode-textLink-foreground);
+}
+
+/* Uncommitted tree node - hollow dashed blue circle */
+.stack-item .tree-node.uncommitted {
+  background: var(--vscode-editor-background);
+  border: var(--tree-node-stroke) dashed var(--vscode-textLink-foreground);
+}
+
+/* Uncommitted sections container */
+.uncommitted-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+/* Collapsible changes section */
+.changes-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.changes-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 0.2rem 0;
+  user-select: none;
+}
+
+.changes-section-header:hover {
+  color: var(--vscode-foreground);
+}
+
+.changes-section-header .section-toggle {
+  width: 0.8rem;
+  height: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.changes-section-header .section-toggle.collapsed {
+  transform: rotate(-90deg);
+}
+
+.changes-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-left: 0.25rem;
+}
+
+.changes-section-content.collapsed {
+  display: none;
+}
+
+/* Commit form */
+.commit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+}
+
+.commit-message-input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.commit-message-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  border-color: var(--vscode-focusBorder);
+}
+
+.commit-message-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+/* Commit action buttons */
+.commit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.commit-btn {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.commit-btn:hover {
+  opacity: 0.9;
+}
+
+.commit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.commit-btn-primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.commit-btn-primary:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.commit-btn-secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.commit-btn-secondary:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* File action buttons (stage, unstage, discard) */
+.file-action-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0.1rem;
+  cursor: pointer;
+  color: var(--vscode-icon-foreground);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-change:hover .file-action-btn {
+  opacity: 0.7;
+}
+
+.file-action-btn:hover {
+  opacity: 1 !important;
+}
+
+/* Untracked file status */
+.file-status.status-u {
+  color: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
+}
+
