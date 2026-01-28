@@ -582,7 +582,6 @@ button {
 
 /* File list container */
 .commit-files {
-  margin-left: 1.25rem;
   padding: 0.25rem 0;
   display: flex;
   flex-direction: column;

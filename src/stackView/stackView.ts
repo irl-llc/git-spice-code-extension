@@ -1187,12 +1187,6 @@ class StackView {
 		folderSpan.textContent = folderPath;
 		row.appendChild(folderSpan);
 
-		// Status indicator
-		const statusSpan = document.createElement('span');
-		statusSpan.className = `file-status status-${file.status.toLowerCase()}`;
-		statusSpan.textContent = file.status;
-		row.appendChild(statusSpan);
-
 		// Open current file button (hidden for deleted files)
 		if (file.status !== 'D') {
 			const openBtn = document.createElement('button');
@@ -1206,6 +1200,12 @@ class StackView {
 			});
 			row.appendChild(openBtn);
 		}
+
+		// Status indicator (always last)
+		const statusSpan = document.createElement('span');
+		statusSpan.className = `file-status status-${file.status.toLowerCase()}`;
+		statusSpan.textContent = file.status;
+		row.appendChild(statusSpan);
 
 		// Click on row opens the diff for this file
 		row.addEventListener('click', (event: Event) => {
