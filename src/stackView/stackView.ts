@@ -34,6 +34,10 @@
 
 import type { BranchViewModel, CommitFileChange, DisplayState, UncommittedState, WorkingCopyChange } from './types';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
+import { buildBranchContext, buildCommitContext } from './contextBuilder';
+import { LANE_WIDTH, NODE_RADIUS, NODE_RADIUS_CURRENT, NODE_STROKE, CURVE_RADIUS, NODE_GAP } from './tree/treeConstants';
+import { createRoundedPath, buildSvgPaths, type PathData } from './tree/treePath';
+import { createNodeCircle, createUncommittedNodeCircle, appendPaths, appendNodes, type TreeColors } from './tree/treeNodes';
 
 /** Action button configuration for file rows. */
 type FileRowAction = {
@@ -79,7 +83,7 @@ class StackView {
 
 	private static readonly COMMIT_CHUNK = 10;
 	private static readonly ANIMATION_DURATION = 200;
-	private static readonly FLASH_DURATION = 300; // Back to normal duration
+	private static readonly FLASH_DURATION = 300;
 
 	constructor() {
 		this.stackList = document.getElementById('stackList')!;
@@ -101,31 +105,6 @@ class StackView {
 			} else if (message.type === 'commitFiles') {
 				this.handleCommitFilesResponse(message.sha, message.files);
 			}
-		});
-	}
-
-	/**
-	 * Builds the data-vscode-context JSON for branch cards.
-	 */
-	private buildBranchContext(branch: BranchViewModel): string {
-		return JSON.stringify({
-			webviewSection: 'branch',
-			branchName: branch.name,
-			webviewBranchIsCurrent: branch.current,
-			webviewBranchNeedsRestack: branch.restack,
-			preventDefaultContextMenuItems: true,
-		});
-	}
-
-	/**
-	 * Builds the data-vscode-context JSON for commit items.
-	 */
-	private buildCommitContext(sha: string, branchName: string): string {
-		return JSON.stringify({
-			webviewSection: 'commit',
-			sha,
-			branchName,
-			preventDefaultContextMenuItems: true,
 		});
 	}
 
@@ -339,12 +318,6 @@ class StackView {
 	}
 
 	// Match VSCode's scmHistory.ts dimensions
-	private static readonly LANE_WIDTH = 11; // SWIMLANE_WIDTH
-	private static readonly NODE_RADIUS = 4; // CIRCLE_RADIUS for non-current branches
-	private static readonly NODE_RADIUS_CURRENT = 5; // Larger radius for current branch
-	private static readonly NODE_STROKE = 2; // CIRCLE_STROKE_WIDTH
-	private static readonly CURVE_RADIUS = 5; // SWIMLANE_CURVE_RADIUS
-	private static readonly NODE_GAP = 7; // Gap between line endpoints and node edge
 
 	/**
 	 * Redraws the tree using the current state.
@@ -396,7 +369,7 @@ class StackView {
 
 	private updateGraphWidth(maxLane: number): void {
 		// VSCode: width accommodates all lanes plus padding
-		const width = StackView.LANE_WIDTH * (maxLane + 1) + StackView.NODE_RADIUS;
+		const width = LANE_WIDTH * (maxLane + 1) + NODE_RADIUS;
 		this.stackList.style.setProperty('--tree-graph-width', `${width}px`);
 	}
 
@@ -405,7 +378,7 @@ class StackView {
 	 * This centers nodes within their lane column.
 	 */
 	private getLaneX(lane: number): number {
-		return StackView.LANE_WIDTH * (lane + 1);
+		return LANE_WIDTH * (lane + 1);
 	}
 
 	/** Removes legacy DOM-based tree nodes (now drawn in SVG). */
@@ -421,7 +394,7 @@ class StackView {
 
 		if (nodePositions.size === 0) return;
 
-		const paths = this.buildSvgPaths(branches, branchMap, nodePositions);
+		const paths = buildSvgPaths(branches, branchMap, nodePositions);
 		const svg = this.createTreeSvgElement(branches, nodePositions, paths);
 		this.stackList.insertBefore(svg, this.stackList.firstChild);
 	}
@@ -479,10 +452,10 @@ class StackView {
 		const colors = this.getTreeColors();
 
 		// Draw paths first (behind nodes)
-		this.appendPaths(svg, paths, colors);
+		appendPaths(svg, paths, colors);
 
 		// Draw nodes on top
-		this.appendNodes(svg, branches, nodePositions, colors);
+		appendNodes(svg, branches, nodePositions, colors);
 
 		this.setSvgDimensions(svg, nodePositions);
 		return svg;
@@ -499,116 +472,6 @@ class StackView {
 		};
 	}
 
-	private appendPaths(
-		svg: SVGSVGElement,
-		paths: Array<{ d: string; restack: boolean; uncommitted?: boolean }>,
-		colors: { line: string; restack: string; nodeCurrent: string },
-	): void {
-		paths.forEach(({ d, restack, uncommitted }) => {
-			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-			path.setAttribute('d', d);
-			path.setAttribute('stroke-width', '1.5');
-			path.setAttribute('fill', 'none');
-			path.setAttribute('stroke-linecap', 'round');
-			path.setAttribute('stroke-linejoin', 'round');
-
-			if (uncommitted) {
-				path.setAttribute('stroke', colors.nodeCurrent);
-				path.setAttribute('stroke-dasharray', '4 2');
-			} else if (restack) {
-				path.setAttribute('stroke', colors.restack);
-				path.setAttribute('stroke-dasharray', '4 2');
-			} else {
-				path.setAttribute('stroke', colors.line);
-			}
-
-			svg.appendChild(path);
-		});
-	}
-
-	private appendNodes(
-		svg: SVGSVGElement,
-		branches: BranchViewModel[],
-		nodePositions: Map<string, { x: number; y: number }>,
-		colors: { node: string; nodeCurrent: string; bg: string; restack: string },
-	): void {
-		const branchMap = new Map(branches.map((b) => [b.name, b]));
-
-		nodePositions.forEach(({ x, y }, branchName) => {
-			// Handle uncommitted node specially
-			if (branchName === '__uncommitted__') {
-				const circle = this.createUncommittedNodeCircle(x, y, colors);
-				svg.appendChild(circle);
-				return;
-			}
-
-			const branch = branchMap.get(branchName);
-			const isCurrent = branch?.current ?? false;
-			const needsRestack = branch?.restack ?? false;
-			const circle = this.createNodeCircle(x, y, isCurrent, needsRestack, colors);
-			svg.appendChild(circle);
-		});
-	}
-
-	/**
-	 * Creates an SVG circle for the uncommitted changes node.
-	 * Dashed blue hollow circle.
-	 */
-	private createUncommittedNodeCircle(
-		x: number,
-		y: number,
-		colors: { nodeCurrent: string; bg: string },
-	): SVGCircleElement {
-		const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-		circle.setAttribute('cx', String(x));
-		circle.setAttribute('cy', String(y));
-		circle.setAttribute('r', String(StackView.NODE_RADIUS_CURRENT));
-		circle.setAttribute('fill', colors.bg);
-		circle.setAttribute('stroke', colors.nodeCurrent);
-		circle.setAttribute('stroke-width', String(StackView.NODE_STROKE));
-		circle.setAttribute('stroke-dasharray', '2 2');
-		return circle;
-	}
-
-	/**
-	 * Creates an SVG circle for a branch node.
-	 * - Current branch: hollow circle with solid stroke
-	 * - Needs restack: hollow circle with dashed stroke (warning color)
-	 * - Normal: filled circle
-	 */
-	private createNodeCircle(
-		x: number,
-		y: number,
-		isCurrent: boolean,
-		needsRestack: boolean,
-		colors: { node: string; nodeCurrent: string; bg: string; restack: string },
-	): SVGCircleElement {
-		const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-		circle.setAttribute('cx', String(x));
-		circle.setAttribute('cy', String(y));
-
-		if (needsRestack) {
-			// Hollow circle with dashed stroke (warning style)
-			circle.setAttribute('r', String(StackView.NODE_RADIUS_CURRENT));
-			circle.setAttribute('fill', colors.bg);
-			circle.setAttribute('stroke', colors.restack);
-			circle.setAttribute('stroke-width', String(StackView.NODE_STROKE));
-			circle.setAttribute('stroke-dasharray', '2 2');
-		} else if (isCurrent) {
-			// Hollow circle with solid stroke (current branch indicator)
-			circle.setAttribute('r', String(StackView.NODE_RADIUS_CURRENT));
-			circle.setAttribute('fill', colors.bg);
-			circle.setAttribute('stroke', colors.nodeCurrent);
-			circle.setAttribute('stroke-width', String(StackView.NODE_STROKE));
-		} else {
-			// Filled circle (normal branch)
-			circle.setAttribute('r', String(StackView.NODE_RADIUS));
-			circle.setAttribute('fill', colors.node);
-		}
-
-		return circle;
-	}
-
 	private setSvgDimensions(svg: SVGSVGElement, nodePositions: Map<string, { x: number; y: number }>): void {
 		const maxY = this.computeSvgHeight(nodePositions);
 		const maxX = this.computeSvgWidth(nodePositions);
@@ -623,93 +486,7 @@ class StackView {
 		for (const { x } of nodePositions.values()) {
 			maxX = Math.max(maxX, x);
 		}
-		return maxX + StackView.NODE_RADIUS;
-	}
-
-	/** Builds SVG path data for parent-child connections. */
-	private buildSvgPaths(
-		branches: BranchViewModel[],
-		branchMap: Map<string, BranchViewModel>,
-		nodePositions: Map<string, { x: number; y: number }>,
-	): Array<{ d: string; restack: boolean; uncommitted?: boolean }> {
-		const paths: Array<{ d: string; restack: boolean; uncommitted?: boolean }> = [];
-
-		// Add uncommitted connector if present
-		const uncommittedPos = nodePositions.get('__uncommitted__');
-		const currentBranch = branches.find((b) => b.current);
-		if (uncommittedPos && currentBranch) {
-			const currentPos = nodePositions.get(currentBranch.name);
-			if (currentPos) {
-				const d = this.createRoundedPath(currentPos.x, currentPos.y, uncommittedPos.x, uncommittedPos.y);
-				paths.push({ d, restack: false, uncommitted: true });
-			}
-		}
-
-		for (const branch of branches) {
-			if (!branch.tree.parentName) continue;
-
-			const parent = branchMap.get(branch.tree.parentName);
-			if (!parent) continue;
-
-			const childPos = nodePositions.get(branch.name);
-			const parentPos = nodePositions.get(branch.tree.parentName);
-			if (!childPos || !parentPos) continue;
-
-			const d = this.createRoundedPath(parentPos.x, parentPos.y, childPos.x, childPos.y);
-			paths.push({ d, restack: branch.restack });
-		}
-
-		return paths;
-	}
-
-	/**
-	 * Creates SVG path from parent to child using "smooth exit" pattern.
-	 * Matches VSCode's scmHistory.ts arc drawing approach.
-	 *
-	 * Paths include gaps at node boundaries so lines don't overlap the
-	 * circular nodes - creating the "halo" effect seen in VSCode.
-	 */
-	private createRoundedPath(parentX: number, parentY: number, childX: number, childY: number): string {
-		const r = StackView.CURVE_RADIUS;
-		const gap = StackView.NODE_GAP;
-
-		// Same lane: straight vertical line with gaps at both ends
-		if (parentX === childX) {
-			// Parent is at larger Y (below), child is at smaller Y (above)
-			const startY = parentY - gap; // Above parent's top edge
-			const endY = childY + gap; // Below child's bottom edge
-			return `M ${parentX} ${startY} L ${childX} ${endY}`;
-		}
-
-		// Different lanes: horizontal exit → arc → vertical to child
-		const goingRight = childX > parentX;
-
-		// Start with gap from parent's edge (horizontal exit)
-		const startX = goingRight ? parentX + gap : parentX - gap;
-
-		// End with gap from child's edge (vertical approach from below)
-		const endY = childY + gap;
-
-		// Clamp curve radius to available space
-		const dx = Math.abs(childX - startX);
-		const dy = Math.abs(parentY - endY);
-		const effectiveR = Math.min(r, dx, dy);
-
-		// SVG arc sweep: 0=counter-clockwise (going right), 1=clockwise (going left)
-		const sweep = goingRight ? 0 : 1;
-
-		// Horizontal line ends at curve start
-		const hLineEndX = goingRight ? childX - effectiveR : childX + effectiveR;
-
-		// Arc ends at child's X, effectiveR above parent's Y
-		const arcEndY = parentY - effectiveR;
-
-		return [
-			`M ${startX} ${parentY}`,
-			`L ${hLineEndX} ${parentY}`,
-			`A ${effectiveR} ${effectiveR} 0 0 ${sweep} ${childX} ${arcEndY}`,
-			`L ${childX} ${endY}`,
-		].join(' ');
+		return maxX + NODE_RADIUS;
 	}
 
 	private computeSvgHeight(nodePositions: Map<string, { x: number; y: number }>): number {
@@ -717,7 +494,7 @@ class StackView {
 		nodePositions.forEach(({ y }) => {
 			if (y > maxY) maxY = y;
 		});
-		return maxY + StackView.NODE_RADIUS * 2;
+		return maxY + NODE_RADIUS * 2;
 	}
 
 	private renderBranch(branch: BranchViewModel): HTMLElement {
@@ -731,7 +508,7 @@ class StackView {
 		}
 
 		// Add VSCode native context menu support
-		card.dataset.vscodeContext = this.buildBranchContext(branch);
+		card.dataset.vscodeContext = buildBranchContext(branch);
 
 		if (branch.current) {
 			card.classList.add('is-current');
@@ -834,7 +611,7 @@ class StackView {
 		card.classList.toggle('needs-restack', Boolean(branch.restack));
 
 		// Update VSCode context menu data
-		card.dataset.vscodeContext = this.buildBranchContext(branch);
+		card.dataset.vscodeContext = buildBranchContext(branch);
 
 		// Update data attributes for tree position
 		card.dataset.depth = String(branch.tree.depth);
@@ -1146,7 +923,7 @@ class StackView {
 
 		// Add VSCode native context menu support
 		if (branchName) {
-			row.dataset.vscodeContext = this.buildCommitContext(commit.sha, branchName);
+			row.dataset.vscodeContext = buildCommitContext(commit.sha, branchName);
 		}
 
 		// Toggle chevron for file list
