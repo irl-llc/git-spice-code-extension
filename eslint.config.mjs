@@ -31,15 +31,23 @@ export default [
             semi: "warn",
             "no-duplicate-imports": "error",
 
-            // Function size and complexity (warn initially, promote to error after refactoring)
-            "max-lines-per-function": ["warn", {
-                max: 25,
+            // File size limits to prevent module bloat
+            "max-lines": ["warn", {
+                max: 400,
                 skipBlankLines: true,
                 skipComments: true,
             }],
-            complexity: ["warn", { max: 8 }],
+
+            // Function size and complexity (aligned with coding standards)
+            "max-lines-per-function": ["warn", {
+                max: 20,
+                skipBlankLines: true,
+                skipComments: true,
+            }],
+            complexity: ["warn", { max: 10 }],
             "max-depth": ["warn", { max: 2 }],
             "max-nested-callbacks": ["warn", { max: 2 }],
+            "max-params": ["warn", { max: 4 }],
 
             // TypeScript strictness (warn initially)
             "@typescript-eslint/no-explicit-any": "warn",
