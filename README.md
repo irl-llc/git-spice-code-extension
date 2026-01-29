@@ -1,5 +1,7 @@
 # git-spice for VSCode
 
+Forked from the original version by [Smexey (Pavle Divovic)](https://github.com/Smexey/git-spice-code-extension).
+
 A Visual Studio Code extension that provides a rich UI for [git-spice](https://abhinav.github.io/git-spice/), a tool for stacking Git branches and managing change requests.
 
 ## Features

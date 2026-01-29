@@ -1,7 +1,3 @@
----
-trigger: always_on
----
-
 # Git-Spice VSCode Extension Development Guidelines
 
 ## Project Overview

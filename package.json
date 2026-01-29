@@ -3,7 +3,7 @@
   "displayName": "Git Spice",
   "description": "Manage stacked Git branches with ease. Visualize, navigate, and submit branch stacks directly from VS Code.",
   "version": "0.0.1",
-  "publisher": "Smexey",
+  "publisher": "IRLAILLC",
   "license": "MIT",
   "keywords": [
     "git",
@@ -15,10 +15,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Smexey/git-spice-code-extension.git"
+    "url": "https://github.com/irl-llc/git-spice-code-extension.git"
   },
   "bugs": {
-    "url": "https://github.com/Smexey/git-spice-code-extension/issues"
+    "url": "https://github.com/irl-llc/git-spice-code-extension/issues"
   },
   "engines": {
     "vscode": "^1.98.0"
