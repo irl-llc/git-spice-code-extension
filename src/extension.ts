@@ -1,18 +1,104 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
 import { StackViewProvider } from './stackView/StackViewProvider';
-import { execBranchCreate, execUp, execDown, execTrunk, execStackRestack, execStackSubmit } from './utils/gitSpice';
+import {
+	execBranchCreate,
+	execUp,
+	execDown,
+	execTrunk,
+	execStackRestack,
+	execStackSubmit,
+	type BranchCommandResult,
+} from './utils/gitSpice';
+
+/** Context passed to branch commands from webview. */
+interface BranchContext {
+	branchName?: string;
+}
+
+/** Context passed to commit commands from webview. */
+interface CommitContext {
+	sha?: string;
+	branchName?: string;
+}
+
+/**
+ * Registers a simple command that calls a git-spice exec function.
+ * Handles folder validation, error display, and provider refresh.
+ */
+function registerSimpleCommand(
+	context: vscode.ExtensionContext,
+	commandId: string,
+	execFn: (folder: vscode.WorkspaceFolder) => Promise<BranchCommandResult>,
+	successMessage: string,
+	errorPrefix: string,
+	provider: StackViewProvider,
+): void {
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commandId, async () => {
+			const folder = vscode.workspace.workspaceFolders?.[0];
+			if (!folder) {
+				void vscode.window.showErrorMessage('No workspace folder found');
+				return;
+			}
+
+			const result = await execFn(folder);
+			if ('error' in result) {
+				void vscode.window.showErrorMessage(`${errorPrefix}: ${result.error}`);
+			} else {
+				void vscode.window.showInformationMessage(successMessage);
+			}
+			void provider.refresh();
+		}),
+	);
+}
 
 export function activate(context: vscode.ExtensionContext): void {
 	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 	const provider = new StackViewProvider(workspaceFolder, context.extensionUri);
 
+	// Register navigation commands using helper
+	registerSimpleCommand(context, 'git-spice.up', execUp, 'Navigated up the stack', 'Failed to navigate up', provider);
+	registerSimpleCommand(
+		context,
+		'git-spice.down',
+		execDown,
+		'Navigated down the stack',
+		'Failed to navigate down',
+		provider,
+	);
+	registerSimpleCommand(
+		context,
+		'git-spice.trunk',
+		execTrunk,
+		'Navigated to trunk',
+		'Failed to navigate to trunk',
+		provider,
+	);
+
+	// Register branch context menu commands (data-driven)
+	const branchCommands = [
+		{ id: 'branchCheckout', action: 'checkout' },
+		{ id: 'branchEdit', action: 'edit' },
+		{ id: 'branchRestack', action: 'restack' },
+		{ id: 'branchSubmit', action: 'submit' },
+		{ id: 'branchFold', action: 'fold' },
+		{ id: 'branchSquash', action: 'squash' },
+		{ id: 'branchUntrack', action: 'untrack' },
+	];
+
+	for (const { id, action } of branchCommands) {
+		context.subscriptions.push(
+			vscode.commands.registerCommand(`git-spice.${id}`, (ctx: BranchContext) => {
+				if (ctx?.branchName) void provider.handleBranchCommand(action, ctx.branchName);
+			}),
+		);
+	}
+
 	context.subscriptions.push(
 		provider,
 		vscode.window.registerWebviewViewProvider('gitSpice.branches', provider, {
-			webviewOptions: { retainContextWhenHidden: true }
+			webviewOptions: { retainContextWhenHidden: true },
 		}),
 		vscode.commands.registerCommand('git-spice.refresh', () => provider.refresh()),
 		vscode.commands.registerCommand('git-spice.syncRepo', () => provider.sync()),
@@ -51,66 +137,21 @@ export function activate(context: vscode.ExtensionContext): void {
 				void vscode.window.showInformationMessage(`Created branch with message: ${commitMessage}`);
 				// Clear the commit message input box after successful branch creation
 				repository.inputBox.value = '';
-				
+
 				// Multiple refresh strategies for faster UI updates
 				void provider.refresh();
 				void repository.status();
-				
+
 				// Force refresh the Source Control view
 				void vscode.commands.executeCommand('workbench.scm.focus');
 				void vscode.commands.executeCommand('workbench.view.scm');
-				
+
 				// Additional refresh after a short delay to ensure UI is updated
 				setTimeout(() => {
 					void repository.status();
 					void provider.refresh();
 				}, 100);
 			}
-		}),
-		vscode.commands.registerCommand('git-spice.up', async () => {
-			const folder = vscode.workspace.workspaceFolders?.[0];
-			if (!folder) {
-				void vscode.window.showErrorMessage('No workspace folder found');
-				return;
-			}
-
-			const result = await execUp(folder);
-			if ('error' in result) {
-				void vscode.window.showErrorMessage(`Failed to navigate up: ${result.error}`);
-			} else {
-				void vscode.window.showInformationMessage('Navigated up the stack');
-			}
-			void provider.refresh();
-		}),
-		vscode.commands.registerCommand('git-spice.down', async () => {
-			const folder = vscode.workspace.workspaceFolders?.[0];
-			if (!folder) {
-				void vscode.window.showErrorMessage('No workspace folder found');
-				return;
-			}
-
-			const result = await execDown(folder);
-			if ('error' in result) {
-				void vscode.window.showErrorMessage(`Failed to navigate down: ${result.error}`);
-			} else {
-				void vscode.window.showInformationMessage('Navigated down the stack');
-			}
-			void provider.refresh();
-		}),
-		vscode.commands.registerCommand('git-spice.trunk', async () => {
-			const folder = vscode.workspace.workspaceFolders?.[0];
-			if (!folder) {
-				void vscode.window.showErrorMessage('No workspace folder found');
-				return;
-			}
-
-			const result = await execTrunk(folder);
-			if ('error' in result) {
-				void vscode.window.showErrorMessage(`Failed to navigate to trunk: ${result.error}`);
-			} else {
-				void vscode.window.showInformationMessage('Navigated to trunk');
-			}
-			void provider.refresh();
 		}),
 		vscode.commands.registerCommand('git-spice.stackRestack', async () => {
 			const folder = vscode.workspace.workspaceFolders?.[0];
@@ -119,19 +160,22 @@ export function activate(context: vscode.ExtensionContext): void {
 				return;
 			}
 
-			await vscode.window.withProgress({
-				location: vscode.ProgressLocation.Notification,
-				title: 'Restacking current stack...',
-				cancellable: false,
-			}, async () => {
-				const result = await execStackRestack(folder);
-				if ('error' in result) {
-					void vscode.window.showErrorMessage(`Failed to restack stack: ${result.error}`);
-				} else {
-					void vscode.window.showInformationMessage('Stack restacked successfully');
-				}
-				await provider.refresh();
-			});
+			await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title: 'Restacking current stack...',
+					cancellable: false,
+				},
+				async () => {
+					const result = await execStackRestack(folder);
+					if ('error' in result) {
+						void vscode.window.showErrorMessage(`Failed to restack stack: ${result.error}`);
+					} else {
+						void vscode.window.showInformationMessage('Stack restacked successfully');
+					}
+					await provider.refresh();
+				},
+			);
 		}),
 		vscode.commands.registerCommand('git-spice.stackSubmit', async () => {
 			const folder = vscode.workspace.workspaceFolders?.[0];
@@ -140,88 +184,44 @@ export function activate(context: vscode.ExtensionContext): void {
 				return;
 			}
 
-			await vscode.window.withProgress({
-				location: vscode.ProgressLocation.Notification,
-				title: 'Submitting current stack...',
-				cancellable: false,
-			}, async () => {
-				const result = await execStackSubmit(folder);
-				if ('error' in result) {
-					void vscode.window.showErrorMessage(`Failed to submit stack: ${result.error}`);
-				} else {
-					void vscode.window.showInformationMessage('Stack submitted successfully');
-				}
-				await provider.refresh();
-			});
+			await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title: 'Submitting current stack...',
+					cancellable: false,
+				},
+				async () => {
+					const result = await execStackSubmit(folder);
+					if ('error' in result) {
+						void vscode.window.showErrorMessage(`Failed to submit stack: ${result.error}`);
+					} else {
+						void vscode.window.showInformationMessage('Stack submitted successfully');
+					}
+					await provider.refresh();
+				},
+			);
 		}),
 
-		// Branch context menu commands (receive context from webview)
-		vscode.commands.registerCommand('git-spice.branchCheckout', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('checkout', ctx.branchName);
-			}
+		// Special branch commands with custom prompts
+		vscode.commands.registerCommand('git-spice.branchRename', (ctx: BranchContext) => {
+			if (ctx?.branchName) void provider.handleBranchRenamePrompt(ctx.branchName);
 		}),
-		vscode.commands.registerCommand('git-spice.branchRename', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchRenamePrompt(ctx.branchName);
-			}
+		vscode.commands.registerCommand('git-spice.branchMove', (ctx: BranchContext) => {
+			if (ctx?.branchName) void provider.handleBranchMovePrompt(ctx.branchName);
 		}),
-		vscode.commands.registerCommand('git-spice.branchMove', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchMovePrompt(ctx.branchName);
-			}
+		vscode.commands.registerCommand('git-spice.branchMoveWithChildren', (ctx: BranchContext) => {
+			if (ctx?.branchName) void provider.handleUpstackMovePrompt(ctx.branchName);
 		}),
-		vscode.commands.registerCommand('git-spice.branchMoveWithChildren', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleUpstackMovePrompt(ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchEdit', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('edit', ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchRestack', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('restack', ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchSubmit', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('submit', ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchFold', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('fold', ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchSquash', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('squash', ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchUntrack', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchCommand('untrack', ctx.branchName);
-			}
-		}),
-		vscode.commands.registerCommand('git-spice.branchDelete', (ctx: { branchName?: string }) => {
-			if (ctx?.branchName) {
-				void provider.handleBranchDelete(ctx.branchName);
-			}
+		vscode.commands.registerCommand('git-spice.branchDelete', (ctx: BranchContext) => {
+			if (ctx?.branchName) void provider.handleBranchDelete(ctx.branchName);
 		}),
 
 		// Commit context menu commands
-		vscode.commands.registerCommand('git-spice.commitCopySha', (ctx: { sha?: string }) => {
-			if (ctx?.sha) {
-				void provider.handleCommitCopySha(ctx.sha);
-			}
+		vscode.commands.registerCommand('git-spice.commitCopySha', (ctx: CommitContext) => {
+			if (ctx?.sha) void provider.handleCommitCopySha(ctx.sha);
 		}),
-		vscode.commands.registerCommand('git-spice.commitSplit', (ctx: { sha?: string; branchName?: string }) => {
-			if (ctx?.sha && ctx?.branchName) {
-				void provider.handleCommitSplit(ctx.sha, ctx.branchName);
-			}
+		vscode.commands.registerCommand('git-spice.commitSplit', (ctx: CommitContext) => {
+			if (ctx?.sha && ctx?.branchName) void provider.handleCommitSplit(ctx.sha, ctx.branchName);
 		}),
 
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {

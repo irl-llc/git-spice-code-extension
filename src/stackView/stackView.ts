@@ -1,31 +1,31 @@
 /**
  * Git-Spice Stack View
- * 
+ *
  * Architecture:
- * 
+ *
  * 1. STATE MANAGEMENT
  *    - Single source of truth: currentState
  *    - Immutable updates trigger diffing and rendering
  *    - State includes: error, branches (with commits, changes, etc.)
- * 
+ *
  * 2. DIFFING ABSTRACTION
  *    - Generic diffList() function handles list animations
  *    - Works at any level: branches, commits, tags, etc.
  *    - Three operations: add (animate in), remove (animate out), update (flash)
  *    - Keyed reconciliation prevents unnecessary re-renders
- * 
+ *
  * 3. RENDERING PIPELINE
  *    - updateState() → updateBranchItems() → diffList()
  *    - Each branch tracks its own data for change detection
  *    - Commits can be expanded/animated independently
  *    - All animations are CSS-based for performance
- * 
+ *
  * 4. ANIMATION SYSTEM
  *    - animateIn(): Entrance animation (fade + slide)
  *    - animateOut(): Exit animation (fade + slide + collapse)
  *    - animateUpdate(): Flash animation to highlight changes
  *    - All durations are constants for easy tweaking
- * 
+ *
  * 5. EXTENSIBILITY
  *    - Add new animatable elements by wrapping in diffList()
  *    - New animations: add CSS classes and update constants
@@ -166,8 +166,7 @@ class StackView {
 		// Always remove first so re-insertion positions correctly after branch switches
 		this.stackList.querySelector('.uncommitted-item')?.remove();
 
-		const hasChanges = uncommitted &&
-			(uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
+		const hasChanges = uncommitted && (uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
 		if (!hasChanges) return;
 
 		const newCard = this.renderUncommittedCard(uncommitted);
@@ -192,20 +191,8 @@ class StackView {
 	/**
 	 * Generic differ for lists with animations
 	 */
-	private diffList<T>(
-		container: HTMLElement,
-		oldItems: T[],
-		newItems: T[],
-		config: DiffListConfig<T>
-	): void {
-		const {
-			getKey,
-			render,
-			update,
-			needsUpdate,
-			itemSelector,
-			itemClass,
-		} = config;
+	private diffList<T>(container: HTMLElement, _oldItems: T[], newItems: T[], config: DiffListConfig<T>): void {
+		const { getKey, render, update, needsUpdate, itemSelector, itemClass } = config;
 
 		// Build map of existing elements
 		const existingElements = new Map<string, HTMLElement>();
@@ -325,11 +312,14 @@ class StackView {
 			const items = this.stackList.querySelectorAll('.stack-item');
 			items.forEach((item, index) => {
 				(item as HTMLElement).style.animationDelay = `${index * 30}ms`;
-				this.animateOut(item as HTMLElement, () => { });
+				this.animateOut(item as HTMLElement, () => {});
 			});
-			setTimeout(() => {
-				this.stackList.innerHTML = '';
-			}, items.length * 30 + StackView.ANIMATION_DURATION);
+			setTimeout(
+				() => {
+					this.stackList.innerHTML = '';
+				},
+				items.length * 30 + StackView.ANIMATION_DURATION,
+			);
 			return;
 		}
 
@@ -453,9 +443,7 @@ class StackView {
 		// Tip of stack: same lane as current branch; otherwise fork to a new lane
 		const currentBranch = branches.find((b) => b.current);
 		const isTip = this.currentBranchIsStackTip(branches);
-		const uncommittedLane = isTip
-			? (currentBranch?.tree.lane ?? 0)
-			: this.computeMaxLane(branches) + 1;
+		const uncommittedLane = isTip ? (currentBranch?.tree.lane ?? 0) : this.computeMaxLane(branches) + 1;
 
 		this.stackList.querySelectorAll('.stack-item').forEach((item) => {
 			const wrapper = item as HTMLElement;
@@ -621,10 +609,7 @@ class StackView {
 		return circle;
 	}
 
-	private setSvgDimensions(
-		svg: SVGSVGElement,
-		nodePositions: Map<string, { x: number; y: number }>,
-	): void {
+	private setSvgDimensions(svg: SVGSVGElement, nodePositions: Map<string, { x: number; y: number }>): void {
 		const maxY = this.computeSvgHeight(nodePositions);
 		const maxX = this.computeSvgWidth(nodePositions);
 		svg.setAttribute('width', String(maxX));
@@ -734,7 +719,6 @@ class StackView {
 		});
 		return maxY + StackView.NODE_RADIUS * 2;
 	}
-
 
 	private renderBranch(branch: BranchViewModel): HTMLElement {
 		const card = document.createElement('article');
@@ -1012,7 +996,6 @@ class StackView {
 		const tags = document.createElement('div');
 		tags.className = 'branch-tags';
 
-
 		if (branch.restack) {
 			tags.appendChild(this.createTag('Restack', 'warning'));
 		}
@@ -1058,7 +1041,7 @@ class StackView {
 		return meta;
 	}
 
-	private renderCommitsContainer(branch: BranchViewModel, card: HTMLElement): HTMLElement {
+	private renderCommitsContainer(branch: BranchViewModel, _card: HTMLElement): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'branch-commits';
 		container.dataset.commitsContainer = 'true';
@@ -1070,60 +1053,69 @@ class StackView {
 		return container;
 	}
 
-	private renderCommitsIntoContainer(container: HTMLElement, commits: BranchViewModel['commits'], visibleCount: number, branchName: string): void {
+	private renderCommitsIntoContainer(
+		container: HTMLElement,
+		commits: BranchViewModel['commits'],
+		visibleCount: number,
+		branchName: string,
+	): void {
 		if (!commits) return;
 
 		const newCommits = commits.slice(0, visibleCount);
 
 		// Use diffList to reconcile commits inside the container
-		this.diffList(container, Array.from(container.querySelectorAll('.commit-wrapper')).map(el => {
-			const key = (el as HTMLElement).dataset.key;
-			return key ? { sha: key, shortSha: '', subject: '' } : null;
-		}).filter((item): item is NonNullable<BranchViewModel['commits']>[0] => item !== null), newCommits, {
-			getKey: (c) => c.sha,
-			render: (c) => {
-				const wrapper = document.createElement('div');
-				wrapper.className = 'commit-wrapper';
-				wrapper.dataset.key = c.sha;
-				const row = this.renderCommitItem(c, branchName);
-				wrapper.appendChild(row);
-				return wrapper;
-			},
-			needsUpdate: (el, c) => {
-				const row = el.querySelector('.commit-item');
-				if (!row) return true;
-				// simple check: subject or shortSha changed
-				const subjectEl = row.querySelector('.commit-subject');
-				const shaEl = row.querySelector('.commit-sha');
-				return (
-					subjectEl?.textContent !== c.subject ||
-					shaEl?.textContent !== c.shortSha
-				);
-			},
-			update: (el, c) => {
-				const newRow = this.renderCommitItem(c, branchName);
-				const oldRow = el.querySelector('.commit-item');
-				if (oldRow) {
-					// Check what specifically changed and flash only that part
-					const oldSubject = oldRow.querySelector('.commit-subject')?.textContent;
-					const oldSha = oldRow.querySelector('.commit-sha')?.textContent;
+		this.diffList(
+			container,
+			Array.from(container.querySelectorAll('.commit-wrapper'))
+				.map((el) => {
+					const key = (el as HTMLElement).dataset.key;
+					return key ? { sha: key, shortSha: '', subject: '' } : null;
+				})
+				.filter((item): item is NonNullable<BranchViewModel['commits']>[0] => item !== null),
+			newCommits,
+			{
+				getKey: (c) => c.sha,
+				render: (c) => {
+					const wrapper = document.createElement('div');
+					wrapper.className = 'commit-wrapper';
+					wrapper.dataset.key = c.sha;
+					const row = this.renderCommitItem(c, branchName);
+					wrapper.appendChild(row);
+					return wrapper;
+				},
+				needsUpdate: (el, c) => {
+					const row = el.querySelector('.commit-item');
+					if (!row) return true;
+					// simple check: subject or shortSha changed
+					const subjectEl = row.querySelector('.commit-subject');
+					const shaEl = row.querySelector('.commit-sha');
+					return subjectEl?.textContent !== c.subject || shaEl?.textContent !== c.shortSha;
+				},
+				update: (el, c) => {
+					const newRow = this.renderCommitItem(c, branchName);
+					const oldRow = el.querySelector('.commit-item');
+					if (oldRow) {
+						// Check what specifically changed and flash only that part
+						const oldSubject = oldRow.querySelector('.commit-subject')?.textContent;
+						const oldSha = oldRow.querySelector('.commit-sha')?.textContent;
 
-					oldRow.replaceWith(newRow);
+						oldRow.replaceWith(newRow);
 
-					// Flash changed elements
-					if (oldSubject !== c.subject) {
-						const newSubject = newRow.querySelector('.commit-subject');
-						if (newSubject) this.animateUpdate(newSubject as HTMLElement);
+						// Flash changed elements
+						if (oldSubject !== c.subject) {
+							const newSubject = newRow.querySelector('.commit-subject');
+							if (newSubject) this.animateUpdate(newSubject as HTMLElement);
+						}
+						if (oldSha !== c.shortSha) {
+							const newSha = newRow.querySelector('.commit-sha');
+							if (newSha) this.animateUpdate(newSha as HTMLElement);
+						}
 					}
-					if (oldSha !== c.shortSha) {
-						const newSha = newRow.querySelector('.commit-sha');
-						if (newSha) this.animateUpdate(newSha as HTMLElement);
-					}
-				}
+				},
+				itemSelector: '.commit-wrapper',
+				itemClass: 'commit-wrapper',
 			},
-			itemSelector: '.commit-wrapper',
-			itemClass: 'commit-wrapper',
-		});
+		);
 
 		// Add "show more" button if needed (ensure it's after the commits)
 		const existingMore = container.querySelector('.branch-more');
@@ -1133,9 +1125,8 @@ class StackView {
 			const more = document.createElement('button');
 			more.type = 'button';
 			more.className = 'branch-more';
-			more.textContent = remaining > StackView.COMMIT_CHUNK
-				? `Show more (${remaining})`
-				: `Show remaining ${remaining}`;
+			more.textContent =
+				remaining > StackView.COMMIT_CHUNK ? `Show more (${remaining})` : `Show remaining ${remaining}`;
 			more.addEventListener('click', (event: Event) => {
 				event.stopPropagation();
 				this.renderCommitsIntoContainer(container, commits, visibleCount + StackView.COMMIT_CHUNK, branchName);
@@ -1382,14 +1373,14 @@ class StackView {
 		container.className = 'uncommitted-sections';
 
 		if (uncommitted.staged.length > 0) {
-			container.appendChild(this.renderChangesSection(
-				'Staged Changes', uncommitted.staged, this.expandedStagedSection, true,
-			));
+			container.appendChild(
+				this.renderChangesSection('Staged Changes', uncommitted.staged, this.expandedStagedSection, true),
+			);
 		}
 		if (uncommitted.unstaged.length > 0) {
-			container.appendChild(this.renderChangesSection(
-				'Changes', uncommitted.unstaged, this.expandedUnstagedSection, false,
-			));
+			container.appendChild(
+				this.renderChangesSection('Changes', uncommitted.unstaged, this.expandedUnstagedSection, false),
+			);
 		}
 
 		return container;
@@ -1488,22 +1479,30 @@ class StackView {
 
 	private appendWorkingCopyActions(row: HTMLElement, file: WorkingCopyChange, isStaged: boolean): void {
 		if (isStaged) {
-			row.appendChild(this.createFileActionButton('codicon-remove', 'Unstage', () => {
-				this.vscode.postMessage({ type: 'unstageFile', path: file.path });
-			}));
+			row.appendChild(
+				this.createFileActionButton('codicon-remove', 'Unstage', () => {
+					this.vscode.postMessage({ type: 'unstageFile', path: file.path });
+				}),
+			);
 		} else {
-			row.appendChild(this.createFileActionButton('codicon-discard', 'Discard Changes', () => {
-				this.vscode.postMessage({ type: 'discardFile', path: file.path });
-			}));
-			row.appendChild(this.createFileActionButton('codicon-add', 'Stage', () => {
-				this.vscode.postMessage({ type: 'stageFile', path: file.path });
-			}));
+			row.appendChild(
+				this.createFileActionButton('codicon-discard', 'Discard Changes', () => {
+					this.vscode.postMessage({ type: 'discardFile', path: file.path });
+				}),
+			);
+			row.appendChild(
+				this.createFileActionButton('codicon-add', 'Stage', () => {
+					this.vscode.postMessage({ type: 'stageFile', path: file.path });
+				}),
+			);
 		}
 
 		if (file.status !== 'D') {
-			row.appendChild(this.createFileActionButton('codicon-go-to-file', 'Open File', () => {
-				this.vscode.postMessage({ type: 'openCurrentFile', path: file.path });
-			}));
+			row.appendChild(
+				this.createFileActionButton('codicon-go-to-file', 'Open File', () => {
+					this.vscode.postMessage({ type: 'openCurrentFile', path: file.path });
+				}),
+			);
 		}
 	}
 
@@ -1582,7 +1581,9 @@ class StackView {
 
 	private syncCommitButtonStates(input: HTMLInputElement, buttons: HTMLButtonElement[]): void {
 		const hasMessage = input.value.trim().length > 0;
-		buttons.forEach((btn) => { btn.disabled = !hasMessage; });
+		buttons.forEach((btn) => {
+			btn.disabled = !hasMessage;
+		});
 	}
 
 	private createCommitButton(label: string, variant: string): HTMLButtonElement {
@@ -1602,7 +1603,6 @@ class StackView {
 		this.commitMessageValue = '';
 		input.value = '';
 	}
-
 }
 
 // Initialize the stack view when the DOM is ready

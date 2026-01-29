@@ -23,6 +23,9 @@ import {
 	type BranchCommandResult,
 } from '../utils/gitSpice';
 import { readMediaFile, readDistFile } from '../utils/readFileSync';
+import { execGit } from '../utils/git';
+import { buildCommitDiffUris, buildWorkingCopyDiffUris } from '../utils/diffUri';
+import { requireNonEmpty, requireWorkspace, requireAllNonEmpty } from '../utils/validation';
 
 export class StackViewProvider implements vscode.WebviewViewProvider {
 	private view!: vscode.WebviewView; // definite assignment assertion - set in resolveWebviewView
@@ -34,7 +37,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	private saveListener: vscode.Disposable | undefined;
 	private refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
-	constructor(private workspaceFolder: vscode.WorkspaceFolder | undefined, private readonly extensionUri: vscode.Uri) {
+	constructor(
+		private workspaceFolder: vscode.WorkspaceFolder | undefined,
+		private readonly extensionUri: vscode.Uri,
+	) {
 		// No initialization here - everything happens after resolveWebviewView
 	}
 
@@ -249,22 +255,66 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		this.pushState();
 	}
 
+	/**
+	 * Runs an operation with progress UI, error handling, and refresh.
+	 * Simplifies the common pattern of showing progress, handling errors, and refreshing state.
+	 *
+	 * @param title - Progress notification title
+	 * @param operation - Async operation that returns BranchCommandResult
+	 * @param successMessage - Message to show on success
+	 * @returns true if the operation succeeded, false otherwise
+	 */
+	private async runBranchCommand(
+		title: string,
+		operation: () => Promise<BranchCommandResult>,
+		successMessage: string,
+	): Promise<boolean> {
+		let success = false;
+
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title,
+				cancellable: false,
+			},
+			async (_progress) => {
+				try {
+					const result = await operation();
+
+					if ('error' in result) {
+						void vscode.window.showErrorMessage(result.error);
+					} else {
+						void vscode.window.showInformationMessage(successMessage);
+						success = true;
+					}
+
+					await this.refresh();
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
+				}
+			},
+		);
+
+		return success;
+	}
+
 	async sync(): Promise<void> {
 		if (!this.workspaceFolder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
 		}
 
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: 'Syncing repository with remote...',
-			cancellable: false,
-		}, async (progress) => {
-			try {
-				// Execute repo sync with interactive prompt callback
-				const result = await execRepoSync(
-					this.workspaceFolder!,
-					async (branchName: string) => {
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: 'Syncing repository with remote...',
+				cancellable: false,
+			},
+			async (_progress) => {
+				try {
+					// Execute repo sync with interactive prompt callback
+					const result = await execRepoSync(this.workspaceFolder!, async (branchName: string) => {
 						// Show VSCode confirmation dialog for each branch deletion
 						const answer = await vscode.window.showWarningMessage(
 							`Branch '${branchName}' has a closed pull request. Delete this branch?`,
@@ -273,35 +323,35 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 							'No',
 						);
 						return answer === 'Yes';
-					}
-				);
+					});
 
-				if ('error' in result) {
-					console.error('🔄 Repository sync failed:', result.error);
-					void vscode.window.showErrorMessage(`Failed to sync repository: ${result.error}`);
-				} else {
-					const { deletedBranches, syncedBranches } = result.value;
-					let message = `Repository synced successfully.`;
-					
-					if (syncedBranches > 0) {
-						message += ` ${syncedBranches} branch${syncedBranches === 1 ? '' : 'es'} updated.`;
+					if ('error' in result) {
+						console.error('🔄 Repository sync failed:', result.error);
+						void vscode.window.showErrorMessage(`Failed to sync repository: ${result.error}`);
+					} else {
+						const { deletedBranches, syncedBranches } = result.value;
+						let message = `Repository synced successfully.`;
+
+						if (syncedBranches > 0) {
+							message += ` ${syncedBranches} branch${syncedBranches === 1 ? '' : 'es'} updated.`;
+						}
+
+						if (deletedBranches.length > 0) {
+							message += ` Deleted ${deletedBranches.length} branch${deletedBranches.length === 1 ? '' : 'es'}: ${deletedBranches.join(', ')}.`;
+						}
+
+						void vscode.window.showInformationMessage(message);
 					}
-					
-					if (deletedBranches.length > 0) {
-						message += ` Deleted ${deletedBranches.length} branch${deletedBranches.length === 1 ? '' : 'es'}: ${deletedBranches.join(', ')}.`;
-					}
-					
-					void vscode.window.showInformationMessage(message);
+
+					// Always refresh to reflect current state
+					await this.refresh();
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					console.error('🔄 Unexpected error during repository sync:', message);
+					void vscode.window.showErrorMessage(`Unexpected error during repository sync: ${message}`);
 				}
-
-				// Always refresh to reflect current state
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error('🔄 Unexpected error during repository sync:', message);
-				void vscode.window.showErrorMessage(`Unexpected error during repository sync: ${message}`);
-			}
-		});
+			},
+		);
 	}
 
 	private pushState(): void {
@@ -332,86 +382,47 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 
 		try {
 			// Get the list of files changed in this commit with their status
-			const { execFile } = await import('node:child_process');
-			const { promisify } = await import('node:util');
 			const path = await import('node:path');
-			const execFileAsync = promisify(execFile);
 
 			// Use git diff-tree to get changed files with status
-			// --no-commit-id: suppress commit ID output
-			// --name-status: show file names with status (A=added, M=modified, D=deleted)
-			// -r: recursive
-			const { stdout } = await execFileAsync(
-				'git',
-				['diff-tree', '--no-commit-id', '--name-status', '-r', sha],
-				{ cwd: this.workspaceFolder.uri.fsPath }
-			);
+			const { stdout } = await execGit(this.workspaceFolder.uri.fsPath, [
+				'diff-tree',
+				'--no-commit-id',
+				'--name-status',
+				'-r',
+				sha,
+			]);
 
-			const lines = stdout.trim().split('\n').filter(l => l.length > 0);
+			const lines = stdout
+				.trim()
+				.split('\n')
+				.filter((l) => l.length > 0);
 
 			if (lines.length === 0) {
 				void vscode.window.showInformationMessage('No files changed in this commit.');
 				return;
 			}
 
-			// Build resource list for vscode.changes command
-			// Each entry must be a tuple of [label, left, right] where all are URIs
-			const parentRef = `${sha}^`;
-			const commitRef = sha;
-			// Git's empty tree SHA - used for new files that don't exist in parent
-			const emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+			const resourceList: [vscode.Uri, vscode.Uri, vscode.Uri][] = [];
 
-			const resourceList: [vscode.Uri, vscode.Uri | undefined, vscode.Uri | undefined][] = [];
-			
 			for (const line of lines) {
-				// Parse status and file path (format: "M\tfile.txt" or "A\tfile.txt")
 				const match = line.match(/^([A-Z])\t(.+)$/);
 				if (!match) {
 					continue;
 				}
 
 				const [, status, file] = match;
-				
-				// Construct absolute file path
 				const absolutePath = path.join(this.workspaceFolder!.uri.fsPath, file);
 				const fileUri = vscode.Uri.file(absolutePath);
 
-				let leftUri: vscode.Uri | undefined;
-				let rightUri: vscode.Uri | undefined;
-
-				if (status === 'A') {
-					// Added file: compare empty tree to commit version
-					const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: emptyTree });
-					const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: commitRef });
-					leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-					rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-				} else if (status === 'D') {
-					// Deleted file: compare parent to empty tree
-					const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: parentRef });
-					const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: emptyTree });
-					leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-					rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-				} else {
-					// Modified file: compare parent to commit
-					const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: parentRef });
-					const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: commitRef });
-					leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-					rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-				}
-
-				// Add as tuple: [label, left, right]
-				// Use the file URI as the label
-				resourceList.push([fileUri, leftUri, rightUri]);
+				const { left, right } = buildCommitDiffUris(fileUri, sha, status as FileChangeStatus);
+				resourceList.push([fileUri, left, right]);
 			}
 
 			const title = `Changes in ${sha.substring(0, 7)}`;
 
 			// Use vscode.changes to open all files in a single changes editor
-			await vscode.commands.executeCommand(
-				'vscode.changes',
-				title,
-				resourceList
-			);
+			await vscode.commands.executeCommand('vscode.changes', title, resourceList);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error('❌ Error opening commit diff:', message);
@@ -424,7 +435,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	 */
 	public async handleBranchCommand(commandName: string, branchName: string): Promise<void> {
 		// Map command names to their exec functions
-		const commandMap: Record<string, (folder: vscode.WorkspaceFolder, branchName: string) => Promise<BranchCommandResult>> = {
+		const commandMap: Record<
+			string,
+			(folder: vscode.WorkspaceFolder, branchName: string) => Promise<BranchCommandResult>
+		> = {
 			untrack: execBranchUntrack,
 			checkout: execBranchCheckout,
 			fold: execBranchFold,
@@ -445,56 +459,22 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	/**
-	 * Internal method to handle branch commands with exec function
+	 * Internal method to handle branch commands with exec function.
 	 */
 	private async handleBranchCommandInternal(
 		commandName: string,
 		branchName: string,
 		execFunction: (folder: vscode.WorkspaceFolder, branchName: string) => Promise<BranchCommandResult>,
 	): Promise<void> {
-		// Validate input
-		const trimmedName = typeof branchName === 'string' ? branchName.trim() : '';
-		if (trimmedName.length === 0) {
-			console.error(`❌ Invalid branch name provided to handleBranchCommand (${commandName}):`, branchName);
-			void vscode.window.showErrorMessage(`Invalid branch name provided for ${commandName}.`);
-			return;
-		}
+		const trimmedName = requireNonEmpty(branchName, `branch name for ${commandName}`);
+		if (!trimmedName) return;
 
-		// Validate workspace folder
-		if (!this.workspaceFolder) {
-			console.error(`❌ No workspace folder available for branch ${commandName}`);
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
-		console.log(`🔄 Executing branch ${commandName} for:`, trimmedName);
+		const title = `${commandName.charAt(0).toUpperCase() + commandName.slice(1)}ing branch: ${trimmedName}`;
+		const successMessage = `Branch ${trimmedName} ${commandName}ed successfully.`;
 
-		// Show progress notification
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `${commandName.charAt(0).toUpperCase() + commandName.slice(1)}ing branch: ${trimmedName}`,
-			cancellable: false,
-		}, async (progress) => {
-			try {
-				// Execute the branch command
-				const result = await execFunction(this.workspaceFolder!, trimmedName);
-
-				if ('error' in result) {
-					console.error(`🔄 Branch ${commandName} failed:`, result.error);
-					void vscode.window.showErrorMessage(`Failed to ${commandName} branch: ${result.error}`);
-				} else {
-					console.log(`🔄 Branch ${commandName} successful`);
-					void vscode.window.showInformationMessage(`Branch ${trimmedName} ${commandName}ed successfully.`);
-				}
-
-				// Always refresh state to reflect current git-spice state
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error(`🔄 Unexpected error during branch ${commandName}:`, message);
-				void vscode.window.showErrorMessage(`Unexpected error during branch ${commandName}: ${message}`);
-			}
-		});
+		await this.runBranchCommand(title, () => execFunction(this.workspaceFolder!, trimmedName), successMessage);
 	}
 
 	/**
@@ -507,8 +487,8 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		const isCurrent = branch.current === true;
-		const needsRestack = branch.down?.needsRestack === true ||
-			(branch.ups ?? []).some((link) => link.needsRestack === true);
+		const needsRestack =
+			branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
 		const hasPR = Boolean(branch.change);
 
 		type MenuItem = { label: string; action: string; description?: string };
@@ -529,7 +509,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 
 		items.push({
 			label: hasPR ? '$(cloud-upload) Submit' : '$(git-pull-request) Submit (create PR)',
-			action: 'submit'
+			action: 'submit',
 		});
 
 		items.push({ label: '$(fold) Fold', action: 'fold' });
@@ -586,86 +566,52 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	 * Handles branch deletion with confirmation dialog
 	 */
 	public async handleBranchDelete(branchName: string): Promise<void> {
-		const trimmedName = typeof branchName === 'string' ? branchName.trim() : '';
-		if (trimmedName.length === 0) {
-			console.error('❌ Invalid branch name provided to handleBranchDelete:', branchName);
-			void vscode.window.showErrorMessage('Invalid branch name provided for delete.');
-			return;
-		}
+		const trimmedName = requireNonEmpty(branchName, 'branch name for delete');
+		if (!trimmedName) return;
 
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for branch delete');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
 		const confirmed = await vscode.window.showWarningMessage(
 			`Delete branch '${trimmedName}'? This will untrack it and delete the local branch.`,
 			{ modal: true },
-			'Delete'
+			'Delete',
 		);
+		if (confirmed !== 'Delete') return;
 
-		if (confirmed !== 'Delete') {
-			return;
-		}
-
-		console.log('🔄 Executing branch delete for:', trimmedName);
-
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `Deleting branch: ${trimmedName}`,
-			cancellable: false,
-		}, async () => {
-			const result = await execBranchDelete(this.workspaceFolder!, trimmedName);
-
-			if ('error' in result) {
-				console.error('🔄 Branch delete failed:', result.error);
-				void vscode.window.showErrorMessage(`Failed to delete branch: ${result.error}`);
-			} else {
-				console.log('🔄 Branch delete successful');
-				void vscode.window.showInformationMessage(`Branch ${trimmedName} deleted successfully.`);
-			}
-
-			await this.refresh();
-		});
+		await this.runBranchCommand(
+			`Deleting branch: ${trimmedName}`,
+			() => execBranchDelete(this.workspaceFolder!, trimmedName),
+			`Branch ${trimmedName} deleted successfully.`,
+		);
 	}
 
 	/**
 	 * Public method to handle branch rename prompt from VSCode commands
 	 */
 	public async handleBranchRenamePrompt(branchName: string): Promise<void> {
-		// Validate input
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleBranchRenamePrompt:', branchName);
-			return;
-		}
+		const trimmedName = requireNonEmpty(branchName, 'branch name for rename');
+		if (!trimmedName) return;
 
 		try {
 			const newName = await vscode.window.showInputBox({
-				prompt: `Enter new name for branch '${branchName}':`,
-				value: branchName,
+				prompt: `Enter new name for branch '${trimmedName}':`,
+				value: trimmedName,
 				validateInput: (input) => {
-					if (!input || !input.trim()) {
-						return 'Branch name cannot be empty.';
-					}
-					if (input.trim() === branchName) {
-						return 'New name must be different from current name.';
-					}
+					if (!input || !input.trim()) return 'Branch name cannot be empty.';
+					if (input.trim() === trimmedName) return 'New name must be different from current name.';
 					return null;
-				}
+				},
 			});
 
-			if (newName && newName.trim() && newName !== branchName) {
-				// Send the rename command with the new name back to webview
+			if (newName && newName.trim() && newName !== trimmedName) {
 				this.view.webview.postMessage({
 					type: 'branchRename',
-					branchName: branchName,
-					newName: newName.trim()
+					branchName: trimmedName,
+					newName: newName.trim(),
 				});
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error showing rename prompt:', message);
 			void vscode.window.showErrorMessage(`Error showing rename prompt: ${message}`);
 		}
 	}
@@ -674,69 +620,30 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	 * Handles branch rename command with new name parameter
 	 */
 	private async handleBranchRename(branchName: string, newName: string): Promise<void> {
-		// Validate input
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleBranchRename:', branchName);
-			void vscode.window.showErrorMessage('Invalid branch name provided for rename.');
-			return;
-		}
+		const validated = requireAllNonEmpty([
+			[branchName, 'branch name for rename'],
+			[newName, 'new name for rename'],
+		]);
+		if (!validated) return;
+		const [trimmedBranch, trimmedNew] = validated;
 
-		if (typeof newName !== 'string' || newName.trim() === '') {
-			console.error('❌ Invalid new name provided to handleBranchRename:', newName);
-			void vscode.window.showErrorMessage('Invalid new name provided for rename.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
-		// Validate workspace folder
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for branch rename');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
-
-		console.log('🔄 Executing branch rename for:', branchName, 'to:', newName);
-
-		// Show progress notification
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `Renaming branch: ${branchName} → ${newName}`,
-			cancellable: false,
-		}, async (progress) => {
-			try {
-				// Execute the branch rename command
-				const result = await execBranchRename(this.workspaceFolder!, branchName, newName);
-
-				if ('error' in result) {
-					console.error('🔄 Branch rename failed:', result.error);
-					void vscode.window.showErrorMessage(`Failed to rename branch: ${result.error}`);
-				} else {
-					console.log('🔄 Branch rename successful');
-					void vscode.window.showInformationMessage(`Branch renamed from ${branchName} to ${newName} successfully.`);
-				}
-
-				// Always refresh state to reflect current git-spice state
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error('🔄 Unexpected error during branch rename:', message);
-				void vscode.window.showErrorMessage(`Unexpected error during branch rename: ${message}`);
-			}
-		});
+		await this.runBranchCommand(
+			`Renaming branch: ${trimmedBranch} → ${trimmedNew}`,
+			() => execBranchRename(this.workspaceFolder!, trimmedBranch, trimmedNew),
+			`Branch renamed from ${trimmedBranch} to ${trimmedNew} successfully.`,
+		);
 	}
 
 	/**
 	 * Prompts user to select a new parent branch for the move operation
 	 */
 	public async handleBranchMovePrompt(branchName: string): Promise<void> {
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleBranchMovePrompt:', branchName);
-			return;
-		}
+		const trimmedName = requireNonEmpty(branchName, 'branch name for move');
+		if (!trimmedName) return;
 
-		// Get available branches (excluding current branch and its descendants)
-		const availableParents = this.branches
-			.filter((b) => b.name !== branchName)
-			.map((b) => b.name);
+		const availableParents = this.branches.filter((b) => b.name !== trimmedName).map((b) => b.name);
 
 		if (availableParents.length === 0) {
 			void vscode.window.showWarningMessage('No other branches available to move onto.');
@@ -744,70 +651,43 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		const selected = await vscode.window.showQuickPick(availableParents, {
-			placeHolder: `Select new parent for '${branchName}'`,
+			placeHolder: `Select new parent for '${trimmedName}'`,
 			title: 'Move Branch Onto...',
 		});
 
 		if (selected) {
-			void this.handleBranchMove(branchName, selected);
+			void this.handleBranchMove(trimmedName, selected);
 		}
 	}
 
 	/**
-	 * Moves a branch to a new parent (reparents it)
+	 * Moves a branch to a new parent (reparents it).
 	 */
 	private async handleBranchMove(branchName: string, newParent: string): Promise<void> {
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleBranchMove:', branchName);
-			void vscode.window.showErrorMessage('Invalid branch name provided for move.');
-			return;
-		}
+		const validated = requireAllNonEmpty([
+			[branchName, 'branch name for move'],
+			[newParent, 'parent name for move'],
+		]);
+		if (!validated) return;
+		const [trimmedBranch, trimmedParent] = validated;
 
-		if (typeof newParent !== 'string' || newParent.trim() === '') {
-			console.error('❌ Invalid parent name provided to handleBranchMove:', newParent);
-			void vscode.window.showErrorMessage('Invalid parent name provided for move.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for branch move');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
-
-		console.log('🔄 Executing branch move for:', branchName, 'onto:', newParent);
-
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `Moving branch: ${branchName} → ${newParent}`,
-			cancellable: false,
-		}, async () => {
-			const result = await execBranchMove(this.workspaceFolder!, branchName, newParent);
-
-			if ('error' in result) {
-				console.error('🔄 Branch move failed:', result.error);
-				void vscode.window.showErrorMessage(`Failed to move branch: ${result.error}`);
-			} else {
-				console.log('🔄 Branch move successful');
-				void vscode.window.showInformationMessage(`Branch ${branchName} moved onto ${newParent} successfully.`);
-			}
-
-			await this.refresh();
-		});
+		await this.runBranchCommand(
+			`Moving branch: ${trimmedBranch} → ${trimmedParent}`,
+			() => execBranchMove(this.workspaceFolder!, trimmedBranch, trimmedParent),
+			`Branch ${trimmedBranch} moved onto ${trimmedParent} successfully.`,
+		);
 	}
 
 	/**
 	 * Prompts user to select a new parent branch for moving with children
 	 */
 	public async handleUpstackMovePrompt(branchName: string): Promise<void> {
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleUpstackMovePrompt:', branchName);
-			return;
-		}
+		const trimmedName = requireNonEmpty(branchName, 'branch name for upstack move');
+		if (!trimmedName) return;
 
-		const availableParents = this.branches
-			.filter((b) => b.name !== branchName)
-			.map((b) => b.name);
+		const availableParents = this.branches.filter((b) => b.name !== trimmedName).map((b) => b.name);
 
 		if (availableParents.length === 0) {
 			void vscode.window.showWarningMessage('No other branches available to move onto.');
@@ -815,74 +695,45 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		const selected = await vscode.window.showQuickPick(availableParents, {
-			placeHolder: `Select new parent for '${branchName}' and its children`,
+			placeHolder: `Select new parent for '${trimmedName}' and its children`,
 			title: 'Move Branch with Children Onto...',
 		});
 
 		if (selected) {
-			void this.handleUpstackMove(branchName, selected);
+			void this.handleUpstackMove(trimmedName, selected);
 		}
 	}
 
 	/**
-	 * Moves a branch and all its descendants to a new parent
+	 * Moves a branch and all its descendants to a new parent.
 	 */
 	private async handleUpstackMove(branchName: string, newParent: string): Promise<void> {
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleUpstackMove:', branchName);
-			void vscode.window.showErrorMessage('Invalid branch name provided for move.');
-			return;
-		}
+		const validated = requireAllNonEmpty([
+			[branchName, 'branch name for upstack move'],
+			[newParent, 'parent name for upstack move'],
+		]);
+		if (!validated) return;
+		const [trimmedBranch, trimmedParent] = validated;
 
-		if (typeof newParent !== 'string' || newParent.trim() === '') {
-			console.error('❌ Invalid parent name provided to handleUpstackMove:', newParent);
-			void vscode.window.showErrorMessage('Invalid parent name provided for move.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for upstack move');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
-
-		console.log('🔄 Executing upstack move for:', branchName, 'onto:', newParent);
-
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `Moving branch with children: ${branchName} → ${newParent}`,
-			cancellable: false,
-		}, async () => {
-			const result = await execUpstackMove(this.workspaceFolder!, branchName, newParent);
-
-			if ('error' in result) {
-				console.error('🔄 Upstack move failed:', result.error);
-				void vscode.window.showErrorMessage(`Failed to move branch with children: ${result.error}`);
-			} else {
-				console.log('🔄 Upstack move successful');
-				void vscode.window.showInformationMessage(
-					`Branch ${branchName} and children moved onto ${newParent} successfully.`
-				);
-			}
-
-			await this.refresh();
-		});
+		await this.runBranchCommand(
+			`Moving branch with children: ${trimmedBranch} → ${trimmedParent}`,
+			() => execUpstackMove(this.workspaceFolder!, trimmedBranch, trimmedParent),
+			`Branch ${trimmedBranch} and children moved onto ${trimmedParent} successfully.`,
+		);
 	}
 
 	/**
 	 * Handles copying a commit SHA to the clipboard
 	 */
 	public async handleCommitCopySha(sha: string): Promise<void> {
-		// Validate input
-		if (typeof sha !== 'string' || sha.trim() === '') {
-			console.error('❌ Invalid SHA provided to handleCommitCopySha:', sha);
-			void vscode.window.showErrorMessage('Invalid commit SHA provided.');
-			return;
-		}
+		const trimmedSha = requireNonEmpty(sha, 'commit SHA');
+		if (!trimmedSha) return;
 
 		try {
-			await vscode.env.clipboard.writeText(sha);
-			void vscode.window.showInformationMessage(`Copied commit SHA: ${sha.substring(0, 8)}`);
+			await vscode.env.clipboard.writeText(trimmedSha);
+			void vscode.window.showInformationMessage(`Copied commit SHA: ${trimmedSha.substring(0, 8)}`);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error('❌ Error copying SHA to clipboard:', message);
@@ -891,124 +742,76 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	/**
-	 * Handles creating a fixup commit for the specified commit
+	 * Handles creating a fixup commit for the specified commit.
 	 */
 	private async handleCommitFixup(sha: string): Promise<void> {
-		// Validate input
-		if (typeof sha !== 'string' || sha.trim() === '') {
-			console.error('❌ Invalid SHA provided to handleCommitFixup:', sha);
-			void vscode.window.showErrorMessage('Invalid commit SHA provided.');
-			return;
-		}
+		const trimmedSha = requireNonEmpty(sha, 'commit SHA');
+		if (!trimmedSha) return;
 
-		// Validate workspace folder
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for commit fixup');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
-		console.log('🔄 Executing commit fixup for:', sha);
-
-		// Show progress notification
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `Creating fixup commit for ${sha.substring(0, 8)}`,
-			cancellable: false,
-		}, async (progress) => {
-			try {
-				const result = await execCommitFixup(this.workspaceFolder!, sha);
-
-				if ('error' in result) {
-					console.error('🔄 Commit fixup failed:', result.error);
-					void vscode.window.showErrorMessage(`Failed to create fixup commit: ${result.error}`);
-				} else {
-					console.log('🔄 Commit fixup successful');
-					void vscode.window.showInformationMessage(`Fixup commit created for ${sha.substring(0, 8)}`);
-				}
-
-				// Refresh state to reflect changes
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error('🔄 Unexpected error during commit fixup:', message);
-				void vscode.window.showErrorMessage(`Unexpected error during commit fixup: ${message}`);
-			}
-		});
+		await this.runBranchCommand(
+			`Creating fixup commit for ${trimmedSha.substring(0, 8)}`,
+			() => execCommitFixup(this.workspaceFolder!, trimmedSha),
+			`Fixup commit created for ${trimmedSha.substring(0, 8)}`,
+		);
 	}
 
 	/**
-	 * Handles splitting a branch at the specified commit
+	 * Handles splitting a branch at the specified commit.
 	 */
 	public async handleCommitSplit(sha: string, branchName: string): Promise<void> {
-		// Validate input
-		if (typeof sha !== 'string' || sha.trim() === '') {
-			console.error('❌ Invalid SHA provided to handleCommitSplit:', sha);
-			void vscode.window.showErrorMessage('Invalid commit SHA provided.');
-			return;
-		}
+		const validated = requireAllNonEmpty([
+			[sha, 'commit SHA'],
+			[branchName, 'branch name'],
+		]);
+		if (!validated) return;
+		const [trimmedSha, trimmedBranch] = validated;
 
-		if (typeof branchName !== 'string' || branchName.trim() === '') {
-			console.error('❌ Invalid branch name provided to handleCommitSplit:', branchName);
-			void vscode.window.showErrorMessage('Invalid branch name provided.');
-			return;
-		}
+		if (!requireWorkspace(this.workspaceFolder)) return;
 
-		// Validate workspace folder
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for branch split');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
-
-		// Prompt for new branch name
 		const newBranchName = await vscode.window.showInputBox({
-			prompt: `Enter name for the new branch that will be created at commit ${sha.substring(0, 8)}`,
+			prompt: `Enter name for the new branch that will be created at commit ${trimmedSha.substring(0, 8)}`,
 			placeHolder: 'new-branch-name',
 			validateInput: (input) => {
-				if (!input || !input.trim()) {
-					return 'Branch name cannot be empty.';
-				}
-				// Basic validation for git branch names
-				if (!/^[a-zA-Z0-9/_-]+$/.test(input.trim())) {
-					return 'Branch name contains invalid characters.';
-				}
+				if (!input || !input.trim()) return 'Branch name cannot be empty.';
+				if (!/^[a-zA-Z0-9/_-]+$/.test(input.trim())) return 'Branch name contains invalid characters.';
 				return null;
-			}
+			},
 		});
 
-		if (!newBranchName || !newBranchName.trim()) {
-			// User cancelled
-			return;
-		}
+		if (!newBranchName || !newBranchName.trim()) return;
 
-		console.log('🔄 Executing branch split for:', branchName, 'at:', sha, 'new branch:', newBranchName);
+		console.log('🔄 Executing branch split for:', trimmedBranch, 'at:', trimmedSha, 'new branch:', newBranchName);
 
-		// Show progress notification
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: `Splitting branch ${branchName} at ${sha.substring(0, 8)}`,
-			cancellable: false,
-		}, async (progress) => {
-			try {
-				const result = await execBranchSplit(this.workspaceFolder!, branchName, sha, newBranchName.trim());
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: `Splitting branch ${trimmedBranch} at ${trimmedSha.substring(0, 8)}`,
+				cancellable: false,
+			},
+			async (_progress) => {
+				try {
+					const result = await execBranchSplit(this.workspaceFolder!, trimmedBranch, trimmedSha, newBranchName.trim());
 
-				if ('error' in result) {
-					console.error('🔄 Branch split failed:', result.error);
-					void vscode.window.showErrorMessage(`Failed to split branch: ${result.error}`);
-				} else {
-					console.log('🔄 Branch split successful');
-					void vscode.window.showInformationMessage(`Branch ${branchName} split at ${sha.substring(0, 8)} → ${newBranchName}`);
+					if ('error' in result) {
+						console.error('🔄 Branch split failed:', result.error);
+						void vscode.window.showErrorMessage(`Failed to split branch: ${result.error}`);
+					} else {
+						console.log('🔄 Branch split successful');
+						void vscode.window.showInformationMessage(
+							`Branch ${trimmedBranch} split at ${trimmedSha.substring(0, 8)} → ${newBranchName}`,
+						);
+					}
+
+					await this.refresh();
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					console.error('🔄 Unexpected error during branch split:', message);
+					void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
 				}
-
-				// Refresh state to reflect changes
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error('🔄 Unexpected error during branch split:', message);
-				void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
-			}
-		});
+			},
+		);
 	}
 
 	/**
@@ -1033,17 +836,18 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	 * Parses git diff-tree output and returns file changes.
 	 */
 	private async fetchCommitFiles(sha: string): Promise<CommitFileChange[]> {
-		const { execFile } = await import('node:child_process');
-		const { promisify } = await import('node:util');
-		const execFileAsync = promisify(execFile);
+		const { stdout } = await execGit(this.workspaceFolder!.uri.fsPath, [
+			'diff-tree',
+			'--no-commit-id',
+			'--name-status',
+			'-r',
+			sha,
+		]);
 
-		const { stdout } = await execFileAsync(
-			'git',
-			['diff-tree', '--no-commit-id', '--name-status', '-r', sha],
-			{ cwd: this.workspaceFolder!.uri.fsPath }
-		);
-
-		const lines = stdout.trim().split('\n').filter(l => l.length > 0);
+		const lines = stdout
+			.trim()
+			.split('\n')
+			.filter((l) => l.length > 0);
 		const files: CommitFileChange[] = [];
 
 		for (const line of lines) {
@@ -1076,33 +880,12 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 			const absolutePath = path.join(this.workspaceFolder.uri.fsPath, filePath);
 			const fileUri = vscode.Uri.file(absolutePath);
 
-			const parentRef = `${sha}^`;
-			const emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
 			// Determine file status to handle added/deleted files properly
 			const files = await this.fetchCommitFiles(sha);
-			const fileChange = files.find(f => f.path === filePath);
+			const fileChange = files.find((f) => f.path === filePath);
 			const status = fileChange?.status ?? 'M';
 
-			let leftUri: vscode.Uri;
-			let rightUri: vscode.Uri;
-
-			if (status === 'A') {
-				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: emptyTree });
-				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: sha });
-				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-			} else if (status === 'D') {
-				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: parentRef });
-				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: emptyTree });
-				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-			} else {
-				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: parentRef });
-				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: sha });
-				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-			}
+			const { left: leftUri, right: rightUri } = buildCommitDiffUris(fileUri, sha, status);
 
 			const fileName = path.basename(filePath);
 			const title = `${fileName} (${sha.substring(0, 7)})`;
@@ -1146,16 +929,11 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		try {
-			const { execFile } = await import('node:child_process');
-			const { promisify } = await import('node:util');
-			const execFileAsync = promisify(execFile);
-
-			const { stdout } = await execFileAsync(
-				'git',
-				['status', '--porcelain=v1', '--untracked-files=all'],
-				{ cwd: this.workspaceFolder.uri.fsPath }
-			);
-
+			const { stdout } = await execGit(this.workspaceFolder.uri.fsPath, [
+				'status',
+				'--porcelain=v1',
+				'--untracked-files=all',
+			]);
 			return this.parseGitStatusOutput(stdout);
 		} catch (error) {
 			console.error('❌ Error fetching working copy changes:', error);
@@ -1200,7 +978,13 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 
 	private mapGitStatusChar(char: string): FileChangeStatus {
 		const statusMap: Record<string, FileChangeStatus> = {
-			'A': 'A', 'M': 'M', 'D': 'D', 'R': 'R', 'C': 'C', 'T': 'T', '?': 'U',
+			A: 'A',
+			M: 'M',
+			D: 'D',
+			R: 'R',
+			C: 'C',
+			T: 'T',
+			'?': 'U',
 		};
 		return statusMap[char] ?? 'M';
 	}
@@ -1214,14 +998,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		try {
-			const { execFile } = await import('node:child_process');
-			const { promisify } = await import('node:util');
-			const execFileAsync = promisify(execFile);
-
-			await execFileAsync('git', ['add', '--', filePath], {
-				cwd: this.workspaceFolder.uri.fsPath,
-			});
-
+			await execGit(this.workspaceFolder.uri.fsPath, ['add', '--', filePath]);
 			await this.refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -1239,14 +1016,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		try {
-			const { execFile } = await import('node:child_process');
-			const { promisify } = await import('node:util');
-			const execFileAsync = promisify(execFile);
-
-			await execFileAsync('git', ['restore', '--staged', '--', filePath], {
-				cwd: this.workspaceFolder.uri.fsPath,
-			});
-
+			await execGit(this.workspaceFolder.uri.fsPath, ['restore', '--staged', '--', filePath]);
 			await this.refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -1266,7 +1036,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		const confirmed = await vscode.window.showWarningMessage(
 			`Discard changes to '${filePath}'? This cannot be undone.`,
 			{ modal: true },
-			'Discard'
+			'Discard',
 		);
 
 		if (confirmed !== 'Discard') {
@@ -1274,14 +1044,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		try {
-			const { execFile } = await import('node:child_process');
-			const { promisify } = await import('node:util');
-			const execFileAsync = promisify(execFile);
-
-			await execFileAsync('git', ['restore', '--', filePath], {
-				cwd: this.workspaceFolder.uri.fsPath,
-			});
-
+			await execGit(this.workspaceFolder.uri.fsPath, ['restore', '--', filePath]);
 			await this.refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -1304,22 +1067,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 			const absolutePath = path.join(this.workspaceFolder.uri.fsPath, filePath);
 			const fileUri = vscode.Uri.file(absolutePath);
 
-			let leftUri: vscode.Uri;
-			let rightUri: vscode.Uri;
 			const fileName = path.basename(filePath);
-
-			if (staged) {
-				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: 'HEAD' });
-				const rightQuery = JSON.stringify({ path: fileUri.fsPath, ref: '~' });
-				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-				rightUri = fileUri.with({ scheme: 'git', query: rightQuery });
-				await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, `${fileName} (Staged)`);
-			} else {
-				const leftQuery = JSON.stringify({ path: fileUri.fsPath, ref: '~' });
-				leftUri = fileUri.with({ scheme: 'git', query: leftQuery });
-				rightUri = fileUri;
-				await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, `${fileName} (Working Copy)`);
-			}
+			const { left, right } = buildWorkingCopyDiffUris(fileUri, staged);
+			const title = staged ? `${fileName} (Staged)` : `${fileName} (Working Copy)`;
+			await vscode.commands.executeCommand('vscode.diff', left, right, title);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error('❌ Error opening working copy diff:', message);
@@ -1360,12 +1111,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/** Stages all changes via `git add -A`. */
 	private async stageAllChanges(): Promise<boolean> {
 		try {
-			const { execFile } = await import('node:child_process');
-			const { promisify } = await import('node:util');
-			const execFileAsync = promisify(execFile);
-			await execFileAsync('git', ['add', '-A'], {
-				cwd: this.workspaceFolder!.uri.fsPath,
-			});
+			await execGit(this.workspaceFolder!.uri.fsPath, ['add', '-A']);
 			return true;
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error);
@@ -1393,28 +1139,24 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		const ready = await this.ensureStagedChanges();
 		if (!ready) return;
 
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: 'Committing changes...',
-			cancellable: false,
-		}, async () => {
-			try {
-				const { execFile } = await import('node:child_process');
-				const { promisify } = await import('node:util');
-				const execFileAsync = promisify(execFile);
-
-				await execFileAsync('git', ['commit', '-m', trimmedMessage], {
-					cwd: this.workspaceFolder!.uri.fsPath,
-				});
-
-				void vscode.window.showInformationMessage('Changes committed successfully.');
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error('❌ Error committing changes:', message);
-				void vscode.window.showErrorMessage(`Failed to commit: ${message}`);
-			}
-		});
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: 'Committing changes...',
+				cancellable: false,
+			},
+			async () => {
+				try {
+					await execGit(this.workspaceFolder!.uri.fsPath, ['commit', '-m', trimmedMessage]);
+					void vscode.window.showInformationMessage('Changes committed successfully.');
+					await this.refresh();
+				} catch (error) {
+					const msg = error instanceof Error ? error.message : String(error);
+					console.error('❌ Error committing changes:', msg);
+					void vscode.window.showErrorMessage(`Failed to commit: ${msg}`);
+				}
+			},
+		);
 	}
 
 	/**
@@ -1435,28 +1177,33 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		const ready = await this.ensureStagedChanges();
 		if (!ready) return;
 
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: 'Creating new branch...',
-			cancellable: false,
-		}, async () => {
-			const result = await execBranchCreate(this.workspaceFolder!, trimmedMessage);
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: 'Creating new branch...',
+				cancellable: false,
+			},
+			async () => {
+				const result = await execBranchCreate(this.workspaceFolder!, trimmedMessage);
 
-			if ('error' in result) {
-				console.error('❌ Error creating branch:', result.error);
-				void vscode.window.showErrorMessage(`Failed to create branch: ${result.error}`);
-			} else {
-				void vscode.window.showInformationMessage('Branch created successfully.');
-			}
+				if ('error' in result) {
+					console.error('❌ Error creating branch:', result.error);
+					void vscode.window.showErrorMessage(`Failed to create branch: ${result.error}`);
+				} else {
+					void vscode.window.showInformationMessage('Branch created successfully.');
+				}
 
-			await this.refresh();
-		});
+				await this.refresh();
+			},
+		);
 	}
 
 	/** Debounced refresh — coalesces rapid file-system events into a single refresh. */
 	private debouncedRefresh(): void {
 		if (this.refreshTimer) clearTimeout(this.refreshTimer);
-		this.refreshTimer = setTimeout(() => { void this.refresh(); }, 300);
+		this.refreshTimer = setTimeout(() => {
+			void this.refresh();
+		}, 300);
 	}
 
 	private setupFileWatcher(): void {
@@ -1526,8 +1273,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 			`font-src ${webview.cspSource}`,
 		].join('; ');
 
-		const mediaUri = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString();
-		const distUri = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', name)).toString();
+		const mediaUri = (name: string) =>
+			webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString();
+		const distUri = (name: string) =>
+			webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', name)).toString();
 		const codiconStyleUri = distUri('codicons/codicon.css');
 		const template = await readMediaFile(this.extensionUri, 'stackView.html');
 

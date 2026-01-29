@@ -1,4 +1,11 @@
-import type { BranchChangeViewModel, BranchRecord, BranchViewModel, DisplayState, TreePosition, UncommittedState } from './types';
+import type {
+	BranchChangeViewModel,
+	BranchRecord,
+	BranchViewModel,
+	DisplayState,
+	TreePosition,
+	UncommittedState,
+} from './types';
 
 /** Branch with computed tree position */
 type BranchWithTree = {
@@ -18,8 +25,7 @@ export function buildDisplayState(
 	const branchMap = new Map(branches.map((branch) => [branch.name, branch]));
 	const ordered = orderStackWithTree(branches, branchMap);
 
-	const hasUncommittedChanges = uncommitted &&
-		(uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
+	const hasUncommittedChanges = uncommitted && (uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
 
 	return {
 		branches: ordered.map((item) => createBranchViewModel(item.branch, item.tree)),
@@ -43,10 +49,7 @@ type TraversalContext = {
  * Children appear before (above) their parents, with first sibling's subtree before second's.
  * Lane compaction: first child inherits parent's lane, additional children fork to new lanes.
  */
-function orderStackWithTree(
-	branches: BranchRecord[],
-	branchMap: Map<string, BranchRecord>,
-): BranchWithTree[] {
+function orderStackWithTree(branches: BranchRecord[], branchMap: Map<string, BranchRecord>): BranchWithTree[] {
 	const result: BranchWithTree[] = [];
 	const visited = new Set<string>();
 	const laneCounter = { value: 0 };
@@ -124,8 +127,7 @@ function getChildren(
 }
 
 function createBranchViewModel(branch: BranchRecord, tree: TreePosition): BranchViewModel {
-	const restack =
-		branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
+	const restack = branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
 
 	const model: BranchViewModel = {
 		name: branch.name,

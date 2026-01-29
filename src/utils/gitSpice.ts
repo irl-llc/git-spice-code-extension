@@ -72,7 +72,10 @@ export async function execGitSpice(folder: vscode.WorkspaceFolder): Promise<Bran
 	}
 }
 
-export async function execBranchUntrack(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+export async function execBranchUntrack(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
 		return { error: `Branch untrack: ${normalized.error}` };
@@ -84,7 +87,10 @@ export async function execBranchUntrack(folder: vscode.WorkspaceFolder, branchNa
  * Deletes a branch using `gs branch delete`.
  * This untracks the branch and deletes the local git branch.
  */
-export async function execBranchDelete(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+export async function execBranchDelete(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
 		return { error: `Branch delete: ${normalized.error}` };
@@ -92,7 +98,10 @@ export async function execBranchDelete(folder: vscode.WorkspaceFolder, branchNam
 	return runGitSpiceCommand(folder, ['branch', 'delete', '--force', normalized.value], 'Branch delete');
 }
 
-export async function execBranchCheckout(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+export async function execBranchCheckout(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
 		return { error: `Branch checkout: ${normalized.error}` };
@@ -108,7 +117,10 @@ export async function execBranchFold(folder: vscode.WorkspaceFolder, branchName:
 	return runGitSpiceCommand(folder, ['branch', 'fold', '--branch', normalized.value], 'Branch fold');
 }
 
-export async function execBranchSquash(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+export async function execBranchSquash(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
 		return { error: `Branch squash: ${normalized.error}` };
@@ -128,7 +140,11 @@ export async function execBranchEdit(folder: vscode.WorkspaceFolder, branchName:
 	return { value: undefined };
 }
 
-export async function execBranchRename(folder: vscode.WorkspaceFolder, branchName: string, newName: string): Promise<BranchCommandResult> {
+export async function execBranchRename(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+	newName: string,
+): Promise<BranchCommandResult> {
 	const normalizedBranch = normalizeNonEmpty(branchName, 'Current branch name');
 	if ('error' in normalizedBranch) {
 		return { error: `Branch rename: ${normalizedBranch.error}` };
@@ -144,7 +160,10 @@ export async function execBranchRename(folder: vscode.WorkspaceFolder, branchNam
 	);
 }
 
-export async function execBranchRestack(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+export async function execBranchRestack(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
 		return { error: `Branch restack: ${normalized.error}` };
@@ -152,7 +171,10 @@ export async function execBranchRestack(folder: vscode.WorkspaceFolder, branchNa
 	return runGitSpiceCommand(folder, ['branch', 'restack', '--branch', normalized.value], 'Branch restack');
 }
 
-export async function execBranchSubmit(folder: vscode.WorkspaceFolder, branchName: string): Promise<BranchCommandResult> {
+export async function execBranchSubmit(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+): Promise<BranchCommandResult> {
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
 		return { error: `Branch submit: ${normalized.error}` };
@@ -181,7 +203,12 @@ export async function execCommitFixup(folder: vscode.WorkspaceFolder, sha: strin
 	return runGitSpiceCommand(folder, ['commit', 'fixup', normalized.value], 'Commit fixup');
 }
 
-export async function execBranchSplit(folder: vscode.WorkspaceFolder, branchName: string, sha: string, newBranchName: string): Promise<BranchCommandResult> {
+export async function execBranchSplit(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+	sha: string,
+	newBranchName: string,
+): Promise<BranchCommandResult> {
 	const normalizedBranch = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalizedBranch) {
 		return { error: `Branch split: ${normalizedBranch.error}` };
@@ -330,14 +357,14 @@ export async function execRepoSync(
 			const promptMatch = text.match(/Delete branch '([^']+)'\? \[y\/N\]/i);
 			if (promptMatch) {
 				const branchName = promptMatch[1];
-				
+
 				// Asynchronously prompt the user and send response
 				void (async () => {
 					try {
 						const shouldDelete = await promptCallback(branchName);
 						const response = shouldDelete ? 'y\n' : 'n\n';
 						process.stdin.write(response);
-						
+
 						if (shouldDelete) {
 							deletedBranches.push(branchName);
 						}
@@ -357,12 +384,12 @@ export async function execRepoSync(
 		// Handle process exit
 		process.on('close', (code) => {
 			clearTimeout(timeout);
-			
+
 			if (code === 0) {
 				// Success - parse output to count synced branches
 				const syncedBranchesMatch = outputBuffer.match(/(\d+) branch(?:es)? synced/i);
 				const syncedBranches = syncedBranchesMatch ? Number.parseInt(syncedBranchesMatch[1], 10) : 0;
-				
+
 				resolveOnce({
 					value: {
 						deletedBranches,

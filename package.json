@@ -243,9 +243,13 @@
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint && npm run format:check",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vscode-test",
+    "test:unit": "mocha out/test/unit/**/*.test.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -255,8 +259,9 @@
     "@typescript-eslint/parser": "^8.45.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.36.0",
     "copy-webpack-plugin": "^12.0.2",
+    "eslint": "^9.36.0",
+    "eslint-config-prettier": "^10.1.8",
     "prettier": "3.6.2",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
