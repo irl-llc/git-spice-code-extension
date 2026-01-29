@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { buildDisplayState } from './state';
-import type { BranchRecord, CommitFileChange, FileChangeStatus, UncommittedState, WorkingCopyChange } from './types';
+import type { BranchRecord, FileChangeStatus, UncommittedState } from './types';
 import type { WebviewMessage } from './webviewTypes';
 import {
 	execGitSpice,
@@ -22,26 +22,34 @@ import {
 	execBranchCreate,
 	type BranchCommandResult,
 } from '../utils/gitSpice';
-import { readMediaFile, readDistFile } from '../utils/readFileSync';
 import { execGit } from '../utils/git';
 import { buildCommitDiffUris, buildWorkingCopyDiffUris } from '../utils/diffUri';
 import { requireNonEmpty, requireWorkspace, requireAllNonEmpty } from '../utils/validation';
+import {
+	fetchWorkingCopyChanges,
+	stageFile,
+	unstageFile,
+	discardFile,
+	stageAllFiles,
+	commitChanges,
+} from './workingCopy';
+import { fetchCommitFiles } from './commitFiles';
+import { renderWebviewHtml } from './webviewHtml';
+import { routeMessage, type MessageHandlerContext, type ExecFunctionMap } from './messageRouter';
+import { FileWatcherManager } from './fileWatcher';
 
-export class StackViewProvider implements vscode.WebviewViewProvider {
+export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext {
 	private view!: vscode.WebviewView; // definite assignment assertion - set in resolveWebviewView
 	private branches: BranchRecord[] = [];
 	private uncommitted: UncommittedState | undefined;
 	private lastError: string | undefined;
-	private gitWatcher: vscode.FileSystemWatcher | undefined;
-	private workspaceWatcher: vscode.FileSystemWatcher | undefined;
-	private saveListener: vscode.Disposable | undefined;
-	private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly fileWatcher: FileWatcherManager;
 
 	constructor(
 		private workspaceFolder: vscode.WorkspaceFolder | undefined,
 		private readonly extensionUri: vscode.Uri,
 	) {
-		// No initialization here - everything happens after resolveWebviewView
+		this.fileWatcher = new FileWatcherManager(() => void this.refresh());
 	}
 
 	async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
@@ -54,178 +62,20 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 				vscode.Uri.joinPath(this.extensionUri, 'dist', 'codicons'),
 			],
 		};
-		webviewView.webview.html = await this.renderHtml(webviewView.webview);
+		webviewView.webview.html = await renderWebviewHtml(webviewView.webview, this.extensionUri);
+		webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
 
-		webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => {
-			switch (message.type) {
-				case 'ready':
-					this.pushState();
-					return;
-				case 'refresh':
-					void this.refresh();
-					return;
-				case 'openChange':
-					if (typeof message.url === 'string') {
-						void vscode.env.openExternal(vscode.Uri.parse(message.url));
-					}
-					return;
-				case 'openCommit':
-					if (typeof message.sha === 'string') {
-						void vscode.commands.executeCommand('git.openCommit', message.sha);
-					}
-					return;
-				case 'openCommitDiff':
-					if (typeof message.sha === 'string') {
-						void this.handleOpenCommitDiff(message.sha);
-					}
-					return;
-				case 'branchContextMenu':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchContextMenu(message.branchName);
-					}
-					return;
-				case 'branchUntrack':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('untrack', message.branchName, execBranchUntrack);
-					}
-					return;
-				case 'branchDelete':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchDelete(message.branchName);
-					}
-					return;
-				case 'branchCheckout':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('checkout', message.branchName, execBranchCheckout);
-					}
-					return;
-				case 'branchFold':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('fold', message.branchName, execBranchFold);
-					}
-					return;
-				case 'branchSquash':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('squash', message.branchName, execBranchSquash);
-					}
-					return;
-				case 'branchEdit':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('edit', message.branchName, execBranchEdit);
-					}
-					return;
-				case 'branchRenamePrompt':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchRenamePrompt(message.branchName);
-					}
-					return;
-				case 'branchRename':
-					if (typeof message.branchName === 'string' && typeof message.newName === 'string') {
-						void this.handleBranchRename(message.branchName, message.newName);
-					}
-					return;
-				case 'branchRestack':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('restack', message.branchName, execBranchRestack);
-					}
-					return;
-				case 'branchSubmit':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchCommandInternal('submit', message.branchName, execBranchSubmit);
-					}
-					return;
-				case 'commitCopySha':
-					if (typeof message.sha === 'string') {
-						void this.handleCommitCopySha(message.sha);
-					}
-					return;
-				case 'commitFixup':
-					if (typeof message.sha === 'string') {
-						void this.handleCommitFixup(message.sha);
-					}
-					return;
-				case 'commitSplit':
-					if (typeof message.sha === 'string' && typeof message.branchName === 'string') {
-						void this.handleCommitSplit(message.sha, message.branchName);
-					}
-					return;
-				case 'branchMovePrompt':
-					if (typeof message.branchName === 'string') {
-						void this.handleBranchMovePrompt(message.branchName);
-					}
-					return;
-				case 'branchMove':
-					if (typeof message.branchName === 'string' && typeof message.newParent === 'string') {
-						void this.handleBranchMove(message.branchName, message.newParent);
-					}
-					return;
-				case 'upstackMovePrompt':
-					if (typeof message.branchName === 'string') {
-						void this.handleUpstackMovePrompt(message.branchName);
-					}
-					return;
-				case 'upstackMove':
-					if (typeof message.branchName === 'string' && typeof message.newParent === 'string') {
-						void this.handleUpstackMove(message.branchName, message.newParent);
-					}
-					return;
-				case 'getCommitFiles':
-					if (typeof message.sha === 'string') {
-						void this.handleGetCommitFiles(message.sha);
-					}
-					return;
-				case 'openFileDiff':
-					if (typeof message.sha === 'string' && typeof message.path === 'string') {
-						void this.handleOpenFileDiff(message.sha, message.path);
-					}
-					return;
-				case 'openCurrentFile':
-					if (typeof message.path === 'string') {
-						void this.handleOpenCurrentFile(message.path);
-					}
-					return;
-				case 'stageFile':
-					if (typeof message.path === 'string') {
-						void this.handleStageFile(message.path);
-					}
-					return;
-				case 'unstageFile':
-					if (typeof message.path === 'string') {
-						void this.handleUnstageFile(message.path);
-					}
-					return;
-				case 'discardFile':
-					if (typeof message.path === 'string') {
-						void this.handleDiscardFile(message.path);
-					}
-					return;
-				case 'openWorkingCopyDiff':
-					if (typeof message.path === 'string' && typeof message.staged === 'boolean') {
-						void this.handleOpenWorkingCopyDiff(message.path, message.staged);
-					}
-					return;
-				case 'commitChanges':
-					if (typeof message.message === 'string') {
-						void this.handleCommitChanges(message.message);
-					}
-					return;
-				case 'createBranch':
-					if (typeof message.message === 'string') {
-						void this.handleCreateBranch(message.message);
-					}
-					return;
-				default:
-					return;
-			}
-		});
-
-		this.setupFileWatcher();
+		if (this.workspaceFolder) this.fileWatcher.watch(this.workspaceFolder);
 		void this.refresh();
 	}
 
 	setWorkspaceFolder(folder: vscode.WorkspaceFolder | undefined): void {
 		this.workspaceFolder = folder;
-		this.setupFileWatcher();
+		if (folder) {
+			this.fileWatcher.watch(folder);
+		} else {
+			this.fileWatcher.dispose();
+		}
 		void this.refresh();
 	}
 
@@ -240,7 +90,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 
 		const [branchResult, uncommittedResult] = await Promise.all([
 			execGitSpice(this.workspaceFolder),
-			this.fetchWorkingCopyChanges(),
+			this.getWorkingCopyChanges(),
 		]);
 
 		if ('error' in branchResult) {
@@ -354,7 +204,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	private pushState(): void {
+	pushState(): void {
 		// No undefined check needed - only called when view exists
 		const state = buildDisplayState(this.branches, this.lastError, this.uncommitted);
 		void this.view.webview.postMessage({ type: 'state', payload: state });
@@ -362,70 +212,34 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 
 	/**
 	 * Opens a changes view for the specified commit, comparing it with its parent.
-	 * Gets the list of files changed in the commit and opens them in a single changes editor.
 	 *
 	 * @param sha - The commit SHA to view
 	 */
-	private async handleOpenCommitDiff(sha: string): Promise<void> {
-		// Validate input
-		if (typeof sha !== 'string' || sha.trim() === '') {
-			console.error('❌ Invalid commit SHA provided to handleOpenCommitDiff:', sha);
-			return;
-		}
+	async handleOpenCommitDiff(sha: string): Promise<void> {
+		const trimmedSha = requireNonEmpty(sha, 'commit SHA');
+		if (!trimmedSha) return;
 
-		// Validate workspace folder
-		if (!this.workspaceFolder) {
-			console.error('❌ No workspace folder available for commit diff');
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
+		const cwd = requireWorkspace(this.workspaceFolder);
+		if (!cwd) return;
 
 		try {
-			// Get the list of files changed in this commit with their status
 			const path = await import('node:path');
+			const files = await fetchCommitFiles(cwd, trimmedSha);
 
-			// Use git diff-tree to get changed files with status
-			const { stdout } = await execGit(this.workspaceFolder.uri.fsPath, [
-				'diff-tree',
-				'--no-commit-id',
-				'--name-status',
-				'-r',
-				sha,
-			]);
-
-			const lines = stdout
-				.trim()
-				.split('\n')
-				.filter((l) => l.length > 0);
-
-			if (lines.length === 0) {
+			if (files.length === 0) {
 				void vscode.window.showInformationMessage('No files changed in this commit.');
 				return;
 			}
 
-			const resourceList: [vscode.Uri, vscode.Uri, vscode.Uri][] = [];
+			const resourceList = files.map((file) => {
+				const fileUri = vscode.Uri.file(path.join(cwd, file.path));
+				const { left, right } = buildCommitDiffUris(fileUri, trimmedSha, file.status);
+				return [fileUri, left, right] as [vscode.Uri, vscode.Uri, vscode.Uri];
+			});
 
-			for (const line of lines) {
-				const match = line.match(/^([A-Z])\t(.+)$/);
-				if (!match) {
-					continue;
-				}
-
-				const [, status, file] = match;
-				const absolutePath = path.join(this.workspaceFolder!.uri.fsPath, file);
-				const fileUri = vscode.Uri.file(absolutePath);
-
-				const { left, right } = buildCommitDiffUris(fileUri, sha, status as FileChangeStatus);
-				resourceList.push([fileUri, left, right]);
-			}
-
-			const title = `Changes in ${sha.substring(0, 7)}`;
-
-			// Use vscode.changes to open all files in a single changes editor
-			await vscode.commands.executeCommand('vscode.changes', title, resourceList);
+			await vscode.commands.executeCommand('vscode.changes', `Changes in ${trimmedSha.substring(0, 7)}`, resourceList);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error opening commit diff:', message);
 			void vscode.window.showErrorMessage(`Failed to open commit diff: ${message}`);
 		}
 	}
@@ -459,9 +273,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	/**
-	 * Internal method to handle branch commands with exec function.
+	 * Handles branch commands with exec function (exposed for message router).
 	 */
-	private async handleBranchCommandInternal(
+	async handleBranchCommandInternal(
 		commandName: string,
 		branchName: string,
 		execFunction: (folder: vscode.WorkspaceFolder, branchName: string) => Promise<BranchCommandResult>,
@@ -480,7 +294,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Shows a native VSCode QuickPick menu for branch actions
 	 */
-	private async handleBranchContextMenu(branchName: string): Promise<void> {
+	async handleBranchContextMenu(branchName: string): Promise<void> {
 		const branch = this.branches.find((b) => b.name === branchName);
 		if (!branch) {
 			return;
@@ -520,46 +334,37 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		const selected = await vscode.window.showQuickPick(items, {
 			placeHolder: `Actions for branch '${branchName}'`,
 		});
+		if (!selected) return;
 
-		if (!selected) {
+		this.dispatchContextMenuAction(selected.action, branchName);
+	}
+
+	/** Dispatches a context menu action to the appropriate handler. */
+	private dispatchContextMenuAction(action: string, branchName: string): void {
+		const execActions: Record<string, typeof execBranchCheckout> = {
+			checkout: execBranchCheckout,
+			edit: execBranchEdit,
+			restack: execBranchRestack,
+			submit: execBranchSubmit,
+			fold: execBranchFold,
+			squash: execBranchSquash,
+			untrack: execBranchUntrack,
+		};
+
+		const execFn = execActions[action];
+		if (execFn) {
+			void this.handleBranchCommandInternal(action, branchName, execFn);
 			return;
 		}
 
-		switch (selected.action) {
-			case 'checkout':
-				void this.handleBranchCommandInternal('checkout', branchName, execBranchCheckout);
-				break;
-			case 'rename':
-				void this.handleBranchRenamePrompt(branchName);
-				break;
-			case 'move':
-				void this.handleBranchMovePrompt(branchName);
-				break;
-			case 'upstackMove':
-				void this.handleUpstackMovePrompt(branchName);
-				break;
-			case 'edit':
-				void this.handleBranchCommandInternal('edit', branchName, execBranchEdit);
-				break;
-			case 'restack':
-				void this.handleBranchCommandInternal('restack', branchName, execBranchRestack);
-				break;
-			case 'submit':
-				void this.handleBranchCommandInternal('submit', branchName, execBranchSubmit);
-				break;
-			case 'fold':
-				void this.handleBranchCommandInternal('fold', branchName, execBranchFold);
-				break;
-			case 'squash':
-				void this.handleBranchCommandInternal('squash', branchName, execBranchSquash);
-				break;
-			case 'untrack':
-				void this.handleBranchCommandInternal('untrack', branchName, execBranchUntrack);
-				break;
-			case 'delete':
-				void this.handleBranchDelete(branchName);
-				break;
-		}
+		const promptActions: Record<string, () => void> = {
+			rename: () => void this.handleBranchRenamePrompt(branchName),
+			move: () => void this.handleBranchMovePrompt(branchName),
+			upstackMove: () => void this.handleUpstackMovePrompt(branchName),
+			delete: () => void this.handleBranchDelete(branchName),
+		};
+
+		promptActions[action]?.();
 	}
 
 	/**
@@ -619,7 +424,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Handles branch rename command with new name parameter
 	 */
-	private async handleBranchRename(branchName: string, newName: string): Promise<void> {
+	async handleBranchRename(branchName: string, newName: string): Promise<void> {
 		const validated = requireAllNonEmpty([
 			[branchName, 'branch name for rename'],
 			[newName, 'new name for rename'],
@@ -663,7 +468,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Moves a branch to a new parent (reparents it).
 	 */
-	private async handleBranchMove(branchName: string, newParent: string): Promise<void> {
+	async handleBranchMove(branchName: string, newParent: string): Promise<void> {
 		const validated = requireAllNonEmpty([
 			[branchName, 'branch name for move'],
 			[newParent, 'parent name for move'],
@@ -707,7 +512,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Moves a branch and all its descendants to a new parent.
 	 */
-	private async handleUpstackMove(branchName: string, newParent: string): Promise<void> {
+	async handleUpstackMove(branchName: string, newParent: string): Promise<void> {
 		const validated = requireAllNonEmpty([
 			[branchName, 'branch name for upstack move'],
 			[newParent, 'parent name for upstack move'],
@@ -744,7 +549,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Handles creating a fixup commit for the specified commit.
 	 */
-	private async handleCommitFixup(sha: string): Promise<void> {
+	async handleCommitFixup(sha: string): Promise<void> {
 		const trimmedSha = requireNonEmpty(sha, 'commit SHA');
 		if (!trimmedSha) return;
 
@@ -814,62 +619,21 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	/**
-	 * Fetches the list of files changed in a commit and sends it to the webview.
-	 */
-	private async handleGetCommitFiles(sha: string): Promise<void> {
-		if (!this.workspaceFolder) {
-			return;
-		}
+	/** Fetches the list of files changed in a commit and sends it to the webview. */
+	async handleGetCommitFiles(sha: string): Promise<void> {
+		if (!this.workspaceFolder) return;
 
 		try {
-			const files = await this.fetchCommitFiles(sha);
+			const files = await fetchCommitFiles(this.workspaceFolder.uri.fsPath, sha);
 			void this.view.webview.postMessage({ type: 'commitFiles', sha, files });
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error fetching commit files:', message);
 			void this.view.webview.postMessage({ type: 'commitFiles', sha, files: [] });
 		}
 	}
 
-	/**
-	 * Parses git diff-tree output and returns file changes.
-	 */
-	private async fetchCommitFiles(sha: string): Promise<CommitFileChange[]> {
-		const { stdout } = await execGit(this.workspaceFolder!.uri.fsPath, [
-			'diff-tree',
-			'--no-commit-id',
-			'--name-status',
-			'-r',
-			sha,
-		]);
-
-		const lines = stdout
-			.trim()
-			.split('\n')
-			.filter((l) => l.length > 0);
-		const files: CommitFileChange[] = [];
-
-		for (const line of lines) {
-			const match = line.match(/^([A-Z])\t(.+)$/);
-			if (!match) {
-				continue;
-			}
-
-			const [, statusChar, filePath] = match;
-			files.push({
-				status: statusChar as FileChangeStatus,
-				path: filePath,
-			});
-		}
-
-		return files;
-	}
-
-	/**
-	 * Opens a diff view for a single file in a commit.
-	 */
-	private async handleOpenFileDiff(sha: string, filePath: string): Promise<void> {
+	/** Opens a diff view for a single file in a commit. */
+	async handleOpenFileDiff(sha: string, filePath: string): Promise<void> {
 		if (!this.workspaceFolder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
@@ -880,20 +644,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 			const absolutePath = path.join(this.workspaceFolder.uri.fsPath, filePath);
 			const fileUri = vscode.Uri.file(absolutePath);
 
-			// Determine file status to handle added/deleted files properly
-			const files = await this.fetchCommitFiles(sha);
+			const files = await fetchCommitFiles(this.workspaceFolder.uri.fsPath, sha);
 			const fileChange = files.find((f) => f.path === filePath);
 			const status = fileChange?.status ?? 'M';
 
 			const { left: leftUri, right: rightUri } = buildCommitDiffUris(fileUri, sha, status);
-
 			const fileName = path.basename(filePath);
-			const title = `${fileName} (${sha.substring(0, 7)})`;
-
-			await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+			await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, `${fileName} (${sha.substring(0, 7)})`);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error opening file diff:', message);
 			void vscode.window.showErrorMessage(`Failed to open file diff: ${message}`);
 		}
 	}
@@ -901,7 +660,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Opens the current version of a file in the editor.
 	 */
-	private async handleOpenCurrentFile(filePath: string): Promise<void> {
+	async handleOpenCurrentFile(filePath: string): Promise<void> {
 		if (!this.workspaceFolder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
@@ -920,135 +679,51 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	/**
-	 * Fetches the current working copy changes (staged and unstaged).
-	 */
-	private async fetchWorkingCopyChanges(): Promise<UncommittedState> {
-		if (!this.workspaceFolder) {
-			return { staged: [], unstaged: [] };
-		}
+	/** Fetches uncommitted changes from git status. */
+	private getWorkingCopyChanges(): Promise<UncommittedState> {
+		return fetchWorkingCopyChanges(this.workspaceFolder?.uri.fsPath);
+	}
 
+	/** Stages a file using git add. */
+	async handleStageFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) return;
 		try {
-			const { stdout } = await execGit(this.workspaceFolder.uri.fsPath, [
-				'status',
-				'--porcelain=v1',
-				'--untracked-files=all',
-			]);
-			return this.parseGitStatusOutput(stdout);
-		} catch (error) {
-			console.error('❌ Error fetching working copy changes:', error);
-			return { staged: [], unstaged: [] };
-		}
-	}
-
-	/**
-	 * Parses git status --porcelain output into staged and unstaged changes.
-	 * Format: XY PATH where X = staged status, Y = unstaged status
-	 */
-	private parseGitStatusOutput(stdout: string): UncommittedState {
-		const staged: WorkingCopyChange[] = [];
-		const unstaged: WorkingCopyChange[] = [];
-
-		for (const line of stdout.split('\n')) {
-			if (line.length < 3) {
-				continue;
-			}
-
-			const stagedStatus = line[0];
-			const unstagedStatus = line[1];
-			const filePath = line.slice(3);
-
-			if (stagedStatus !== ' ' && stagedStatus !== '?') {
-				staged.push({
-					path: filePath,
-					status: this.mapGitStatusChar(stagedStatus),
-				});
-			}
-
-			if (unstagedStatus !== ' ') {
-				unstaged.push({
-					path: filePath,
-					status: this.mapGitStatusChar(unstagedStatus),
-				});
-			}
-		}
-
-		return { staged, unstaged };
-	}
-
-	private mapGitStatusChar(char: string): FileChangeStatus {
-		const statusMap: Record<string, FileChangeStatus> = {
-			A: 'A',
-			M: 'M',
-			D: 'D',
-			R: 'R',
-			C: 'C',
-			T: 'T',
-			'?': 'U',
-		};
-		return statusMap[char] ?? 'M';
-	}
-
-	/**
-	 * Stages a file using git add.
-	 */
-	private async handleStageFile(filePath: string): Promise<void> {
-		if (!this.workspaceFolder) {
-			return;
-		}
-
-		try {
-			await execGit(this.workspaceFolder.uri.fsPath, ['add', '--', filePath]);
+			await stageFile(this.workspaceFolder.uri.fsPath, filePath);
 			await this.refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error staging file:', message);
 			void vscode.window.showErrorMessage(`Failed to stage file: ${message}`);
 		}
 	}
 
-	/**
-	 * Unstages a file using git restore --staged.
-	 */
-	private async handleUnstageFile(filePath: string): Promise<void> {
-		if (!this.workspaceFolder) {
-			return;
-		}
-
+	/** Unstages a file using git restore --staged. */
+	async handleUnstageFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) return;
 		try {
-			await execGit(this.workspaceFolder.uri.fsPath, ['restore', '--staged', '--', filePath]);
+			await unstageFile(this.workspaceFolder.uri.fsPath, filePath);
 			await this.refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error unstaging file:', message);
 			void vscode.window.showErrorMessage(`Failed to unstage file: ${message}`);
 		}
 	}
 
-	/**
-	 * Discards changes to a file using git restore (with confirmation).
-	 */
-	private async handleDiscardFile(filePath: string): Promise<void> {
-		if (!this.workspaceFolder) {
-			return;
-		}
+	/** Discards changes to a file using git restore (with confirmation). */
+	async handleDiscardFile(filePath: string): Promise<void> {
+		if (!this.workspaceFolder) return;
 
 		const confirmed = await vscode.window.showWarningMessage(
 			`Discard changes to '${filePath}'? This cannot be undone.`,
 			{ modal: true },
 			'Discard',
 		);
-
-		if (confirmed !== 'Discard') {
-			return;
-		}
+		if (confirmed !== 'Discard') return;
 
 		try {
-			await execGit(this.workspaceFolder.uri.fsPath, ['restore', '--', filePath]);
+			await discardFile(this.workspaceFolder.uri.fsPath, filePath);
 			await this.refresh();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error discarding file:', message);
 			void vscode.window.showErrorMessage(`Failed to discard changes: ${message}`);
 		}
 	}
@@ -1056,7 +731,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Opens a diff for a working copy file.
 	 */
-	private async handleOpenWorkingCopyDiff(filePath: string, staged: boolean): Promise<void> {
+	async handleOpenWorkingCopyDiff(filePath: string, staged: boolean): Promise<void> {
 		if (!this.workspaceFolder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
@@ -1108,23 +783,20 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		return this.stageAllChanges();
 	}
 
-	/** Stages all changes via `git add -A`. */
+	/** Stages all changes via git add -A. */
 	private async stageAllChanges(): Promise<boolean> {
 		try {
-			await execGit(this.workspaceFolder!.uri.fsPath, ['add', '-A']);
+			await stageAllFiles(this.workspaceFolder!.uri.fsPath);
 			return true;
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error);
-			console.error('❌ Error staging all changes:', msg);
 			void vscode.window.showErrorMessage(`Failed to stage changes: ${msg}`);
 			return false;
 		}
 	}
 
-	/**
-	 * Commits staged changes with the given message.
-	 */
-	private async handleCommitChanges(message: string): Promise<void> {
+	/** Commits staged changes with the given message. */
+	async handleCommitChanges(message: string): Promise<void> {
 		if (!this.workspaceFolder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
@@ -1140,19 +812,14 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		if (!ready) return;
 
 		await vscode.window.withProgress(
-			{
-				location: vscode.ProgressLocation.Notification,
-				title: 'Committing changes...',
-				cancellable: false,
-			},
+			{ location: vscode.ProgressLocation.Notification, title: 'Committing changes...', cancellable: false },
 			async () => {
 				try {
-					await execGit(this.workspaceFolder!.uri.fsPath, ['commit', '-m', trimmedMessage]);
+					await commitChanges(this.workspaceFolder!.uri.fsPath, trimmedMessage);
 					void vscode.window.showInformationMessage('Changes committed successfully.');
 					await this.refresh();
 				} catch (error) {
 					const msg = error instanceof Error ? error.message : String(error);
-					console.error('❌ Error committing changes:', msg);
 					void vscode.window.showErrorMessage(`Failed to commit: ${msg}`);
 				}
 			},
@@ -1162,7 +829,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 	/**
 	 * Creates a new branch with the given commit message.
 	 */
-	private async handleCreateBranch(message: string): Promise<void> {
+	async handleCreateBranch(message: string): Promise<void> {
 		if (!this.workspaceFolder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
@@ -1198,102 +865,20 @@ export class StackViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
-	/** Debounced refresh — coalesces rapid file-system events into a single refresh. */
-	private debouncedRefresh(): void {
-		if (this.refreshTimer) clearTimeout(this.refreshTimer);
-		this.refreshTimer = setTimeout(() => {
-			void this.refresh();
-		}, 300);
-	}
-
-	private setupFileWatcher(): void {
-		this.disposeWatchers();
-
-		if (!this.workspaceFolder || !this.view) return;
-
-		this.setupGitWatcher();
-		this.setupWorkspaceWatcher();
-		this.setupSaveListener();
-	}
-
-	/** Watches .git internals for branch/index/spice-data changes. */
-	private setupGitWatcher(): void {
-		const gitDir = vscode.Uri.joinPath(this.workspaceFolder!.uri, '.git');
-		const pattern = new vscode.RelativePattern(gitDir, '{refs/spice/data,HEAD,refs/heads/**,index}');
-		this.gitWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-		const handler = () => this.debouncedRefresh();
-		this.gitWatcher.onDidChange(handler);
-		this.gitWatcher.onDidCreate(handler);
-		this.gitWatcher.onDidDelete(handler);
-	}
-
-	/** Watches workspace files for working-copy changes (edits, creates, deletes). */
-	private setupWorkspaceWatcher(): void {
-		const pattern = new vscode.RelativePattern(this.workspaceFolder!.uri, '**/*');
-		this.workspaceWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-		const handler = () => this.debouncedRefresh();
-		this.workspaceWatcher.onDidChange(handler);
-		this.workspaceWatcher.onDidCreate(handler);
-		this.workspaceWatcher.onDidDelete(handler);
-	}
-
-	/** Listens for in-editor document saves (more reliable than FS watcher for edits). */
-	private setupSaveListener(): void {
-		this.saveListener = vscode.workspace.onDidSaveTextDocument(() => {
-			this.debouncedRefresh();
-		});
-	}
-
-	private disposeWatchers(): void {
-		this.gitWatcher?.dispose();
-		this.gitWatcher = undefined;
-		this.workspaceWatcher?.dispose();
-		this.workspaceWatcher = undefined;
-		this.saveListener?.dispose();
-		this.saveListener = undefined;
-		if (this.refreshTimer) {
-			clearTimeout(this.refreshTimer);
-			this.refreshTimer = undefined;
-		}
+	/** Returns the map of exec functions for the message router. */
+	getExecFunctions(): ExecFunctionMap {
+		return {
+			untrack: execBranchUntrack,
+			checkout: execBranchCheckout,
+			fold: execBranchFold,
+			squash: execBranchSquash,
+			edit: execBranchEdit,
+			restack: execBranchRestack,
+			submit: execBranchSubmit,
+		};
 	}
 
 	dispose(): void {
-		this.disposeWatchers();
+		this.fileWatcher.dispose();
 	}
-
-	private async renderHtml(webview: vscode.Webview): Promise<string> {
-		const nonce = getNonce();
-		const csp = [
-			`default-src 'none'`,
-			`img-src ${webview.cspSource} https:`,
-			`style-src ${webview.cspSource}`,
-			`script-src 'nonce-${nonce}'`,
-			`font-src ${webview.cspSource}`,
-		].join('; ');
-
-		const mediaUri = (name: string) =>
-			webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString();
-		const distUri = (name: string) =>
-			webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', name)).toString();
-		const codiconStyleUri = distUri('codicons/codicon.css');
-		const template = await readMediaFile(this.extensionUri, 'stackView.html');
-
-		return template
-			.replace('{{csp}}', csp)
-			.replace('{{codiconStyleUri}}', codiconStyleUri)
-			.replace('{{styleUri}}', mediaUri('stackView.css'))
-			.replace('{{scriptUri}}', distUri('stackView.js'))
-			.replace('{{nonce}}', nonce);
-	}
-}
-
-function getNonce(): string {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i += 1) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
 }
