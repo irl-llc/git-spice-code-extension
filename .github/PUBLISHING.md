@@ -79,9 +79,47 @@ npm run deploy
 - Create a publisher (already done: `IRLAILLC`)
 
 ### 2. Personal Access Token (PAT)
+
+**Initial Setup** (already done ✅):
 - Go to https://dev.azure.com
-- Create a PAT with `Marketplace (Manage)` scope
-- Add it as a GitHub secret named `VSCE_PAT` (already done ✅)
+- Select your organization
+- Click your profile → "Personal access tokens"
+- Click "New Token"
+- Configure:
+  - **Name**: Any descriptive name (e.g., "VS Code Marketplace - git-spice")
+  - **Organization**: **"All accessible organizations"** (critical - don't select specific org)
+  - **Expiration**: Set an expiration date (recommended: 90 days for security)
+  - **Scopes**: "Custom defined" → "Show all scopes" → **Marketplace: Manage**
+- Click "Create" and copy the token
+- Add it as a GitHub secret named `VSCE_PAT`
+
+**PAT Rotation** (recommended every 90 days):
+
+When your PAT expires or you want to rotate it for security:
+
+1. **Create New PAT**:
+   - Follow the same steps above to create a new PAT
+   - Use the same scopes: "All accessible organizations" + "Marketplace (Manage)"
+   - Copy the new token
+
+2. **Update GitHub Secret**:
+   - Go to your GitHub repository
+   - Navigate to Settings → Secrets and variables → Actions
+   - Find `VSCE_PAT` in the list
+   - Click "Update" and paste the new token
+   - Click "Update secret"
+
+3. **Revoke Old PAT** (optional but recommended):
+   - Go back to https://dev.azure.com
+   - Find the old token in your Personal Access Tokens list
+   - Click "Revoke" to invalidate it
+
+**Setting Expiration Reminders**:
+- Add a calendar reminder 1 week before PAT expiration
+- Azure DevOps will also email you before expiration
+- The CI workflow will fail with authentication error if PAT expires
+
+Reference: https://code.visualstudio.com/api/working-with-extensions/publishing-extension#get-a-personal-access-token
 
 ## Pre-publishing Checklist
 
@@ -117,18 +155,29 @@ npm version major  # 0.1.0 → 1.0.0
 ## Troubleshooting
 
 **Publishing fails with authentication error:**
-- Verify `VSCE_PAT` secret is set correctly in GitHub
-- Ensure PAT has `Marketplace (Manage)` scope
-- Check PAT hasn't expired
+- **PAT Expired**: Check https://dev.azure.com for token expiration date
+  - If expired, create a new PAT and update the `VSCE_PAT` GitHub secret
+- **Wrong Organization Scope**: PAT must use "All accessible organizations" (not a specific org)
+- **Insufficient Scopes**: Verify PAT has "Marketplace (Manage)" scope
+- **Secret Not Set**: Ensure `VSCE_PAT` secret exists in GitHub Settings → Secrets
 
 **CI passes but publish step is skipped:**
-- Ensure you created a release (not just pushed code)
+- Ensure you created a **GitHub release** (not just pushed code)
 - Verify the tag starts with `v` (e.g., `v0.0.2`)
-- Check the Actions log for the conditional check
+- Check the Actions log to see which condition failed:
+  - `success()` - Did all tests pass?
+  - `startsWith(github.ref, 'refs/tags/')` - Is this a tag push?
+  - `matrix.node-version == '20.x'` - Running on correct Node version?
 
 **Version conflict error:**
-- The version in package.json must be higher than the published version
-- Run `npm version patch` to increment
+- The version in package.json must be **higher** than the currently published version
+- Check marketplace: https://marketplace.visualstudio.com/items?itemName=IRLAILLC.git-spice
+- Run `npm version patch` (or `minor`/`major`) to increment
+
+**PAT will expire soon:**
+- Rotate the PAT before it expires (see "PAT Rotation" section above)
+- Azure DevOps sends reminder emails before expiration
+- Set a calendar reminder 1 week before expiration date
 
 ## Resources
 
