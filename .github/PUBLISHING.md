@@ -1,95 +1,138 @@
 # Publishing to VS Code Marketplace
 
-## Prerequisites
+## Automated Publishing with GitHub Actions
 
-1. **Create a Publisher Account**
-   - Go to https://marketplace.visualstudio.com/manage
-   - Sign in with Microsoft account
-   - Create a new publisher (or use existing)
-   - Update `publisher` field in package.json to match your publisher ID
+This repository is configured for **automatic publishing** to the VS Code Marketplace when you create a GitHub release.
 
-2. **Generate Personal Access Token (PAT)**
-   - Go to https://dev.azure.com
-   - Create a PAT with `Marketplace (Manage)` scope
-   - Store it as a GitHub secret named `VSCE_PAT`
+### How It Works
 
-3. **Install vsce CLI**
-   ```bash
-   npm install -g @vscode/vsce
-   ```
+1. **CI runs on every push/PR** - Validates code quality, runs tests
+2. **Publishing happens automatically on release** - When you create a GitHub release with a tag, the extension is published
 
-## Publishing Process
+### Publishing a New Version
 
-### Option 1: Manual Publishing
+#### Step 1: Update Version
 
 ```bash
-# 1. Update version in package.json
-npm version patch  # or minor, or major
+# Update version in package.json (use patch, minor, or major)
+npm version patch -m "Release v%s"
 
-# 2. Run all checks
+# This creates a commit and git tag (e.g., v0.0.2)
+```
+
+#### Step 2: Push Changes and Tag
+
+```bash
+git push origin main
+git push origin v0.0.2  # Push the tag
+```
+
+#### Step 3: Create GitHub Release
+
+1. Go to your repository on GitHub
+2. Click "Releases" → "Create a new release"
+3. Select the tag you just pushed (e.g., `v0.0.2`)
+4. Add release notes describing changes
+5. Click "Publish release"
+
+**That's it!** The GitHub Actions workflow will automatically:
+- ✅ Run all tests and quality checks
+- ✅ Build the production bundle
+- ✅ Publish to VS Code Marketplace
+- ✅ Use your `VSCE_PAT` secret for authentication
+
+### Monitoring the Deployment
+
+- Watch the "Actions" tab in GitHub to see the CI workflow progress
+- The publish step only runs when:
+  - All tests pass
+  - The trigger is a tag (release)
+  - Running on Node.js 20.x (single publish, no duplicates)
+
+### Manual Publishing (Alternative)
+
+If you need to publish manually without GitHub Actions:
+
+```bash
+# Install vsce globally (if not already installed)
+npm install -g @vscode/vsce
+
+# Run all checks
 npm run lint
 npm run format:check
 npm run compile
 npm run test:unit
 
-# 3. Package the extension
+# Package the extension
 npm run package
 
-# 4. Publish to marketplace
-vsce publish -p <YOUR_PAT>
+# Publish (requires VSCE_PAT environment variable)
+npm run deploy
+# or: vsce publish --no-dependencies -p <YOUR_PAT>
 ```
 
-### Option 2: GitHub Actions Workflow
+## Prerequisites (One-time Setup)
 
-The repository includes a GitHub Actions workflow for automated publishing:
+### 1. Publisher Account
+- Go to https://marketplace.visualstudio.com/manage
+- Sign in with Microsoft account
+- Create a publisher (already done: `IRLAILLC`)
 
-1. Go to Actions tab in GitHub
-2. Select "Publish to Marketplace" workflow
-3. Click "Run workflow"
-4. Enter the version number (e.g., 0.1.0)
-5. The workflow will:
-   - Run all tests and checks
-   - Update package.json version
-   - Build the extension
-   - Publish to marketplace
-   - Create a GitHub release
-
-### Option 3: Tag-based Publishing (Recommended for Production)
-
-Uncomment the trigger in `.github/workflows/publish.yml`:
-
-```yaml
-on:
-  push:
-    tags:
-      - 'v*'
-```
-
-Then publish by creating a tag:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+### 2. Personal Access Token (PAT)
+- Go to https://dev.azure.com
+- Create a PAT with `Marketplace (Manage)` scope
+- Add it as a GitHub secret named `VSCE_PAT` (already done ✅)
 
 ## Pre-publishing Checklist
 
-- [ ] README.md has clear description and screenshots
-- [ ] CHANGELOG.md is up to date
-- [ ] All tests pass
-- [ ] Extension icon is set (optional but recommended)
-- [ ] Categories and keywords are appropriate
-- [ ] License file exists
-- [ ] Repository URL is correct in package.json
+Before creating a release, ensure:
+
+- [ ] All tests pass (`npm run test:unit`)
+- [ ] Linting passes (`npm run lint`)
+- [ ] Format check passes (`npm run format:check`)
+- [ ] Version bumped in package.json
+- [ ] CHANGELOG.md updated with release notes
+- [ ] README.md is up to date
+- [ ] Extension tested manually in VS Code
 
 ## After Publishing
 
-- The extension will appear at: `https://marketplace.visualstudio.com/items?itemName=<publisher>.<name>`
-- Users can install it with: `ext install <publisher>.<name>`
-- Monitor reviews and issues on the marketplace page
+- Extension appears at: `https://marketplace.visualstudio.com/items?itemName=IRLAILLC.git-spice`
+- Users can install: `ext install IRLAILLC.git-spice`
+- Monitor the marketplace page for reviews and ratings
+
+## Version Numbering
+
+Follow semantic versioning (semver):
+- **Patch** (0.0.x): Bug fixes, small tweaks
+- **Minor** (0.x.0): New features, backward compatible
+- **Major** (x.0.0): Breaking changes
+
+```bash
+npm version patch  # 0.0.1 → 0.0.2
+npm version minor  # 0.0.2 → 0.1.0
+npm version major  # 0.1.0 → 1.0.0
+```
+
+## Troubleshooting
+
+**Publishing fails with authentication error:**
+- Verify `VSCE_PAT` secret is set correctly in GitHub
+- Ensure PAT has `Marketplace (Manage)` scope
+- Check PAT hasn't expired
+
+**CI passes but publish step is skipped:**
+- Ensure you created a release (not just pushed code)
+- Verify the tag starts with `v` (e.g., `v0.0.2`)
+- Check the Actions log for the conditional check
+
+**Version conflict error:**
+- The version in package.json must be higher than the published version
+- Run `npm version patch` to increment
 
 ## Resources
 
 - [Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
+- [Continuous Integration](https://code.visualstudio.com/api/working-with-extensions/continuous-integration)
 - [Marketplace Publisher Management](https://marketplace.visualstudio.com/manage)
 - [vsce CLI Documentation](https://github.com/microsoft/vscode-vsce)

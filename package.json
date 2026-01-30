@@ -261,7 +261,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "test": "vscode-test",
-    "test:unit": "mocha out/test/unit/**/*.test.js"
+    "test:unit": "mocha out/test/unit/**/*.test.js",
+    "deploy": "vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -271,9 +272,11 @@
     "@typescript-eslint/parser": "^8.45.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
     "copy-webpack-plugin": "^12.0.2",
     "eslint": "^9.36.0",
     "eslint-config-prettier": "^10.1.8",
+    "mocha": "^11.0.1",
     "prettier": "3.6.2",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
