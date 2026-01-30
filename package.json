@@ -262,7 +262,10 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "test": "vscode-test",
     "test:unit": "mocha out/test/unit/**/*.test.js",
-    "deploy": "vsce publish --no-dependencies"
+    "deploy": "vsce publish --no-dependencies",
+    "deploy:patch": "vsce publish patch --no-dependencies",
+    "deploy:minor": "vsce publish minor --no-dependencies",
+    "deploy:major": "vsce publish major --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

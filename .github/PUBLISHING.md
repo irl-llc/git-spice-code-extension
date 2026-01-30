@@ -11,35 +11,67 @@ This repository is configured for **automatic publishing** to the VS Code Market
 
 ### Publishing a New Version
 
-#### Step 1: Update Version
+There are **two ways** to publish:
 
+#### Option 1: GitHub Release (Recommended for Production)
+
+**Best for:** Stable releases with detailed release notes
+
+**Step 1:** Update version locally
 ```bash
-# Update version in package.json (use patch, minor, or major)
-npm version patch -m "Release v%s"
-
+npm version patch -m "Release v%s"  # or minor/major
 # This creates a commit and git tag (e.g., v0.0.2)
 ```
 
-#### Step 2: Push Changes and Tag
-
+**Step 2:** Push changes and tag
 ```bash
 git push origin main
 git push origin v0.0.2  # Push the tag
 ```
 
-#### Step 3: Create GitHub Release
-
+**Step 3:** Create GitHub Release
 1. Go to your repository on GitHub
 2. Click "Releases" → "Create a new release"
 3. Select the tag you just pushed (e.g., `v0.0.2`)
 4. Add release notes describing changes
 5. Click "Publish release"
 
-**That's it!** The GitHub Actions workflow will automatically:
-- ✅ Run all tests and quality checks
-- ✅ Build the production bundle
+**Result:** GitHub Actions automatically runs tests and publishes to marketplace
+
+#### Option 2: Auto-Increment via Workflow Dispatch (Quick Publishing)
+
+**Best for:** Quick patches, automated version bumping
+
+**Step 1:** Push your changes to main
+```bash
+git add .
+git commit -m "Fix: description of changes"
+git push origin main
+```
+
+**Step 2:** Trigger workflow manually
+1. Go to Actions tab in GitHub
+2. Select "CI" workflow
+3. Click "Run workflow"
+4. Choose version increment type: `patch`, `minor`, or `major`
+5. Click "Run workflow"
+
+**Result:** The workflow will:
+- ✅ Run all tests
+- ✅ Auto-increment version in package.json (using `vsce publish patch/minor/major`)
+- ✅ Create version commit and git tag automatically
 - ✅ Publish to VS Code Marketplace
-- ✅ Use your `VSCE_PAT` secret for authentication
+
+**Comparison:**
+
+| Feature | GitHub Release | Auto-Increment |
+|---------|---------------|----------------|
+| Version control | Manual (you choose) | Automatic (semver) |
+| Release notes | Required/recommended | Optional |
+| Git tag | You create | vsce creates |
+| Best for | Stable releases | Quick patches |
+
+Both methods run the same tests and publish to the marketplace automatically.
 
 ### Monitoring the Deployment
 
@@ -53,23 +85,41 @@ git push origin v0.0.2  # Push the tag
 
 If you need to publish manually without GitHub Actions:
 
+**Option A: Publish current version** (no version change)
 ```bash
-# Install vsce globally (if not already installed)
-npm install -g @vscode/vsce
-
 # Run all checks
 npm run lint
 npm run format:check
 npm run compile
 npm run test:unit
-
-# Package the extension
 npm run package
 
-# Publish (requires VSCE_PAT environment variable)
-npm run deploy
-# or: vsce publish --no-dependencies -p <YOUR_PAT>
+# Publish current version
+VSCE_PAT=<your-token> npm run deploy
 ```
+
+**Option B: Auto-increment and publish** (vsce handles version bump)
+```bash
+# Run all checks
+npm run lint
+npm run format:check
+npm run compile
+npm run test:unit
+npm run package
+
+# Publish with auto-increment (choose one)
+VSCE_PAT=<your-token> npm run deploy:patch  # 0.0.1 → 0.0.2
+VSCE_PAT=<your-token> npm run deploy:minor  # 0.0.1 → 0.1.0
+VSCE_PAT=<your-token> npm run deploy:major  # 0.0.1 → 1.0.0
+```
+
+The auto-increment commands will:
+1. Update version in package.json
+2. Create a git commit with the version change
+3. Create a git tag (e.g., `v0.0.2`)
+4. Publish to marketplace
+
+Reference: https://code.visualstudio.com/api/working-with-extensions/publishing-extension#autoincrement-the-extension-version
 
 ## Prerequisites (One-time Setup)
 
@@ -146,11 +196,21 @@ Follow semantic versioning (semver):
 - **Minor** (0.x.0): New features, backward compatible
 - **Major** (x.0.0): Breaking changes
 
+**Manual versioning** (npm):
 ```bash
-npm version patch  # 0.0.1 → 0.0.2
+npm version patch  # 0.0.1 → 0.0.2 (creates commit + tag)
 npm version minor  # 0.0.2 → 0.1.0
 npm version major  # 0.1.0 → 1.0.0
 ```
+
+**Auto-increment** (vsce):
+```bash
+npm run deploy:patch  # Auto-increments patch version and publishes
+npm run deploy:minor  # Auto-increments minor version and publishes
+npm run deploy:major  # Auto-increments major version and publishes
+```
+
+Both approaches create git commits and tags automatically. The vsce method also publishes immediately, while npm version requires a separate publish step.
 
 ## Troubleshooting
 
