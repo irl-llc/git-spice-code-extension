@@ -32,6 +32,7 @@
   "files": [
     "dist",
     "media",
+    "icon.png",
     "LICENSE"
   ],
   "contributes": {
