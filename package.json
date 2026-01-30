@@ -4,6 +4,7 @@
   "description": "Manage stacked Git branches with ease. Visualize, navigate, and submit branch stacks directly from VS Code.",
   "version": "0.0.1",
   "publisher": "IRLAILLC",
+  "icon": "icon.png",
   "license": "MIT",
   "keywords": [
     "git",

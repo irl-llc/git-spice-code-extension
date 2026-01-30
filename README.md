@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="images/logo.png" alt="Git Spice Logo" width="400">
+</div>
+
 # git-spice for VSCode
 
 Forked from the original version by [Smexey (Pavle Divovic)](https://github.com/Smexey/git-spice-code-extension).
