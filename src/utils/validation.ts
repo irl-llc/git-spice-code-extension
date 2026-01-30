@@ -39,9 +39,7 @@ export function requireWorkspace(folder: vscode.WorkspaceFolder | undefined): st
  * @param values - Array of [value, label] pairs to validate
  * @returns Array of trimmed strings if all valid, undefined otherwise
  */
-export function requireAllNonEmpty(
-	values: Array<[unknown, string]>,
-): string[] | undefined {
+export function requireAllNonEmpty(values: Array<[unknown, string]>): string[] | undefined {
 	const results: string[] = [];
 
 	for (const [value, label] of values) {

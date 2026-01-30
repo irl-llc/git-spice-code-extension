@@ -35,9 +35,22 @@
 import type { BranchViewModel, CommitFileChange, DisplayState, UncommittedState, WorkingCopyChange } from './types';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
 import { buildBranchContext, buildCommitContext } from './contextBuilder';
-import { LANE_WIDTH, NODE_RADIUS, NODE_RADIUS_CURRENT, NODE_STROKE, CURVE_RADIUS, NODE_GAP } from './tree/treeConstants';
+import {
+	LANE_WIDTH,
+	NODE_RADIUS,
+	NODE_RADIUS_CURRENT,
+	NODE_STROKE,
+	CURVE_RADIUS,
+	NODE_GAP,
+} from './tree/treeConstants';
 import { createRoundedPath, buildSvgPaths, type PathData } from './tree/treePath';
-import { createNodeCircle, createUncommittedNodeCircle, appendPaths, appendNodes, type TreeColors } from './tree/treeNodes';
+import {
+	createNodeCircle,
+	createUncommittedNodeCircle,
+	appendPaths,
+	appendNodes,
+	type TreeColors,
+} from './tree/treeNodes';
 
 /** Action button configuration for file rows. */
 type FileRowAction = {
