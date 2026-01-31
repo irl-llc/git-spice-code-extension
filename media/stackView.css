@@ -869,3 +869,31 @@ button {
   color: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
 }
 
+/* ==========================================================================
+   Comments Indicator Styles
+   ========================================================================== */
+
+.comments-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--vscode-descriptionForeground);
+}
+
+.comments-indicator .codicon {
+  font-size: 0.8rem;
+}
+
+.comments-indicator.all-resolved .codicon {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+}
+
+.comments-indicator.has-unresolved .codicon {
+  color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+}
+
+.comments-indicator.item-updated {
+  animation: element-flash 0.3s ease-out;
+}
+
