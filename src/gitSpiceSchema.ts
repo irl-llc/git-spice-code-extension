@@ -175,7 +175,9 @@ function readComments(value: unknown): GitSpiceComments | undefined {
 	const resolved = readNumber(value.resolved);
 	const unresolved = readNumber(value.unresolved);
 
-	if (total === undefined || resolved === undefined || unresolved === undefined) {
+	const isMissing = total === undefined || resolved === undefined || unresolved === undefined;
+	const isInconsistent = !isMissing && resolved + unresolved !== total;
+	if (isMissing || isInconsistent) {
 		return undefined;
 	}
 
