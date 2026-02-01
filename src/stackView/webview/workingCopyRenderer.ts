@@ -5,8 +5,7 @@
 
 import type { TreeFragmentData, UncommittedState, WorkingCopyChange } from '../types';
 import type { WebviewMessage } from '../webviewTypes';
-import type { TreeColors } from '../tree/treeFragment';
-import { createTreeFragmentSvg } from '../tree/treeFragment';
+import { type TreeColors, createTreeFragmentSvg } from '../tree/treeFragment';
 import {
 	createFileRow,
 	appendFileStatus,

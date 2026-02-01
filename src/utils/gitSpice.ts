@@ -204,32 +204,29 @@ export async function execCommitFixup(folder: vscode.WorkspaceFolder, sha: strin
 	return runGitSpiceCommand(folder, ['commit', 'fixup', normalized.value], 'Commit fixup');
 }
 
-export async function execBranchSplit(
-	folder: vscode.WorkspaceFolder,
-	branchName: string,
-	sha: string,
-	newBranchName: string,
-): Promise<BranchCommandResult> {
-	const normalizedBranch = normalizeNonEmpty(branchName, 'Branch name');
-	if ('error' in normalizedBranch) {
-		return { error: `Branch split: ${normalizedBranch.error}` };
+/** Validates multiple string inputs, returning all normalized values or the first error. */
+function validateInputs(inputs: [string, string][], context: string): { values: string[] } | { error: string } {
+	const values: string[] = [];
+	for (const [value, field] of inputs) {
+		const normalized = normalizeNonEmpty(value, field);
+		if ('error' in normalized) return { error: `${context}: ${normalized.error}` };
+		values.push(normalized.value);
 	}
-	const normalizedSha = normalizeNonEmpty(sha, 'Commit SHA');
-	if ('error' in normalizedSha) {
-		return { error: `Branch split: ${normalizedSha.error}` };
-	}
-	const normalizedNewBranch = normalizeNonEmpty(newBranchName, 'New branch name');
-	if ('error' in normalizedNewBranch) {
-		return { error: `Branch split: ${normalizedNewBranch.error}` };
-	}
-	// Format: --at COMMIT:NAME as required by git-spice
-	// Use COMMIT^ to split before the selected commit, so the commit is included in the new branch
-	const atValue = `${normalizedSha.value}^:${normalizedNewBranch.value}`;
-	return runGitSpiceCommand(
-		folder,
-		['branch', 'split', '--branch', normalizedBranch.value, '--at', atValue],
-		'Branch split',
-	);
+	return { values };
+}
+
+/** Executes branch split with validated inputs. */
+export async function execBranchSplit(folder: vscode.WorkspaceFolder, branchName: string, sha: string, newBranchName: string): Promise<BranchCommandResult> {
+	const validated = validateInputs([
+		[branchName, 'Branch name'],
+		[sha, 'Commit SHA'],
+		[newBranchName, 'New branch name'],
+	], 'Branch split');
+	if ('error' in validated) return validated;
+
+	const [branch, commitSha, newBranch] = validated.values;
+	const atValue = `${commitSha}^:${newBranch}`;
+	return runGitSpiceCommand(folder, ['branch', 'split', '--branch', branch, '--at', atValue], 'Branch split');
 }
 
 /**
@@ -305,108 +302,104 @@ export async function execStackSubmit(folder: vscode.WorkspaceFolder): Promise<B
 	return runGitSpiceCommand(folder, ['stack', 'submit', '--fill', '--no-draft'], 'Stack submit');
 }
 
-/**
- * Executes `gs repo sync` with interactive prompts for branch deletion.
- * When git-spice prompts to delete branches (due to closed PRs), shows VSCode prompts
- * to the user and handles their responses.
- *
- * @param folder - The workspace folder where the command should be executed
- * @param promptCallback - Async callback to prompt the user for confirmation
- * @returns A promise that resolves with sync results or an error
- */
-export async function execRepoSync(
-	folder: vscode.WorkspaceFolder,
+/** Parses the number of synced branches from git-spice output. */
+function parseSyncedBranchCount(output: string): number {
+	const match = output.match(/(\d+) branch(?:es)? synced/i);
+	return match ? Number.parseInt(match[1], 10) : 0;
+}
+
+/** Extracts branch name from a deletion prompt if present. */
+function extractBranchFromPrompt(text: string): string | undefined {
+	const match = text.match(/Delete branch '([^']+)'\? \[y\/N\]/i);
+	return match?.[1];
+}
+
+/** State for tracking repo sync process. */
+interface SyncProcessState {
+	deletedBranches: string[];
+	outputBuffer: string;
+	errorBuffer: string;
+	isResolved: boolean;
+}
+
+/** Creates handlers for the repo sync process events. */
+function createSyncProcessHandlers(
+	state: SyncProcessState,
+	process: ReturnType<typeof spawn>,
 	promptCallback: (branchName: string) => Promise<boolean>,
-): Promise<RepoSyncResult> {
+	resolveOnce: (result: RepoSyncResult) => void,
+	timeout: NodeJS.Timeout,
+): void {
+	// stdio: ['pipe', 'pipe', 'pipe'] guarantees these are non-null
+	process.stdout!.on('data', (data: Buffer) => {
+		state.outputBuffer += data.toString();
+		// Check accumulated buffer to handle prompts split across chunks.
+		// Consume the matched portion so repeated data events don't re-trigger.
+		const branchName = extractBranchFromPrompt(state.outputBuffer);
+		if (branchName) {
+			state.outputBuffer = state.outputBuffer.replace(/Delete branch '[^']+'\? \[y\/N\]/i, '');
+			handleBranchDeletePrompt(branchName, process, state.deletedBranches, promptCallback);
+		}
+	});
+
+	process.stderr!.on('data', (data: Buffer) => {
+		state.errorBuffer += data.toString();
+	});
+
+	process.on('close', (code) => {
+		clearTimeout(timeout);
+		if (code === 0) {
+			resolveOnce({ value: { deletedBranches: state.deletedBranches, syncedBranches: parseSyncedBranchCount(state.outputBuffer) } });
+		} else {
+			const errorMessage = state.errorBuffer.trim() || state.outputBuffer.trim() || `Process exited with code ${code}`;
+			resolveOnce({ error: `Repository sync failed: ${errorMessage}` });
+		}
+	});
+
+	process.on('error', (error) => {
+		clearTimeout(timeout);
+		resolveOnce({ error: `Failed to execute gs repo sync: ${toErrorMessage(error)}` });
+	});
+}
+
+/** Handles a branch deletion prompt by asking the user. */
+function handleBranchDeletePrompt(
+	branchName: string,
+	process: ReturnType<typeof spawn>,
+	deletedBranches: string[],
+	promptCallback: (branchName: string) => Promise<boolean>,
+): void {
+	void (async () => {
+		try {
+			const shouldDelete = await promptCallback(branchName);
+			process.stdin!.write(shouldDelete ? 'y\n' : 'n\n');
+			if (shouldDelete) deletedBranches.push(branchName);
+		} catch {
+			process.stdin!.write('n\n');
+		}
+	})();
+}
+
+/** Executes `gs repo sync` with interactive prompts for branch deletion. */
+export async function execRepoSync(folder: vscode.WorkspaceFolder, promptCallback: (branchName: string) => Promise<boolean>): Promise<RepoSyncResult> {
 	const cwd = getWorkspaceFolderPath(folder);
-	if (!cwd) {
-		return { error: 'Invalid workspace folder provided' };
-	}
+	if (!cwd) return { error: 'Invalid workspace folder provided' };
 
 	return new Promise<RepoSyncResult>((resolve) => {
-		const deletedBranches: string[] = [];
-		let outputBuffer = '';
-		let errorBuffer = '';
-
-		// Spawn the process with stdio access
-		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], {
-			cwd,
-			stdio: ['pipe', 'pipe', 'pipe'],
-		});
-
-		let isResolved = false;
+		const state: SyncProcessState = { deletedBranches: [], outputBuffer: '', errorBuffer: '', isResolved: false };
 		const resolveOnce = (result: RepoSyncResult): void => {
-			if (!isResolved) {
-				isResolved = true;
+			if (!state.isResolved) {
+				state.isResolved = true;
 				resolve(result);
 			}
 		};
 
-		// Set timeout
+		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
 		const timeout = setTimeout(() => {
 			process.kill();
 			resolveOnce({ error: 'Repository sync timed out after 30 seconds' });
 		}, GIT_SPICE_TIMEOUT_MS);
 
-		// Handle stdout data
-		process.stdout.on('data', (data: Buffer) => {
-			const text = data.toString();
-			outputBuffer += text;
-
-			// Look for branch deletion prompts in the output
-			// git-spice typically outputs: "Delete branch 'branch-name'? [y/N]"
-			const promptMatch = text.match(/Delete branch '([^']+)'\? \[y\/N\]/i);
-			if (promptMatch) {
-				const branchName = promptMatch[1];
-
-				// Asynchronously prompt the user and send response
-				void (async () => {
-					try {
-						const shouldDelete = await promptCallback(branchName);
-						const response = shouldDelete ? 'y\n' : 'n\n';
-						process.stdin.write(response);
-
-						if (shouldDelete) {
-							deletedBranches.push(branchName);
-						}
-					} catch (error) {
-						// If user cancels or there's an error, default to 'n'
-						process.stdin.write('n\n');
-					}
-				})();
-			}
-		});
-
-		// Handle stderr data
-		process.stderr.on('data', (data: Buffer) => {
-			errorBuffer += data.toString();
-		});
-
-		// Handle process exit
-		process.on('close', (code) => {
-			clearTimeout(timeout);
-
-			if (code === 0) {
-				// Success - parse output to count synced branches
-				const syncedBranchesMatch = outputBuffer.match(/(\d+) branch(?:es)? synced/i);
-				const syncedBranches = syncedBranchesMatch ? Number.parseInt(syncedBranchesMatch[1], 10) : 0;
-
-				resolveOnce({
-					value: {
-						deletedBranches,
-						syncedBranches,
-					},
-				});
-			} else {
-				const errorMessage = errorBuffer.trim() || outputBuffer.trim() || `Process exited with code ${code}`;
-				resolveOnce({ error: `Repository sync failed: ${errorMessage}` });
-			}
-		});
-
-		// Handle process errors
-		process.on('error', (error) => {
-			clearTimeout(timeout);
-			resolveOnce({ error: `Failed to execute gs repo sync: ${toErrorMessage(error)}` });
-		});
+		createSyncProcessHandlers(state, process, promptCallback, resolveOnce, timeout);
 	});
 }

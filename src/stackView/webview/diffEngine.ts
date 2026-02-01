@@ -4,8 +4,7 @@
  */
 
 import { getTreeFragment } from '../domHelpers';
-import type { TreeColors } from '../tree/treeFragment';
-import { createTreeFragmentSvg } from '../tree/treeFragment';
+import { type TreeColors, createTreeFragmentSvg } from '../tree/treeFragment';
 
 /** Configuration for diffList reconciliation. */
 export interface DiffListConfig<T> {
