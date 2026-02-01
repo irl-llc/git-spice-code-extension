@@ -297,6 +297,14 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await handleGetCommitFiles(sha, this.getCommitHandlerDeps());
 	}
 
+	handleOpenExternal(url: string): void {
+		void vscode.env.openExternal(vscode.Uri.parse(url));
+	}
+
+	handleOpenCommit(sha: string): void {
+		void vscode.commands.executeCommand('git.openCommit', sha);
+	}
+
 	async handleOpenCommitDiff(sha: string): Promise<void> {
 		await handleOpenCommitDiff(sha, this.getDiffHandlerDeps());
 	}

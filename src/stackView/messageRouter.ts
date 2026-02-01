@@ -4,9 +4,14 @@
  * TypeScript exhaustive type checking on message types.
  */
 
-import * as vscode from 'vscode';
-
 import type { WebviewMessage } from './webviewTypes';
+
+/** Execution function type for branch commands. Uses unknown folder for flexibility. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ExecFunction = (folder: any, branchName: string) => Promise<{ value?: unknown; error?: string }>;
+
+/** Map of command names to their execution functions. */
+export type ExecFunctionMap = Record<string, ExecFunction>;
 
 /**
  * Handler context providing methods the message router can call.
@@ -15,13 +20,11 @@ import type { WebviewMessage } from './webviewTypes';
 export interface MessageHandlerContext {
 	pushState(): void;
 	refresh(): Promise<void>;
+	handleOpenExternal(url: string): void;
+	handleOpenCommit(sha: string): void;
 	handleOpenCommitDiff(sha: string): Promise<void>;
 	handleBranchContextMenu(branchName: string): Promise<void>;
-	handleBranchCommandInternal(
-		commandName: string,
-		branchName: string,
-		execFunction: (folder: vscode.WorkspaceFolder, branchName: string) => Promise<{ value?: unknown; error?: string }>,
-	): Promise<void>;
+	handleBranchCommandInternal(commandName: string, branchName: string, execFunction: ExecFunction): Promise<void>;
 	handleBranchDelete(branchName: string): Promise<void>;
 	handleBranchRenamePrompt(branchName: string): Promise<void>;
 	handleBranchRename(branchName: string, newName: string): Promise<void>;
@@ -43,12 +46,6 @@ export interface MessageHandlerContext {
 	handleCommitSplit(sha: string, branchName: string): Promise<void>;
 	getExecFunctions(): ExecFunctionMap;
 }
-
-/** Map of command names to their execution functions. */
-export type ExecFunctionMap = Record<
-	string,
-	(folder: vscode.WorkspaceFolder, branchName: string) => Promise<{ value?: unknown; error?: string }>
->;
 
 /**
  * Routes webview messages to appropriate handler methods.
@@ -84,10 +81,10 @@ function routeStateMessage(message: WebviewMessage, ctx: MessageHandlerContext):
 function routeNavigationMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'openChange':
-			void vscode.env.openExternal(vscode.Uri.parse(message.url));
+			ctx.handleOpenExternal(message.url);
 			return true;
 		case 'openCommit':
-			void vscode.commands.executeCommand('git.openCommit', message.sha);
+			ctx.handleOpenCommit(message.sha);
 			return true;
 		case 'openCommitDiff':
 			void ctx.handleOpenCommitDiff(message.sha);
