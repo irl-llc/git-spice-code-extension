@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 
+import { NONCE_LENGTH } from '../constants';
 import { readMediaFile } from '../utils/readFileSync';
 
 /** Generates a cryptographic nonce for CSP script security. */
 export function getNonce(): string {
 	let text = '';
 	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i += 1) {
+	for (let i = 0; i < NONCE_LENGTH; i += 1) {
 		text += possible.charAt(Math.floor(Math.random() * possible.length));
 	}
 	return text;
@@ -29,8 +30,8 @@ export async function renderWebviewHtml(webview: vscode.Webview, extensionUri: v
 		`font-src ${webview.cspSource}`,
 	].join('; ');
 
-	const mediaUri = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', name)).toString();
-	const distUri = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', name)).toString();
+	const mediaUri = (name: string): string => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', name)).toString();
+	const distUri = (name: string): string => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', name)).toString();
 	const codiconStyleUri = distUri('codicons/codicon.css');
 	const template = await readMediaFile(extensionUri, 'stackView.html');
 

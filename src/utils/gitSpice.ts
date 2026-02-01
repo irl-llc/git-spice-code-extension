@@ -1,16 +1,17 @@
 import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
-import * as vscode from 'vscode';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as os from 'node:os';
+import * as path from 'node:path';
+import { promisify } from 'node:util';
 
+import * as vscode from 'vscode';
+
+import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
+import { formatError, toErrorMessage } from './error';
 
 const execFileAsync = promisify(execFile);
 const GIT_SPICE_BINARY = 'gs';
-const DEFAULT_TIMEOUT_MS = 30_000;
-const BRANCH_CREATE_TIMEOUT_MS = 10_000;
 
 type NormalizedString = { value: string } | { error: string };
 type GitSpiceArgs = ReadonlyArray<string>;
@@ -18,10 +19,6 @@ type GitSpiceArgs = ReadonlyArray<string>;
 export type BranchLoadResult = { value: GitSpiceBranch[] } | { error: string };
 export type BranchCommandResult = { value: void } | { error: string };
 export type RepoSyncResult = { value: { deletedBranches: string[]; syncedBranches: number } } | { error: string };
-
-function toErrorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
 
 function getWorkspaceFolderPath(folder: vscode.WorkspaceFolder): string | null {
 	const fsPath = folder.uri.fsPath;
@@ -43,25 +40,26 @@ async function runGitSpiceCommand(
 	folder: vscode.WorkspaceFolder,
 	args: GitSpiceArgs,
 	context: string,
-	timeout: number = DEFAULT_TIMEOUT_MS,
+	timeout: number = GIT_SPICE_TIMEOUT_MS,
 ): Promise<BranchCommandResult> {
 	const cwd = getWorkspaceFolderPath(folder);
 	if (!cwd) {
-		return { error: `${context}: Workspace folder path is unavailable.` };
+		return { error: formatError(context, 'Workspace folder path is unavailable') };
 	}
 	try {
 		await execFileAsync(GIT_SPICE_BINARY, args, { cwd, timeout });
 		return { value: undefined };
 	} catch (error) {
-		return { error: `${context}: ${toErrorMessage(error)}` };
+		return { error: formatError(context, toErrorMessage(error)) };
 	}
 }
 
 export async function execGitSpice(folder: vscode.WorkspaceFolder): Promise<BranchLoadResult> {
+	const context = 'Load branches';
 	try {
 		const cwd = getWorkspaceFolderPath(folder);
 		if (!cwd) {
-			return { error: 'Failed to load git-spice branches: Workspace folder path is unavailable.' };
+			return { error: formatError(context, 'Workspace folder path is unavailable') };
 		}
 
 		const showComments = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
@@ -70,7 +68,7 @@ export async function execGitSpice(folder: vscode.WorkspaceFolder): Promise<Bran
 		const { stdout } = await execFileAsync(GIT_SPICE_BINARY, args, { cwd });
 		return { value: parseGitSpiceBranches(stdout) };
 	} catch (error) {
-		return { error: `Failed to load git-spice branches: ${toErrorMessage(error)}` };
+		return { error: formatError(context, toErrorMessage(error)) };
 	}
 }
 
@@ -78,11 +76,12 @@ export async function execBranchUntrack(
 	folder: vscode.WorkspaceFolder,
 	branchName: string,
 ): Promise<BranchCommandResult> {
+	const context = 'Branch untrack';
 	const normalized = normalizeNonEmpty(branchName, 'Branch name');
 	if ('error' in normalized) {
-		return { error: `Branch untrack: ${normalized.error}` };
+		return { error: formatError(context, normalized.error) };
 	}
-	return runGitSpiceCommand(folder, ['branch', 'untrack', normalized.value], 'Branch untrack');
+	return runGitSpiceCommand(folder, ['branch', 'untrack', normalized.value], context);
 }
 
 /**
@@ -347,7 +346,7 @@ export async function execRepoSync(
 		const timeout = setTimeout(() => {
 			process.kill();
 			resolveOnce({ error: 'Repository sync timed out after 30 seconds' });
-		}, DEFAULT_TIMEOUT_MS);
+		}, GIT_SPICE_TIMEOUT_MS);
 
 		// Handle stdout data
 		process.stdout.on('data', (data: Buffer) => {

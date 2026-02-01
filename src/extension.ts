@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { POST_COMMIT_REFRESH_DELAY_MS } from './constants';
 import { StackViewProvider } from './stackView/StackViewProvider';
 import {
 	execBranchCreate,
@@ -11,14 +12,23 @@ import {
 	type BranchCommandResult,
 } from './utils/gitSpice';
 
-/** Context passed to branch commands from webview. */
+/**
+ * Context passed to branch commands from webview context menus.
+ * Populated via the `data-vscode-context` attribute on branch elements.
+ */
 interface BranchContext {
+	/** Name of the branch to operate on. */
 	branchName?: string;
 }
 
-/** Context passed to commit commands from webview. */
+/**
+ * Context passed to commit commands from webview context menus.
+ * Populated via the `data-vscode-context` attribute on commit elements.
+ */
 interface CommitContext {
+	/** Full SHA of the commit. */
 	sha?: string;
+	/** Name of the branch containing this commit. */
 	branchName?: string;
 }
 
@@ -151,7 +161,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				setTimeout(() => {
 					void repository.status();
 					void provider.refresh();
-				}, 100);
+				}, POST_COMMIT_REFRESH_DELAY_MS);
 			}
 		}),
 		vscode.commands.registerCommand('git-spice.stackRestack', async () => {
