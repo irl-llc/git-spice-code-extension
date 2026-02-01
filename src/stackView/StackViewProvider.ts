@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 
+import type { GitSpiceBranch } from '../gitSpiceSchema';
 import { buildDisplayState } from './state';
-import type { BranchRecord, FileChangeStatus, UncommittedState } from './types';
+import type { BranchContextMenuItem, FileChangeStatus, UncommittedState } from './types';
 import type { WebviewMessage } from './webviewTypes';
 import {
 	execGitSpice,
@@ -40,7 +41,7 @@ import { FileWatcherManager } from './fileWatcher';
 
 export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext {
 	private view!: vscode.WebviewView; // definite assignment assertion - set in resolveWebviewView
-	private branches: BranchRecord[] = [];
+	private branches: GitSpiceBranch[] = [];
 	private uncommitted: UncommittedState | undefined;
 	private lastError: string | undefined;
 	private readonly fileWatcher: FileWatcherManager;
@@ -305,8 +306,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
 		const hasPR = Boolean(branch.change);
 
-		type MenuItem = { label: string; action: string; description?: string };
-		const items: MenuItem[] = [
+		const items: BranchContextMenuItem[] = [
 			{ label: '$(git-branch) Checkout', action: 'checkout' },
 			{ label: '$(tag) Rename...', action: 'rename' },
 			{ label: '$(move) Move onto...', action: 'move' },
