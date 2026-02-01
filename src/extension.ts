@@ -53,7 +53,16 @@ function registerSimpleCommand(
 	);
 }
 
+/** Updates the context key for comment progress toggle checkmark. */
+function updateCommentProgressContext(): void {
+	const showComments = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
+	void vscode.commands.executeCommand('setContext', 'git-spice.showCommentProgress', showComments);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
+	// Set initial context key for toggle checkmark
+	updateCommentProgressContext();
+
 	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 	const provider = new StackViewProvider(workspaceFolder, context.extensionUri);
 
@@ -227,6 +236,21 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {
 			provider.setWorkspaceFolder(vscode.workspace.workspaceFolders?.[0]);
 			void provider.refresh();
+		}),
+
+		// Toggle comment progress command
+		vscode.commands.registerCommand('git-spice.toggleCommentProgress', async () => {
+			const config = vscode.workspace.getConfiguration('git-spice');
+			const current = config.get<boolean>('showCommentProgress', false);
+			await config.update('showCommentProgress', !current, vscode.ConfigurationTarget.Global);
+		}),
+
+		// Listen for configuration changes and update context key
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
+				updateCommentProgressContext();
+				void provider.refresh();
+			}
 		}),
 	);
 }
