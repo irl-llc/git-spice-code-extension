@@ -81,6 +81,13 @@ jobs:
         if: steps.unit-tests.outcome == 'failure'
         run: exit 1
 
+      - name: Run E2E tests
+        id: e2e-tests
+        run: xvfb-run -a npm run test:e2e
+        env:
+          DISPLAY: ':99.0'
+        continue-on-error: true
+
       - name: Package extension
         run: npm run package
 
