@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 
+import { FILE_WATCHER_DEBOUNCE_MS } from '../constants';
+
 /**
  * Manages file system watchers for the stack view.
  * Tracks changes to git internals, workspace files, and document saves.
@@ -29,7 +31,7 @@ export class FileWatcherManager implements vscode.Disposable {
 		const pattern = new vscode.RelativePattern(gitDir, '{refs/spice/data,HEAD,refs/heads/**,index}');
 		this.gitWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-		const handler = () => this.debouncedRefresh();
+		const handler = (): void => this.debouncedRefresh();
 		this.gitWatcher.onDidChange(handler);
 		this.gitWatcher.onDidCreate(handler);
 		this.gitWatcher.onDidDelete(handler);
@@ -40,7 +42,7 @@ export class FileWatcherManager implements vscode.Disposable {
 		const pattern = new vscode.RelativePattern(folder.uri, '**/*');
 		this.workspaceWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-		const handler = () => this.debouncedRefresh();
+		const handler = (): void => this.debouncedRefresh();
 		this.workspaceWatcher.onDidChange(handler);
 		this.workspaceWatcher.onDidCreate(handler);
 		this.workspaceWatcher.onDidDelete(handler);
@@ -58,7 +60,7 @@ export class FileWatcherManager implements vscode.Disposable {
 		if (this.refreshTimer) clearTimeout(this.refreshTimer);
 		this.refreshTimer = setTimeout(() => {
 			this.onRefreshNeeded();
-		}, 300);
+		}, FILE_WATCHER_DEBOUNCE_MS);
 	}
 
 	/** Disposes all watchers and timers. */
