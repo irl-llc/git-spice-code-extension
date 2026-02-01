@@ -33,6 +33,7 @@
  */
 
 import type { BranchViewModel, CommitFileChange, DisplayState, UncommittedState, WorkingCopyChange } from './types';
+import type { GitSpiceComments } from '../gitSpiceSchema';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
 import { buildBranchContext, buildCommitContext } from './contextBuilder';
 import {
@@ -66,6 +67,7 @@ interface BranchData {
 	hasChange: boolean;
 	changeId?: string;
 	changeStatus?: string;
+	changeCommentsKey?: string;
 	treeDepth: number;
 	treeIsLastChild: boolean;
 	treeAncestorIsLast: string;
@@ -538,6 +540,7 @@ class StackView {
 			hasChange: Boolean(branch.change),
 			changeId: branch.change?.id,
 			changeStatus: branch.change?.status,
+			changeCommentsKey: this.serializeComments(branch.change?.comments),
 			treeDepth: branch.tree.depth,
 			treeIsLastChild: branch.tree.isLastChild,
 			treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
@@ -642,6 +645,7 @@ class StackView {
 			hasChange: Boolean(branch.change),
 			changeId: branch.change?.id,
 			changeStatus: branch.change?.status,
+			changeCommentsKey: this.serializeComments(branch.change?.comments),
 			treeDepth: branch.tree.depth,
 			treeIsLastChild: branch.tree.isLastChild,
 			treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
@@ -688,6 +692,15 @@ class StackView {
 		if (header) {
 			const newHeader = this.renderBranchHeader(branch, card);
 			header.replaceWith(newHeader);
+
+			// Flash comments indicator if it changed
+			const newCommentsKey = this.serializeComments(branch.change?.comments);
+			if (oldData && oldData.changeCommentsKey !== newCommentsKey) {
+				const commentsIndicator = newHeader.querySelector('.comments-indicator');
+				if (commentsIndicator) {
+					this.animateUpdate(commentsIndicator as HTMLElement);
+				}
+			}
 		}
 
 		// Update meta
@@ -727,6 +740,7 @@ class StackView {
 		if (!oldData) return true;
 
 		const newTreeAncestorIsLast = JSON.stringify(branch.tree.ancestorIsLast);
+		const newCommentsKey = this.serializeComments(branch.change?.comments);
 
 		return (
 			oldData.current !== Boolean(branch.current) ||
@@ -735,6 +749,7 @@ class StackView {
 			oldData.hasChange !== Boolean(branch.change) ||
 			oldData.changeId !== branch.change?.id ||
 			oldData.changeStatus !== branch.change?.status ||
+			oldData.changeCommentsKey !== newCommentsKey ||
 			oldData.treeDepth !== branch.tree.depth ||
 			oldData.treeIsLastChild !== branch.tree.isLastChild ||
 			oldData.treeAncestorIsLast !== newTreeAncestorIsLast ||
@@ -816,6 +831,10 @@ class StackView {
 				button.disabled = true;
 			}
 			tags.appendChild(button);
+
+			if (branch.change.comments && branch.change.comments.total > 0) {
+				tags.appendChild(this.renderCommentsIndicator(branch.change.comments));
+			}
 		}
 
 		header.appendChild(tags);
@@ -1127,6 +1146,31 @@ class StackView {
 		span.className = 'tag' + (variant ? ' tag-' + variant : '');
 		span.textContent = label;
 		return span;
+	}
+
+	/** Serializes comments for comparison in change detection. */
+	private serializeComments(comments: GitSpiceComments | undefined): string | undefined {
+		if (!comments) {
+			return undefined;
+		}
+		return `${comments.resolved}/${comments.total}`;
+	}
+
+	/** Renders a comments indicator showing resolved/total with an icon. */
+	private renderCommentsIndicator(comments: GitSpiceComments): HTMLElement {
+		const indicator = document.createElement('span');
+		const allResolved = comments.resolved === comments.total;
+		indicator.className = `comments-indicator ${allResolved ? 'all-resolved' : 'has-unresolved'}`;
+
+		const icon = document.createElement('i');
+		icon.className = `codicon ${allResolved ? 'codicon-pass' : 'codicon-comment-discussion'}`;
+		indicator.appendChild(icon);
+
+		const text = document.createElement('span');
+		text.textContent = `${comments.resolved}/${comments.total}`;
+		indicator.appendChild(text);
+
+		return indicator;
 	}
 
 	/** Renders the uncommitted changes card wrapper. */
