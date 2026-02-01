@@ -1,6 +1,4 @@
-import type { GitSpiceBranch, GitSpiceChangeStatus, GitSpiceComments } from '../gitSpiceSchema';
-
-export type BranchRecord = GitSpiceBranch;
+import type { GitSpiceChangeStatus, GitSpiceComments } from '../gitSpiceSchema';
 
 export type BranchCommitViewModel = {
 	sha: string;
@@ -38,6 +36,19 @@ export type BranchChangeViewModel = {
 	url?: string;
 	status?: GitSpiceChangeStatus;
 	comments?: GitSpiceComments;
+};
+
+/**
+ * Menu item for branch context menu QuickPick.
+ * Used in the native VSCode QuickPick dialog for branch actions.
+ */
+export type BranchContextMenuItem = {
+	/** Display label with optional codicon prefix (e.g., '$(git-branch) Checkout'). */
+	label: string;
+	/** Action identifier dispatched to the handler. */
+	action: string;
+	/** Optional description shown to the right of the label. */
+	description?: string;
 };
 
 /**

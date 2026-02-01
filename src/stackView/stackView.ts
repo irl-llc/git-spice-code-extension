@@ -35,10 +35,22 @@
 import type { BranchViewModel, CommitFileChange, DisplayState, UncommittedState, WorkingCopyChange } from './types';
 import type { GitSpiceComments } from '../gitSpiceSchema';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
+import {
+	ANIMATION_DURATION_MS,
+	ANIMATION_STAGGER_MS,
+	COMMIT_RENDER_CHUNK_SIZE,
+	FLASH_ANIMATION_DURATION_MS,
+} from '../constants';
 import { buildBranchContext, buildCommitContext } from './contextBuilder';
+import {
+	getBranchData,
+	getTreeFragment,
+	setBranchData,
+	setTreeFragment,
+	type BranchElementData,
+} from './domHelpers';
 import { LANE_WIDTH, NODE_RADIUS, NODE_RADIUS_CURRENT, NODE_STROKE } from './tree/treeConstants';
 import { createTreeFragmentSvg, type TreeColors } from './tree/treeFragment';
-import type { TreeFragmentData } from './types';
 
 /** Action button configuration for file rows. */
 type FileRowAction = {
@@ -46,26 +58,6 @@ type FileRowAction = {
 	title: string;
 	onClick: () => void;
 };
-
-interface BranchData {
-	current: boolean;
-	restack: boolean;
-	commitsCount: number;
-	hasChange: boolean;
-	changeId?: string;
-	changeStatus?: string;
-	changeCommentsKey?: string;
-	treeDepth: number;
-	treeIsLastChild: boolean;
-	treeAncestorIsLast: string;
-	treeLane: number;
-}
-
-/** HTMLElement augmented with branch card metadata stored during rendering. */
-interface BranchCardElement extends HTMLElement {
-	_branchData?: BranchData;
-	_treeFragment?: TreeFragmentData;
-}
 
 interface DiffListConfig<T> {
 	getKey: (item: T) => string;
@@ -88,9 +80,6 @@ class StackView {
 	private expandedUnstagedSection = true;
 	private commitMessageValue = '';
 
-	private static readonly COMMIT_CHUNK = 10;
-	private static readonly ANIMATION_DURATION = 200;
-	private static readonly FLASH_DURATION = 300;
 
 	constructor() {
 		this.stackList = document.getElementById('stackList')!;
@@ -228,7 +217,7 @@ class StackView {
 						}
 
 						// Update tree fragment SVG if it changed
-						const newTreeFragment = (newChild as BranchCardElement)._treeFragment;
+						const newTreeFragment = getTreeFragment(newChild as HTMLElement);
 						if (newTreeFragment) {
 							const oldSvg = existingElement.querySelector('.tree-fragment-svg');
 							const newSvg = createTreeFragmentSvg(newTreeFragment, this.getTreeColors());
@@ -256,7 +245,7 @@ class StackView {
 				const child = render(item);
 
 				// Create and append SVG to wrapper (not to card) for seamless lane connections
-				const treeFragment = (child as BranchCardElement)._treeFragment;
+				const treeFragment = getTreeFragment(child as HTMLElement);
 				if (treeFragment) {
 					const svg = createTreeFragmentSvg(treeFragment, this.getTreeColors());
 					wrapper.appendChild(svg);
@@ -293,7 +282,7 @@ class StackView {
 	 */
 	private animateOut(element: HTMLElement, onComplete: () => void): void {
 		element.classList.add('item-exit');
-		setTimeout(onComplete, StackView.ANIMATION_DURATION);
+		setTimeout(onComplete, ANIMATION_DURATION_MS);
 	}
 
 	/**
@@ -308,7 +297,7 @@ class StackView {
 			element.classList.add('item-updated');
 			setTimeout(() => {
 				element.classList.remove('item-updated');
-			}, StackView.FLASH_DURATION);
+			}, FLASH_ANIMATION_DURATION_MS);
 		});
 	}
 
@@ -321,14 +310,14 @@ class StackView {
 			// Fade out all existing items
 			const items = this.stackList.querySelectorAll('.stack-item');
 			items.forEach((item, index) => {
-				(item as HTMLElement).style.animationDelay = `${index * 30}ms`;
+				(item as HTMLElement).style.animationDelay = `${index * ANIMATION_STAGGER_MS}ms`;
 				this.animateOut(item as HTMLElement, () => {});
 			});
 			setTimeout(
 				() => {
 					this.stackList.innerHTML = '';
 				},
-				items.length * 30 + StackView.ANIMATION_DURATION,
+				items.length * ANIMATION_STAGGER_MS + ANIMATION_DURATION_MS,
 			);
 			return;
 		}
@@ -388,7 +377,7 @@ class StackView {
 		}
 
 		// Store branch data for diffing
-		(card as BranchCardElement)._branchData = {
+		setBranchData(card, {
 			current: branch.current,
 			restack: branch.restack,
 			commitsCount: branch.commits?.length ?? 0,
@@ -400,10 +389,10 @@ class StackView {
 			treeIsLastChild: branch.tree.isLastChild,
 			treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
 			treeLane: branch.tree.lane,
-		} as BranchData;
+		});
 
 		// Store tree fragment data for SVG creation in wrapper (not inside card)
-		(card as BranchCardElement)._treeFragment = branch.treeFragment;
+		setTreeFragment(card, branch.treeFragment);
 
 		// Content wrapper
 		const content = document.createElement('div');
@@ -428,7 +417,7 @@ class StackView {
 	}
 
 	private updateBranch(card: HTMLElement, branch: BranchViewModel): void {
-		const oldData = (card as BranchCardElement)._branchData!;
+		const oldData = getBranchData(card);
 
 		// Update classes
 		card.classList.toggle('is-current', Boolean(branch.current));
@@ -446,7 +435,7 @@ class StackView {
 		}
 
 		// Update stored data
-		(card as BranchCardElement)._branchData = {
+		setBranchData(card, {
 			current: branch.current,
 			restack: branch.restack,
 			commitsCount: branch.commits?.length ?? 0,
@@ -458,7 +447,7 @@ class StackView {
 			treeIsLastChild: branch.tree.isLastChild,
 			treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
 			treeLane: branch.tree.lane,
-		} as BranchData;
+		});
 
 		// Granular updates with targeted animations
 		if (oldData) {
@@ -544,7 +533,7 @@ class StackView {
 	}
 
 	private branchNeedsUpdate(card: HTMLElement, branch: BranchViewModel): boolean {
-		const oldData = (card as BranchCardElement)._branchData!;
+		const oldData = getBranchData(card);
 		if (!oldData) return true;
 
 		const newTreeAncestorIsLast = JSON.stringify(branch.tree.ancestorIsLast);
@@ -661,7 +650,7 @@ class StackView {
 		container.dataset.commitsContainer = 'true';
 
 		// Store initial visible count
-		const initialCount = Math.min(branch.commits!.length, StackView.COMMIT_CHUNK);
+		const initialCount = Math.min(branch.commits!.length, COMMIT_RENDER_CHUNK_SIZE);
 		this.renderCommitsIntoContainer(container, branch.commits!, initialCount, branch.name);
 
 		return container;
@@ -740,10 +729,10 @@ class StackView {
 			more.type = 'button';
 			more.className = 'branch-more';
 			more.textContent =
-				remaining > StackView.COMMIT_CHUNK ? `Show more (${remaining})` : `Show remaining ${remaining}`;
+				remaining > COMMIT_RENDER_CHUNK_SIZE ? `Show more (${remaining})` : `Show remaining ${remaining}`;
 			more.addEventListener('click', (event: Event) => {
 				event.stopPropagation();
-				this.renderCommitsIntoContainer(container, commits, visibleCount + StackView.COMMIT_CHUNK, branchName);
+				this.renderCommitsIntoContainer(container, commits, visibleCount + COMMIT_RENDER_CHUNK_SIZE, branchName);
 			});
 			container.appendChild(more);
 		}
