@@ -74,6 +74,15 @@ describe('treePath', () => {
 				siblingCount: 1,
 				lane,
 			},
+			treeFragment: {
+				lanes: [{ continuesFromAbove: false, continuesBelow: false, hasNode: true, needsRestack: false }],
+				maxLane: 0,
+				nodeLane: lane,
+				parentLane: parentName ? 0 : undefined,
+				childForkLanes: [],
+				nodeStyle: current ? 'current' : 'normal',
+				nodeNeedsRestack: restack,
+			},
 		});
 
 		it('should return empty array when no branches have parents', () => {
