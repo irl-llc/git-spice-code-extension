@@ -380,38 +380,29 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await this.runBranchCommand(title, () => execFunction(this.workspaceFolder!, trimmedName), successMessage);
 	}
 
-	private async runBranchCommand(
-		title: string,
-		operation: () => Promise<BranchCommandResult>,
-		successMessage: string,
-	): Promise<boolean> {
+	/** Shows result of a branch command and returns success status. */
+	private showBranchCommandResult(result: BranchCommandResult, successMessage: string): boolean {
+		if ('error' in result) {
+			void vscode.window.showErrorMessage(result.error);
+			return false;
+		}
+		void vscode.window.showInformationMessage(successMessage);
+		return true;
+	}
+
+	/** Executes a branch command with progress notification. */
+	private async runBranchCommand(title: string, operation: () => Promise<BranchCommandResult>, successMessage: string): Promise<boolean> {
 		let success = false;
-
-		await vscode.window.withProgress(
-			{
-				location: vscode.ProgressLocation.Notification,
-				title,
-				cancellable: false,
-			},
-			async () => {
-				try {
-					const result = await operation();
-
-					if ('error' in result) {
-						void vscode.window.showErrorMessage(result.error);
-					} else {
-						void vscode.window.showInformationMessage(successMessage);
-						success = true;
-					}
-
-					await this.refresh();
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
-				}
-			},
-		);
-
+		await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, async () => {
+			try {
+				const result = await operation();
+				success = this.showBranchCommandResult(result, successMessage);
+				await this.refresh();
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
+			}
+		});
 		return success;
 	}
 
