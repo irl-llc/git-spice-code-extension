@@ -63,9 +63,11 @@ export async function execGitSpice(folder: vscode.WorkspaceFolder): Promise<Bran
 		if (!cwd) {
 			return { error: 'Failed to load git-spice branches: Workspace folder path is unavailable.' };
 		}
-		const { stdout } = await execFileAsync(GIT_SPICE_BINARY, ['ll', '-a', '--json'], {
-			cwd,
-		});
+
+		const showComments = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
+		const args = showComments ? ['ll', '-a', '-c', '--json'] : ['ll', '-a', '--json'];
+
+		const { stdout } = await execFileAsync(GIT_SPICE_BINARY, args, { cwd });
 		return { value: parseGitSpiceBranches(stdout) };
 	} catch (error) {
 		return { error: `Failed to load git-spice branches: ${toErrorMessage(error)}` };
