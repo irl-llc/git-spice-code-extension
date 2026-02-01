@@ -17,3 +17,9 @@ export const CURVE_RADIUS = 5;
 
 /** Gap between line endpoints and node edge (halo effect). */
 export const NODE_GAP = 7;
+
+/** Y coordinate for node center (aligns with card title center). */
+export const NODE_Y = 16;
+
+/** Stroke width for connector lines, matching CSS --tree-connector-width. */
+export const CONNECTOR_WIDTH = 1.5;
