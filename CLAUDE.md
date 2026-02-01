@@ -281,4 +281,59 @@ src/
 │   ├── StackViewProvider.ts
 │   ├── state.ts          # State transformation for display
 │   └── types.ts          # View-specific types
-├── utils/             
+├── utils/             │   ├── gitSpice.ts       # git-spice CLI execution utilities
+│   ├── error.ts          # Error formatting utilities
+│   ├── validation.ts     # Input validation utilities
+│   └── diffUri.ts        # Git diff URI construction
+├── test/
+│   ├── unit/             # Pure function tests (no VSCode mocking)
+│   ├── integration/      # Tests requiring VSCode APIs
+│   └── e2e/              # End-to-end extension tests
+└── constants.ts          # Shared constants
+```
+
+## Code Quality Standards
+
+### File and Function Limits
+
+- **Files**: Maximum 400 lines per file. Split at ~300 lines proactively.
+- **Functions**: Maximum 20 lines per function. Extract helpers with descriptive names.
+- **Nesting**: Maximum 2 levels of conditional nesting. Use early returns to flatten.
+- **Parameters**: Maximum 4 parameters per function. Use options objects for more.
+
+### Naming Conventions for Extracted Code
+
+When decomposing functions:
+- Use semantic names describing the action (not generic like "helper", "process", "handle")
+- Prefix handlers with `handle`: `handleBranchRename`, `handleCommitFixup`
+- Prefix validators with `validate` or `require`: `requireNonEmpty`, `validateInputs`
+- Prefix builders with `build` or `create`: `buildDisplayState`, `createMockContext`
+- Prefix formatters with `format`: `formatError`, `formatSyncMessage`
+
+### Test Coverage Expectations
+
+- All new code should have corresponding unit tests
+- Pure utility functions: aim for 100% coverage
+- Handler functions: test happy path and error cases
+- Test file naming: `<module>.test.ts` in parallel directory structure
+
+### Commit Message Format
+
+Follow conventional commits:
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `refactor:` - Code restructuring without behavior change
+- `test:` - Adding or updating tests
+- `docs:` - Documentation only
+- `ci:` - CI/CD configuration
+- `chore:` - Maintenance tasks
+
+For refactoring PRs, include metrics:
+```
+refactor: decompose StackViewProvider handlers
+
+- Extract branch handlers to separate module
+- Extract commit handlers to separate module
+- Lines: 677 → 150 (main file)
+- Functions: all under 20 lines
+```
