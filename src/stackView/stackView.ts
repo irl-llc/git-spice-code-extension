@@ -36,22 +36,9 @@ import type { BranchViewModel, CommitFileChange, DisplayState, UncommittedState,
 import type { GitSpiceComments } from '../gitSpiceSchema';
 import type { WebviewMessage, ExtensionMessage } from './webviewTypes';
 import { buildBranchContext, buildCommitContext } from './contextBuilder';
-import {
-	LANE_WIDTH,
-	NODE_RADIUS,
-	NODE_RADIUS_CURRENT,
-	NODE_STROKE,
-	CURVE_RADIUS,
-	NODE_GAP,
-} from './tree/treeConstants';
-import { createRoundedPath, buildSvgPaths, type PathData } from './tree/treePath';
-import {
-	createNodeCircle,
-	createUncommittedNodeCircle,
-	appendPaths,
-	appendNodes,
-	type TreeColors,
-} from './tree/treeNodes';
+import { LANE_WIDTH, NODE_RADIUS, NODE_RADIUS_CURRENT, NODE_STROKE } from './tree/treeConstants';
+import { createTreeFragmentSvg, type TreeColors } from './tree/treeFragment';
+import type { TreeFragmentData } from './types';
 
 /** Action button configuration for file rows. */
 type FileRowAction = {
@@ -74,6 +61,12 @@ interface BranchData {
 	treeLane: number;
 }
 
+/** HTMLElement augmented with branch card metadata stored during rendering. */
+interface BranchCardElement extends HTMLElement {
+	_branchData?: BranchData;
+	_treeFragment?: TreeFragmentData;
+}
+
 interface DiffListConfig<T> {
 	getKey: (item: T) => string;
 	render: (item: T) => HTMLElement;
@@ -94,7 +87,6 @@ class StackView {
 	private expandedStagedSection = true;
 	private expandedUnstagedSection = true;
 	private commitMessageValue = '';
-	private pendingTreeDraw: ReturnType<typeof setTimeout> | undefined;
 
 	private static readonly COMMIT_CHUNK = 10;
 	private static readonly ANIMATION_DURATION = 200;
@@ -143,28 +135,32 @@ class StackView {
 		this.errorEl.classList.toggle('hidden', !newState.error);
 		this.errorEl.textContent = newState.error ?? '';
 
-		// Render branches first so DOM elements exist for positioning
+		// Update graph width for CSS variable (per-row fragments use this)
+		this.updateGraphWidth(newState.branches);
+
+		// Render branches (each branch renders its own tree fragment)
 		this.updateBranchItems(oldState?.branches ?? [], newState.branches);
 
 		// Position uncommitted card relative to the current branch
-		this.updateUncommittedCard(newState.uncommitted, newState.branches);
-
-		// Draw tree after entrance animations settle into final positions
-		this.updateTreeConnections(newState.branches, /* waitForAnimations */ true);
+		this.updateUncommittedCard(newState);
 	}
 
 	/**
 	 * Updates the uncommitted changes card, positioned above the current branch.
 	 */
-	private updateUncommittedCard(uncommitted: UncommittedState | undefined, branches: BranchViewModel[]): void {
+	private updateUncommittedCard(state: DisplayState): void {
 		// Always remove first so re-insertion positions correctly after branch switches
 		this.stackList.querySelector('.uncommitted-item')?.remove();
 
-		const hasChanges = uncommitted && (uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
+		const uncommitted = state.uncommitted;
+		const treeFragment = state.uncommittedTreeFragment;
+		if (!uncommitted || !treeFragment) return;
+
+		const hasChanges = uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0;
 		if (!hasChanges) return;
 
-		const newCard = this.renderUncommittedCard(uncommitted);
-		const insertionPoint = this.findCurrentBranchElement(branches);
+		const newCard = this.renderUncommittedCard(uncommitted, treeFragment);
+		const insertionPoint = this.findCurrentBranchElement(state.branches);
 
 		if (insertionPoint) {
 			this.stackList.insertBefore(newCard, insertionPoint);
@@ -230,6 +226,18 @@ class StackView {
 						if (newChild.dataset.branch) {
 							existingElement.dataset.branch = newChild.dataset.branch;
 						}
+
+						// Update tree fragment SVG if it changed
+						const newTreeFragment = (newChild as BranchCardElement)._treeFragment;
+						if (newTreeFragment) {
+							const oldSvg = existingElement.querySelector('.tree-fragment-svg');
+							const newSvg = createTreeFragmentSvg(newTreeFragment, this.getTreeColors());
+							if (oldSvg) {
+								oldSvg.replaceWith(newSvg);
+							} else {
+								existingElement.insertBefore(newSvg, existingElement.firstChild);
+							}
+						}
 					}
 				}
 
@@ -246,6 +254,14 @@ class StackView {
 				wrapper.dataset.key = key;
 
 				const child = render(item);
+
+				// Create and append SVG to wrapper (not to card) for seamless lane connections
+				const treeFragment = (child as BranchCardElement)._treeFragment;
+				if (treeFragment) {
+					const svg = createTreeFragmentSvg(treeFragment, this.getTreeColors());
+					wrapper.appendChild(svg);
+				}
+
 				wrapper.appendChild(child);
 
 				// Copy branch name to wrapper for tree graph positioning
@@ -332,151 +348,15 @@ class StackView {
 		});
 	}
 
-	// Match VSCode's scmHistory.ts dimensions
-
-	/**
-	 * Redraws the tree using the current state.
-	 */
-	private redrawTree(): void {
-		if (this.currentState?.branches) {
-			this.updateTreeConnections(this.currentState.branches);
-		}
-	}
-
-	/**
-	 * Draws the complete tree graph in SVG (both paths and nodes).
-	 * Uses lane assignments to create a multi-column graph showing branch divergence.
-	 */
-	private updateTreeConnections(branches: BranchViewModel[], waitForAnimations = false): void {
-		const hasUncommitted = !!this.stackList.querySelector('.uncommitted-item');
-		const branchMaxLane = this.computeMaxLane(branches);
-		// Only fork to a new lane if the current branch has children (divergence)
-		const needsDivergenceLane = hasUncommitted && !this.currentBranchIsStackTip(branches);
-		const maxLane = needsDivergenceLane ? branchMaxLane + 1 : branchMaxLane;
-		this.updateGraphWidth(maxLane);
-		this.removeOldDomTreeNodes();
-		this.scheduleTreeDraw(branches, waitForAnimations);
-	}
-
-	/** Schedules the SVG tree draw, cancelling any pending draw first. */
-	private scheduleTreeDraw(branches: BranchViewModel[], waitForAnimations: boolean): void {
-		if (this.pendingTreeDraw !== undefined) {
-			clearTimeout(this.pendingTreeDraw);
-		}
-		// Wait for entrance animations (200ms) before measuring positions,
-		// or draw immediately (setTimeout 0) for redraws with no new animations.
-		const delay = waitForAnimations ? StackView.ANIMATION_DURATION : 0;
-		this.pendingTreeDraw = setTimeout(() => {
-			requestAnimationFrame(() => this.drawTreeSvg(branches));
-		}, delay);
-	}
-
-	private computeMaxLane(branches: BranchViewModel[]): number {
-		return branches.reduce((max, b) => Math.max(max, b.tree.lane), 0);
-	}
-
-	/** Whether the current branch has children — if not, it's the stack tip. */
-	private currentBranchIsStackTip(branches: BranchViewModel[]): boolean {
-		const current = branches.find((b) => b.current);
-		if (!current) return true;
-		return !branches.some((b) => b.tree.parentName === current.name);
-	}
-
-	private updateGraphWidth(maxLane: number): void {
-		// VSCode: width accommodates all lanes plus padding
-		const width = LANE_WIDTH * (maxLane + 1) + NODE_RADIUS;
+	/** Updates the CSS variable for tree graph width based on max lane. */
+	private updateGraphWidth(branches: BranchViewModel[]): void {
+		const maxLane = branches.reduce((max, b) => Math.max(max, b.treeFragment.maxLane), 0);
+		const width = LANE_WIDTH * (maxLane + 1) + NODE_RADIUS_CURRENT + NODE_STROKE;
 		this.stackList.style.setProperty('--tree-graph-width', `${width}px`);
 	}
 
-	/**
-	 * Get X position for a lane. VSCode uses: SWIMLANE_WIDTH * (index + 1)
-	 * This centers nodes within their lane column.
-	 */
-	private getLaneX(lane: number): number {
-		return LANE_WIDTH * (lane + 1);
-	}
-
-	/** Removes legacy DOM-based tree nodes (now drawn in SVG). */
-	private removeOldDomTreeNodes(): void {
-		this.stackList.querySelectorAll('.tree-node').forEach((node) => node.remove());
-	}
-
-	private drawTreeSvg(branches: BranchViewModel[]): void {
-		this.removeExistingSvg();
-
-		const branchMap = new Map(branches.map((b) => [b.name, b]));
-		const nodePositions = this.collectNodePositions(branches);
-
-		if (nodePositions.size === 0) return;
-
-		const paths = buildSvgPaths(branches, branchMap, nodePositions);
-		const svg = this.createTreeSvgElement(branches, nodePositions, paths);
-		this.stackList.insertBefore(svg, this.stackList.firstChild);
-	}
-
-	private removeExistingSvg(): void {
-		const existingSvg = this.stackList.querySelector('.tree-svg');
-		if (existingSvg) existingSvg.remove();
-	}
-
-	/**
-	 * Collects node positions by finding the branch name element.
-	 * This ensures nodes align precisely with the branch name text.
-	 */
-	private collectNodePositions(branches: BranchViewModel[]): Map<string, { x: number; y: number }> {
-		const positions = new Map<string, { x: number; y: number }>();
-		const listRect = this.stackList.getBoundingClientRect();
-		const branchLanes = new Map(branches.map((b) => [b.name, b.tree.lane]));
-
-		// Tip of stack: same lane as current branch; otherwise fork to a new lane
-		const currentBranch = branches.find((b) => b.current);
-		const isTip = this.currentBranchIsStackTip(branches);
-		const uncommittedLane = isTip ? (currentBranch?.tree.lane ?? 0) : this.computeMaxLane(branches) + 1;
-
-		this.stackList.querySelectorAll('.stack-item').forEach((item) => {
-			const wrapper = item as HTMLElement;
-			const branchName = wrapper.dataset.branch;
-			if (!branchName) return;
-
-			const isUncommitted = branchName === '__uncommitted__';
-			const lane = isUncommitted ? uncommittedLane : branchLanes.get(branchName);
-			if (lane === undefined) return;
-
-			// Find the branch name span for precise Y alignment
-			const nameEl = wrapper.querySelector('.branch-name');
-			const headerEl = wrapper.querySelector('.branch-header');
-			const targetEl = nameEl ?? headerEl ?? wrapper;
-			const targetRect = targetEl.getBoundingClientRect();
-			const y = targetRect.top + targetRect.height / 2 - listRect.top;
-			const x = this.getLaneX(lane);
-
-			positions.set(branchName, { x, y });
-		});
-
-		return positions;
-	}
-
-	private createTreeSvgElement(
-		branches: BranchViewModel[],
-		nodePositions: Map<string, { x: number; y: number }>,
-		paths: Array<{ d: string; restack: boolean; uncommitted?: boolean }>,
-	): SVGSVGElement {
-		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-		svg.classList.add('tree-svg');
-
-		const colors = this.getTreeColors();
-
-		// Draw paths first (behind nodes)
-		appendPaths(svg, paths, colors);
-
-		// Draw nodes on top
-		appendNodes(svg, branches, nodePositions, colors);
-
-		this.setSvgDimensions(svg, nodePositions);
-		return svg;
-	}
-
-	private getTreeColors(): { line: string; restack: string; node: string; nodeCurrent: string; bg: string } {
+	/** Returns tree colors from CSS variables. */
+	private getTreeColors(): TreeColors {
 		const styles = getComputedStyle(document.documentElement);
 		return {
 			line: styles.getPropertyValue('--tree-line-color').trim() || '#888888',
@@ -485,31 +365,6 @@ class StackView {
 			nodeCurrent: styles.getPropertyValue('--tree-node-current-color').trim() || '#3794ff',
 			bg: styles.getPropertyValue('--vscode-editor-background').trim() || '#1e1e1e',
 		};
-	}
-
-	private setSvgDimensions(svg: SVGSVGElement, nodePositions: Map<string, { x: number; y: number }>): void {
-		const maxY = this.computeSvgHeight(nodePositions);
-		const maxX = this.computeSvgWidth(nodePositions);
-		svg.setAttribute('width', String(maxX));
-		svg.setAttribute('height', String(maxY));
-		svg.style.width = `${maxX}px`;
-		svg.style.height = `${maxY}px`;
-	}
-
-	private computeSvgWidth(nodePositions: Map<string, { x: number; y: number }>): number {
-		let maxX = 0;
-		for (const { x } of nodePositions.values()) {
-			maxX = Math.max(maxX, x);
-		}
-		return maxX + NODE_RADIUS;
-	}
-
-	private computeSvgHeight(nodePositions: Map<string, { x: number; y: number }>): number {
-		let maxY = 0;
-		nodePositions.forEach(({ y }) => {
-			if (y > maxY) maxY = y;
-		});
-		return maxY + NODE_RADIUS * 2;
 	}
 
 	private renderBranch(branch: BranchViewModel): HTMLElement {
@@ -533,7 +388,7 @@ class StackView {
 		}
 
 		// Store branch data for diffing
-		(card as any)._branchData = {
+		(card as BranchCardElement)._branchData = {
 			current: branch.current,
 			restack: branch.restack,
 			commitsCount: branch.commits?.length ?? 0,
@@ -547,11 +402,10 @@ class StackView {
 			treeLane: branch.tree.lane,
 		} as BranchData;
 
-		// Tree connectors (left column)
-		const connectors = this.renderTreeConnectors(branch);
-		card.appendChild(connectors);
+		// Store tree fragment data for SVG creation in wrapper (not inside card)
+		(card as BranchCardElement)._treeFragment = branch.treeFragment;
 
-		// Content wrapper (right column)
+		// Content wrapper
 		const content = document.createElement('div');
 		content.className = 'branch-content';
 
@@ -573,54 +427,8 @@ class StackView {
 		return card;
 	}
 
-	/**
-	 * Renders tree connector lines based on branch position in hierarchy.
-	 */
-	private renderTreeConnectors(branch: BranchViewModel): HTMLElement {
-		const container = document.createElement('div');
-		container.className = 'tree-connectors';
-
-		const { depth, isLastChild, ancestorIsLast } = branch.tree;
-
-		// Render pass-through lines for each ancestor level
-		for (let i = 0; i < depth; i++) {
-			const segment = document.createElement('div');
-			segment.className = 'tree-segment';
-
-			// Draw vertical line if ancestor at this level has more siblings below
-			const isAncestorLast = ancestorIsLast[i] ?? false;
-			if (!isAncestorLast) {
-				segment.classList.add('has-line');
-			}
-
-			container.appendChild(segment);
-		}
-
-		// Render connector segment to this node (if not root)
-		if (depth > 0) {
-			const connector = document.createElement('div');
-			connector.className = 'tree-segment connector has-line';
-
-			if (isLastChild) {
-				connector.classList.add('last-child');
-			}
-
-			container.appendChild(connector);
-		}
-
-		// Branch node dot
-		const dot = document.createElement('div');
-		dot.className = 'tree-node';
-		if (branch.current) {
-			dot.classList.add('current');
-		}
-		container.appendChild(dot);
-
-		return container;
-	}
-
 	private updateBranch(card: HTMLElement, branch: BranchViewModel): void {
-		const oldData = (card as any)._branchData as BranchData;
+		const oldData = (card as BranchCardElement)._branchData!;
 
 		// Update classes
 		card.classList.toggle('is-current', Boolean(branch.current));
@@ -638,7 +446,7 @@ class StackView {
 		}
 
 		// Update stored data
-		(card as any)._branchData = {
+		(card as BranchCardElement)._branchData = {
 			current: branch.current,
 			restack: branch.restack,
 			commitsCount: branch.commits?.length ?? 0,
@@ -736,7 +544,7 @@ class StackView {
 	}
 
 	private branchNeedsUpdate(card: HTMLElement, branch: BranchViewModel): boolean {
-		const oldData = (card as any)._branchData as BranchData;
+		const oldData = (card as BranchCardElement)._branchData!;
 		if (!oldData) return true;
 
 		const newTreeAncestorIsLast = JSON.stringify(branch.tree.ancestorIsLast);
@@ -782,10 +590,6 @@ class StackView {
 				}
 				card.classList.toggle('expanded');
 				toggle.classList.toggle('expanded');
-				// Redraw tree after CSS transition completes (200ms)
-				setTimeout(() => {
-					this.redrawTree();
-				}, StackView.ANIMATION_DURATION);
 			});
 		} else {
 			const spacer = document.createElement('span');
@@ -1040,9 +844,6 @@ class StackView {
 				this.renderFileChanges(fileList, this.fileCache.get(sha)!, sha);
 			}
 		}
-
-		// Redraw tree after DOM update
-		requestAnimationFrame(() => this.redrawTree());
 	}
 
 	/**
@@ -1060,8 +861,6 @@ class StackView {
 		const fileList = container.querySelector('.commit-files') as HTMLElement;
 		if (fileList && this.expandedCommits.has(sha)) {
 			this.renderFileChanges(fileList, files, sha);
-			// Redraw tree after files are rendered
-			requestAnimationFrame(() => this.redrawTree());
 		}
 	}
 
@@ -1174,15 +973,19 @@ class StackView {
 	}
 
 	/** Renders the uncommitted changes card wrapper. */
-	private renderUncommittedCard(uncommitted: UncommittedState): HTMLElement {
+	private renderUncommittedCard(
+		uncommitted: UncommittedState,
+		treeFragment: import('./types').TreeFragmentData,
+	): HTMLElement {
 		const wrapper = document.createElement('li');
 		wrapper.className = 'stack-item uncommitted-item';
 		wrapper.dataset.branch = '__uncommitted__';
 
-		const node = document.createElement('div');
-		node.className = 'tree-node uncommitted';
-		wrapper.appendChild(node);
+		// Create tree fragment SVG and add to WRAPPER (not card) for seamless lane connections
+		const fragmentSvg = createTreeFragmentSvg(treeFragment, this.getTreeColors());
+		wrapper.appendChild(fragmentSvg);
 
+		// Create card WITHOUT SVG inside
 		const card = document.createElement('article');
 		card.className = 'branch-card uncommitted expanded';
 		card.appendChild(this.renderUncommittedContent(uncommitted));

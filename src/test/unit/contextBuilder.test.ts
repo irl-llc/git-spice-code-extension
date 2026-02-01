@@ -16,6 +16,14 @@ describe('contextBuilder', () => {
 				siblingCount: 1,
 				lane: 0,
 			},
+			treeFragment: {
+				lanes: [{ continuesFromAbove: false, continuesBelow: false, hasNode: true, needsRestack: false }],
+				maxLane: 0,
+				nodeLane: 0,
+				childForkLanes: [],
+				nodeStyle: 'normal',
+				nodeNeedsRestack: false,
+			},
 			...overrides,
 		});
 

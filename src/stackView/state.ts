@@ -3,9 +3,11 @@ import type {
 	BranchRecord,
 	BranchViewModel,
 	DisplayState,
+	TreeFragmentData,
 	TreePosition,
 	UncommittedState,
 } from './types';
+import { buildTreeFragments as buildTreeFragmentsFromModel, type BranchTreeInput } from './tree/treeModel';
 
 /** Branch with computed tree position */
 type BranchWithTree = {
@@ -17,6 +19,9 @@ type BranchWithTree = {
  * Builds the display state showing ALL tracked branches (like `gs ll -a`).
  * Branches are organized in a tree structure based on parent-child relationships.
  */
+/** Special name for the uncommitted pseudo-branch. */
+export const UNCOMMITTED_BRANCH_NAME = '__uncommitted__';
+
 export function buildDisplayState(
 	branches: BranchRecord[],
 	error?: string,
@@ -26,10 +31,15 @@ export function buildDisplayState(
 	const ordered = orderStackWithTree(branches, branchMap);
 
 	const hasUncommittedChanges = uncommitted && (uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
+	const treeFragments = buildTreeFragments(ordered, hasUncommittedChanges ? uncommitted : undefined);
 
 	return {
-		branches: ordered.map((item) => createBranchViewModel(item.branch, item.tree)),
+		branches: ordered.map((item) => {
+			const fragment = treeFragments.get(item.branch.name)!;
+			return createBranchViewModel(item.branch, item.tree, fragment);
+		}),
 		uncommitted: hasUncommittedChanges ? uncommitted : undefined,
+		uncommittedTreeFragment: hasUncommittedChanges ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
 		error,
 	};
 }
@@ -126,7 +136,73 @@ function getChildren(
 		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function createBranchViewModel(branch: BranchRecord, tree: TreePosition): BranchViewModel {
+/**
+ * Builds tree fragment data for each branch row.
+ * Delegates to the pure treeModel module for testable data computation.
+ * If uncommitted changes exist, inserts a pseudo-branch entry for visualization.
+ */
+function buildTreeFragments(
+	orderedBranches: BranchWithTree[],
+	uncommitted?: UncommittedState,
+): Map<string, TreeFragmentData> {
+	let inputs = orderedBranches.map(toBranchTreeInput);
+
+	if (uncommitted) {
+		inputs = insertUncommittedPseudoBranch(inputs);
+	}
+
+	return buildTreeFragmentsFromModel(inputs);
+}
+
+/**
+ * Inserts an uncommitted pseudo-branch as a child of the current branch.
+ * Follows lane compaction rules: same lane if no siblings, new lane if siblings exist.
+ */
+function insertUncommittedPseudoBranch(inputs: BranchTreeInput[]): BranchTreeInput[] {
+	const currentBranchIndex = inputs.findIndex((b) => b.isCurrent);
+	if (currentBranchIndex === -1) {
+		return inputs;
+	}
+
+	const currentBranch = inputs[currentBranchIndex];
+	const currentChildCount = inputs.filter((b) => b.parentName === currentBranch.name).length;
+
+	// Lane compaction: if current has no other children, uncommitted uses same lane
+	// Otherwise, uncommitted forks to a new lane (max lane + 1)
+	const maxLane = Math.max(...inputs.map((b) => b.lane));
+	const uncommittedLane = currentChildCount === 0 ? currentBranch.lane : maxLane + 1;
+
+	const uncommittedEntry: BranchTreeInput = {
+		name: UNCOMMITTED_BRANCH_NAME,
+		lane: uncommittedLane,
+		parentName: currentBranch.name,
+		isCurrent: false,
+		isUncommitted: true,
+		needsRestack: false,
+	};
+
+	// Insert uncommitted before current branch (post-order: children before parents)
+	const result = [...inputs];
+	result.splice(currentBranchIndex, 0, uncommittedEntry);
+	return result;
+}
+
+/** Converts BranchWithTree to BranchTreeInput for the tree model. */
+function toBranchTreeInput(item: BranchWithTree): BranchTreeInput {
+	return {
+		name: item.branch.name,
+		lane: item.tree.lane,
+		parentName: item.tree.parentName,
+		isCurrent: item.branch.current === true,
+		needsRestack: item.branch.down?.needsRestack === true,
+	};
+}
+
+function createBranchViewModel(
+	branch: BranchRecord,
+	tree: TreePosition,
+	treeFragment: TreeFragmentData,
+): BranchViewModel {
 	const restack = branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
 
 	const model: BranchViewModel = {
@@ -134,6 +210,7 @@ function createBranchViewModel(branch: BranchRecord, tree: TreePosition): Branch
 		current: branch.current === true,
 		restack,
 		tree,
+		treeFragment,
 	};
 
 	if (branch.change) {
