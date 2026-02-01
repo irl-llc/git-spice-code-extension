@@ -5,8 +5,7 @@
 
 import * as vscode from 'vscode';
 
-import type { BranchCommandResult } from '../../utils/gitSpice';
-import { execCommitFixup, execBranchSplit } from '../../utils/gitSpice';
+import { type BranchCommandResult, execCommitFixup, execBranchSplit } from '../../utils/gitSpice';
 import { requireNonEmpty, requireAllNonEmpty, requireWorkspace } from '../../utils/validation';
 import { fetchCommitFiles } from '../commitFiles';
 import type { CommitFileChange } from '../types';
@@ -88,38 +87,28 @@ async function promptForNewBranchName(sha: string): Promise<string | undefined> 
 	return newBranchName?.trim() || undefined;
 }
 
+/** Shows result of branch split operation. */
+function showBranchSplitResult(result: BranchCommandResult, branchName: string, sha: string, newBranchName: string): void {
+	if ('error' in result) {
+		void vscode.window.showErrorMessage(`Failed to split branch: ${result.error}`);
+	} else {
+		void vscode.window.showInformationMessage(`Branch ${branchName} split at ${sha.substring(0, 8)} → ${newBranchName}`);
+	}
+}
+
 /** Executes the branch split operation with progress UI. */
-async function executeBranchSplit(
-	branchName: string,
-	sha: string,
-	newBranchName: string,
-	deps: CommitHandlerDeps,
-): Promise<void> {
-	await vscode.window.withProgress(
-		{
-			location: vscode.ProgressLocation.Notification,
-			title: `Splitting branch ${branchName} at ${sha.substring(0, 8)}`,
-			cancellable: false,
-		},
-		async () => {
-			try {
-				const result = await execBranchSplit(deps.workspaceFolder!, branchName, sha, newBranchName);
-
-				if ('error' in result) {
-					void vscode.window.showErrorMessage(`Failed to split branch: ${result.error}`);
-				} else {
-					void vscode.window.showInformationMessage(
-						`Branch ${branchName} split at ${sha.substring(0, 8)} → ${newBranchName}`,
-					);
-				}
-
-				await deps.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
-			}
-		},
-	);
+async function executeBranchSplit(branchName: string, sha: string, newBranchName: string, deps: CommitHandlerDeps): Promise<void> {
+	const title = `Splitting branch ${branchName} at ${sha.substring(0, 8)}`;
+	await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, async () => {
+		try {
+			const result = await execBranchSplit(deps.workspaceFolder!, branchName, sha, newBranchName);
+			showBranchSplitResult(result, branchName, sha, newBranchName);
+			await deps.refresh();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
+		}
+	});
 }
 
 /** Fetches files changed in a commit and sends to webview. */

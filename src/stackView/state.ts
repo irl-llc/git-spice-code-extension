@@ -54,21 +54,75 @@ type TraversalContext = {
 	parentLane: number;
 };
 
-/**
- * Orders branches using post-order traversal to match `gs ll -a` output.
- * Children appear before (above) their parents, with first sibling's subtree before second's.
- * Lane compaction: first child inherits parent's lane, additional children fork to new lanes.
- */
-function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, GitSpiceBranch>): BranchWithTree[] {
-	const result: BranchWithTree[] = [];
-	const visited = new Set<string>();
-	const laneCounter = { value: 0 };
+/** Mutable state shared during tree traversal */
+type TraversalState = {
+	result: BranchWithTree[];
+	visited: Set<string>;
+	branchMap: Map<string, GitSpiceBranch>;
+	branches: GitSpiceBranch[];
+};
 
+/** Computes the lane for a node using lane compaction rules. */
+function computeLane(siblingIndex: number, parentLane: number, nextLane: { value: number }): number {
+	return siblingIndex === 0 ? parentLane : nextLane.value++;
+}
+
+/** Creates the tree position for a branch node. */
+function createTreePosition(branch: GitSpiceBranch, ctx: TraversalContext, lane: number, isLastChild: boolean): TreePosition {
+	return {
+		depth: ctx.depth,
+		isLastChild,
+		ancestorIsLast: [...ctx.ancestorIsLast],
+		parentName: branch.down?.name,
+		siblingIndex: ctx.siblingIndex,
+		siblingCount: ctx.siblingCount,
+		lane,
+	};
+}
+
+/** Post-order traversal: visits children first, then adds node to result. */
+function postOrderTraverse(branch: GitSpiceBranch, ctx: TraversalContext, state: TraversalState): void {
+	if (state.visited.has(branch.name)) return;
+	state.visited.add(branch.name);
+
+	const children = getChildren(branch, state.branchMap, state.branches);
+	const isLastChild = ctx.siblingIndex === ctx.siblingCount - 1;
+	const lane = computeLane(ctx.siblingIndex, ctx.parentLane, ctx.nextLane);
+
+	visitChildren(children, ctx, lane, isLastChild, state);
+	state.result.push({ branch, tree: createTreePosition(branch, ctx, lane, isLastChild) });
+}
+
+/** Recursively visits all children in post-order. */
+function visitChildren(children: GitSpiceBranch[], ctx: TraversalContext, lane: number, isLastChild: boolean, state: TraversalState): void {
+	for (let i = 0; i < children.length; i++) {
+		postOrderTraverse(children[i], {
+			depth: ctx.depth + 1,
+			ancestorIsLast: [...ctx.ancestorIsLast, isLastChild],
+			siblingIndex: i,
+			siblingCount: children.length,
+			nextLane: ctx.nextLane,
+			parentLane: lane,
+		}, state);
+	}
+}
+
+/** Finds root branches (those without a tracked parent). */
+function findRootBranches(branches: GitSpiceBranch[], branchMap: Map<string, GitSpiceBranch>): GitSpiceBranch[] {
 	const roots = branches
 		.filter((branch) => !branch.down || !branchMap.has(branch.down.name))
 		.sort((a, b) => a.name.localeCompare(b.name));
+	return roots.length > 0 ? roots : branches;
+}
 
-	const startingBranches = roots.length > 0 ? roots : branches;
+/**
+ * Orders branches using post-order traversal to match `gs ll -a` output.
+ * Children appear before (above) their parents, with first sibling's subtree before second's.
+ */
+function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, GitSpiceBranch>): BranchWithTree[] {
+	const state: TraversalState = { result: [], visited: new Set(), branchMap, branches };
+	const laneCounter = { value: 0 };
+	const startingBranches = findRootBranches(branches, branchMap);
 
 	for (let i = 0; i < startingBranches.length; i++) {
 		const rootLane = laneCounter.value++;
@@ -79,49 +133,10 @@ function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, G
 			siblingCount: startingBranches.length,
 			nextLane: laneCounter,
 			parentLane: rootLane,
-		});
+		}, state);
 	}
 
-	return result;
-
-	function postOrderTraverse(branch: GitSpiceBranch, ctx: TraversalContext): void {
-		if (visited.has(branch.name)) {
-			return;
-		}
-		visited.add(branch.name);
-
-		const children = getChildren(branch, branchMap, branches);
-		const isLastChild = ctx.siblingIndex === ctx.siblingCount - 1;
-
-		// Lane compaction: first child (index 0) inherits parent lane, others fork
-		const lane = ctx.siblingIndex === 0 ? ctx.parentLane : ctx.nextLane.value++;
-
-		// Post-order: visit children FIRST, then add this node
-		for (let i = 0; i < children.length; i++) {
-			postOrderTraverse(children[i], {
-				depth: ctx.depth + 1,
-				ancestorIsLast: [...ctx.ancestorIsLast, isLastChild],
-				siblingIndex: i,
-				siblingCount: children.length,
-				nextLane: ctx.nextLane,
-				parentLane: lane,
-			});
-		}
-
-		// Add node AFTER children (post-order)
-		result.push({
-			branch,
-			tree: {
-				depth: ctx.depth,
-				isLastChild,
-				ancestorIsLast: [...ctx.ancestorIsLast],
-				parentName: branch.down?.name,
-				siblingIndex: ctx.siblingIndex,
-				siblingCount: ctx.siblingCount,
-				lane,
-			},
-		});
-	}
+	return state.result;
 }
 
 /** Gets sorted children of a branch that are in the current branch set */
@@ -154,36 +169,36 @@ function buildTreeFragments(
 	return buildTreeFragmentsFromModel(inputs);
 }
 
-/**
- * Inserts an uncommitted pseudo-branch as a child of the current branch.
- * Follows lane compaction rules: same lane if no siblings, new lane if siblings exist.
- */
-function insertUncommittedPseudoBranch(inputs: BranchTreeInput[]): BranchTreeInput[] {
-	const currentBranchIndex = inputs.findIndex((b) => b.isCurrent);
-	if (currentBranchIndex === -1) {
-		return inputs;
-	}
+/** Computes lane for uncommitted pseudo-branch using compaction rules. */
+function computeUncommittedLane(inputs: BranchTreeInput[], currentBranch: BranchTreeInput): number {
+	const childCount = inputs.filter((b) => b.parentName === currentBranch.name).length;
+	if (childCount === 0) return currentBranch.lane;
+	return Math.max(...inputs.map((b) => b.lane)) + 1;
+}
 
-	const currentBranch = inputs[currentBranchIndex];
-	const currentChildCount = inputs.filter((b) => b.parentName === currentBranch.name).length;
-
-	// Lane compaction: if current has no other children, uncommitted uses same lane
-	// Otherwise, uncommitted forks to a new lane (max lane + 1)
-	const maxLane = Math.max(...inputs.map((b) => b.lane));
-	const uncommittedLane = currentChildCount === 0 ? currentBranch.lane : maxLane + 1;
-
-	const uncommittedEntry: BranchTreeInput = {
+/** Creates the uncommitted pseudo-branch entry. */
+function createUncommittedEntry(lane: number, parentName: string): BranchTreeInput {
+	return {
 		name: UNCOMMITTED_BRANCH_NAME,
-		lane: uncommittedLane,
-		parentName: currentBranch.name,
+		lane,
+		parentName,
 		isCurrent: false,
 		isUncommitted: true,
 		needsRestack: false,
 	};
+}
 
-	// Insert uncommitted before current branch (post-order: children before parents)
+/** Inserts an uncommitted pseudo-branch as a child of the current branch. */
+function insertUncommittedPseudoBranch(inputs: BranchTreeInput[]): BranchTreeInput[] {
+	const currentIndex = inputs.findIndex((b) => b.isCurrent);
+	if (currentIndex === -1) return inputs;
+
+	const currentBranch = inputs[currentIndex];
+	const lane = computeUncommittedLane(inputs, currentBranch);
+	const entry = createUncommittedEntry(lane, currentBranch.name);
+
 	const result = [...inputs];
-	result.splice(currentBranchIndex, 0, uncommittedEntry);
+	result.splice(currentIndex, 0, entry);
 	return result;
 }
 
@@ -198,34 +213,30 @@ function toBranchTreeInput(item: BranchWithTree): BranchTreeInput {
 	};
 }
 
-function createBranchViewModel(
-	branch: GitSpiceBranch,
-	tree: TreePosition,
-	treeFragment: TreeFragmentData,
-): BranchViewModel {
-	const restack = branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
+/** Checks if branch needs restacking based on parent/child relationships. */
+function needsRestack(branch: GitSpiceBranch): boolean {
+	const downNeedsRestack = branch.down?.needsRestack === true;
+	const upNeedsRestack = (branch.ups ?? []).some((link) => link.needsRestack === true);
+	return downNeedsRestack || upNeedsRestack;
+}
 
-	const model: BranchViewModel = {
+/** Maps branch commits to view model format. */
+function mapCommitsToViewModel(commits: GitSpiceBranch['commits']): BranchViewModel['commits'] {
+	if (!commits || commits.length === 0) return undefined;
+	return commits.map((c) => ({ sha: c.sha, shortSha: c.sha.slice(0, 8), subject: c.subject }));
+}
+
+/** Creates a branch view model from branch data and tree information. */
+function createBranchViewModel(branch: GitSpiceBranch, tree: TreePosition, treeFragment: TreeFragmentData): BranchViewModel {
+	return {
 		name: branch.name,
 		current: branch.current === true,
-		restack,
+		restack: needsRestack(branch),
 		tree,
 		treeFragment,
+		change: branch.change ? toChangeViewModel(branch.change) : undefined,
+		commits: mapCommitsToViewModel(branch.commits),
 	};
-
-	if (branch.change) {
-		model.change = toChangeViewModel(branch.change);
-	}
-
-	if (branch.commits && branch.commits.length > 0) {
-		model.commits = branch.commits.map((commit) => ({
-			sha: commit.sha,
-			shortSha: commit.sha.slice(0, 8),
-			subject: commit.subject,
-		}));
-	}
-
-	return model;
 }
 
 function toChangeViewModel(change: NonNullable<GitSpiceBranch['change']>): BranchChangeViewModel {
