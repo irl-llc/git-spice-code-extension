@@ -33,7 +33,7 @@ button {
   padding: 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0; /* No gap - SVG lanes must connect seamlessly */
   position: relative;
 }
 
@@ -44,6 +44,9 @@ button {
   position: relative;
   transition: transform 0.25s ease-out;
   overflow: visible;
+  /* No margin - SVG needs to span full row height for seamless lane connections */
+  margin: 0;
+  padding: 0;
 }
 
 @keyframes item-enter {
@@ -85,11 +88,26 @@ button {
   border: 1px solid var(--vscode-treeIndentGuidesStroke);
   border-radius: 6px;
   padding: 0.35rem 0.5rem;
+  /* Left margin creates space for tree area; vertical margin for card separation */
+  margin-left: calc(var(--tree-graph-width, 30px) + var(--tree-graph-padding));
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+  margin-right: 0;
   background: var(--vscode-editor-background);
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* First card doesn't need top margin */
+.stack-item:first-child .branch-card {
+  margin-top: 0;
+}
+
+/* Last card doesn't need bottom margin */
+.stack-item:last-child .branch-card {
+  margin-bottom: 0;
 }
 
 .branch-card .branch-commits {
@@ -456,6 +474,8 @@ button {
   --tree-node-radius: 4px; /* CIRCLE_RADIUS */
   --tree-node-stroke: 2px; /* CIRCLE_STROKE_WIDTH */
   --tree-curve-radius: 5px; /* SWIMLANE_CURVE_RADIUS */
+  --tree-node-y: 16px; /* Y position for node (aligns with card title center) */
+  --tree-node-gap: 7px; /* Gap between line endpoints and node edge */
 
   /* Colors */
   --tree-line-color: var(--vscode-treeIndentGuidesStroke, #888);
@@ -466,29 +486,37 @@ button {
   /* Layout */
   --tree-connector-width: 1.5px;
   --tree-graph-padding: 8px;
+  --tree-graph-width: 30px; /* Default fallback; dynamically set based on lane count */
 }
 
-/* Stack list contains SVG tree and items */
+/* Stack list contains items - tree area handled by card margin */
 .stack-list {
   position: relative;
-  /* Dynamic padding: graph width + gap to cards */
-  padding-left: calc(var(--tree-graph-width, 30px) + var(--tree-graph-padding));
+  /* Edge padding - tree area is created by card margin-left */
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
 }
 
-/* SVG container for tree lines */
-.tree-svg {
+/* Per-row tree fragment SVG - positioned at left edge of stack-item wrapper */
+.tree-fragment-svg {
   position: absolute;
-  top: 0;
   left: 0;
+  top: 0;
+  height: 100%;
   pointer-events: none;
   z-index: 1;
   overflow: visible;
 }
 
-.tree-svg path {
-  fill: none;
-  stroke: var(--tree-line-color, #888888);
-  stroke-width: var(--tree-connector-width);
+.tree-fragment-svg line,
+.tree-fragment-svg path {
+  stroke-linecap: round;
+}
+
+.tree-fragment-svg circle {
+  transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
 /* Stack item positions the graph node */
@@ -520,8 +548,9 @@ button {
   box-sizing: border-box;
 }
 
-/* Branch card - back to simple flex layout */
+/* Branch card - positioned relative for tree fragment SVG */
 .branch-card {
+  position: relative;
   display: flex;
   flex-direction: column;
 }
