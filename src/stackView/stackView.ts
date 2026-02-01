@@ -602,6 +602,11 @@ class StackView {
 			tags.appendChild(this.createTag('Restack', 'warning'));
 		}
 
+		// Comments indicator (left of submit button)
+		if (branch.change?.comments && branch.change.comments.total > 0) {
+			tags.appendChild(this.renderCommentsIndicator(branch.change.comments));
+		}
+
 		// Submit button (submits this branch and ancestors)
 		const submitBtn = document.createElement('button');
 		submitBtn.type = 'button';
@@ -628,10 +633,6 @@ class StackView {
 				button.disabled = true;
 			}
 			tags.appendChild(button);
-
-			if (branch.change.comments && branch.change.comments.total > 0) {
-				tags.appendChild(this.renderCommentsIndicator(branch.change.comments));
-			}
 		}
 
 		header.appendChild(tags);
