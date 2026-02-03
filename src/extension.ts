@@ -119,16 +119,16 @@ function registerBranchContextMenuCommands(context: vscode.ExtensionContext, pro
 function registerBranchPromptCommands(context: vscode.ExtensionContext, provider: StackViewProvider): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('git-spice.branchRename', (ctx: BranchContext) => {
-			if (ctx?.branchName) void provider.handleBranchRenamePrompt(ctx.branchName);
+			if (ctx?.branchName) void provider.handleBranchRenamePrompt(undefined, ctx.branchName);
 		}),
 		vscode.commands.registerCommand('git-spice.branchMove', (ctx: BranchContext) => {
-			if (ctx?.branchName) void provider.handleBranchMovePrompt(ctx.branchName);
+			if (ctx?.branchName) void provider.handleBranchMovePrompt(undefined, ctx.branchName);
 		}),
 		vscode.commands.registerCommand('git-spice.branchMoveWithChildren', (ctx: BranchContext) => {
-			if (ctx?.branchName) void provider.handleUpstackMovePrompt(ctx.branchName);
+			if (ctx?.branchName) void provider.handleUpstackMovePrompt(undefined, ctx.branchName);
 		}),
 		vscode.commands.registerCommand('git-spice.branchDelete', (ctx: BranchContext) => {
-			if (ctx?.branchName) void provider.handleBranchDelete(ctx.branchName);
+			if (ctx?.branchName) void provider.handleBranchDelete(undefined, ctx.branchName);
 		}),
 	);
 }
@@ -137,10 +137,10 @@ function registerBranchPromptCommands(context: vscode.ExtensionContext, provider
 function registerCommitContextMenuCommands(context: vscode.ExtensionContext, provider: StackViewProvider): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('git-spice.commitCopySha', (ctx: CommitContext) => {
-			if (ctx?.sha) void provider.handleCommitCopySha(ctx.sha);
+			if (ctx?.sha) void provider.handleCommitCopySha(undefined, ctx.sha);
 		}),
 		vscode.commands.registerCommand('git-spice.commitSplit', (ctx: CommitContext) => {
-			if (ctx?.sha && ctx?.branchName) void provider.handleCommitSplit(ctx.sha, ctx.branchName);
+			if (ctx?.sha && ctx?.branchName) void provider.handleCommitSplit(undefined, ctx.sha, ctx.branchName);
 		}),
 	);
 }

@@ -16,36 +16,37 @@ export type ExecFunctionMap = Record<string, ExecFunction>;
 /**
  * Handler context providing methods the message router can call.
  * This interface decouples the router from StackViewProvider.
+ * Repo-scoped methods accept an optional repoId to target a specific repository.
  */
 export interface MessageHandlerContext {
 	pushState(force?: boolean): void;
 	refresh(force?: boolean): Promise<void>;
-	handleOpenExternal(url: string): void;
-	handleOpenCommit(sha: string): void;
-	handleOpenCommitDiff(sha: string): Promise<void>;
-	handleBranchContextMenu(branchName: string): Promise<void>;
-	handleBranchCommandInternal(commandName: string, branchName: string, execFunction: ExecFunction): Promise<void>;
-	handleBranchDelete(branchName: string): Promise<void>;
-	handleBranchRenamePrompt(branchName: string): Promise<void>;
-	handleBranchRename(branchName: string, newName: string): Promise<void>;
-	handleBranchMovePrompt(branchName: string): Promise<void>;
-	handleBranchMove(branchName: string, newParent: string): Promise<void>;
-	handleUpstackMovePrompt(branchName: string): Promise<void>;
-	handleUpstackMove(branchName: string, newParent: string): Promise<void>;
-	handleGetCommitFiles(sha: string): Promise<void>;
-	handleGetBranchFiles(branchName: string): Promise<void>;
-	handleOpenBranchFileDiff(branchName: string, path: string): Promise<void>;
-	handleOpenFileDiff(sha: string, path: string): Promise<void>;
-	handleOpenCurrentFile(path: string): Promise<void>;
-	handleStageFile(path: string): Promise<void>;
-	handleUnstageFile(path: string): Promise<void>;
-	handleDiscardFile(path: string): Promise<void>;
-	handleOpenWorkingCopyDiff(path: string, staged: boolean): Promise<void>;
-	handleCommitChanges(message: string): Promise<void>;
-	handleCreateBranch(message: string): Promise<void>;
-	handleCommitCopySha(sha: string): Promise<void>;
-	handleCommitFixup(sha: string): Promise<void>;
-	handleCommitSplit(sha: string, branchName: string): Promise<void>;
+	handleOpenExternal(repoId: string | undefined, url: string): void;
+	handleOpenCommit(repoId: string | undefined, sha: string): void;
+	handleOpenCommitDiff(repoId: string | undefined, sha: string): Promise<void>;
+	handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void>;
+	handleBranchCommandInternal(repoId: string | undefined, commandName: string, branchName: string, execFunction: ExecFunction): Promise<void>;
+	handleBranchDelete(repoId: string | undefined, branchName: string): Promise<void>;
+	handleBranchRenamePrompt(repoId: string | undefined, branchName: string): Promise<void>;
+	handleBranchRename(repoId: string | undefined, branchName: string, newName: string): Promise<void>;
+	handleBranchMovePrompt(repoId: string | undefined, branchName: string): Promise<void>;
+	handleBranchMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void>;
+	handleUpstackMovePrompt(repoId: string | undefined, branchName: string): Promise<void>;
+	handleUpstackMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void>;
+	handleGetCommitFiles(repoId: string | undefined, sha: string): Promise<void>;
+	handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void>;
+	handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, path: string): Promise<void>;
+	handleOpenFileDiff(repoId: string | undefined, sha: string, path: string): Promise<void>;
+	handleOpenCurrentFile(repoId: string | undefined, path: string): Promise<void>;
+	handleStageFile(repoId: string | undefined, path: string): Promise<void>;
+	handleUnstageFile(repoId: string | undefined, path: string): Promise<void>;
+	handleDiscardFile(repoId: string | undefined, path: string): Promise<void>;
+	handleOpenWorkingCopyDiff(repoId: string | undefined, path: string, staged: boolean): Promise<void>;
+	handleCommitChanges(repoId: string | undefined, message: string): Promise<void>;
+	handleCreateBranch(repoId: string | undefined, message: string): Promise<void>;
+	handleCommitCopySha(repoId: string | undefined, sha: string): Promise<void>;
+	handleCommitFixup(repoId: string | undefined, sha: string): Promise<void>;
+	handleCommitSplit(repoId: string | undefined, sha: string, branchName: string): Promise<void>;
 	getExecFunctions(): ExecFunctionMap;
 }
 
@@ -83,13 +84,13 @@ function routeStateMessage(message: WebviewMessage, ctx: MessageHandlerContext):
 function routeNavigationMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'openChange':
-			ctx.handleOpenExternal(message.url);
+			ctx.handleOpenExternal(message.repoId, message.url);
 			return true;
 		case 'openCommit':
-			ctx.handleOpenCommit(message.sha);
+			ctx.handleOpenCommit(message.repoId, message.sha);
 			return true;
 		case 'openCommitDiff':
-			void ctx.handleOpenCommitDiff(message.sha);
+			void ctx.handleOpenCommitDiff(message.repoId, message.sha);
 			return true;
 		default:
 			return false;
@@ -105,16 +106,16 @@ function routeBranchManagementMessage(message: WebviewMessage, ctx: MessageHandl
 function routeBranchContextMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'branchContextMenu':
-			void ctx.handleBranchContextMenu(message.branchName);
+			void ctx.handleBranchContextMenu(message.repoId, message.branchName);
 			return true;
 		case 'branchDelete':
-			void ctx.handleBranchDelete(message.branchName);
+			void ctx.handleBranchDelete(message.repoId, message.branchName);
 			return true;
 		case 'branchRenamePrompt':
-			void ctx.handleBranchRenamePrompt(message.branchName);
+			void ctx.handleBranchRenamePrompt(message.repoId, message.branchName);
 			return true;
 		case 'branchRename':
-			void ctx.handleBranchRename(message.branchName, message.newName);
+			void ctx.handleBranchRename(message.repoId, message.branchName, message.newName);
 			return true;
 		default:
 			return false;
@@ -125,16 +126,16 @@ function routeBranchContextMessage(message: WebviewMessage, ctx: MessageHandlerC
 function routeBranchMoveMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'branchMovePrompt':
-			void ctx.handleBranchMovePrompt(message.branchName);
+			void ctx.handleBranchMovePrompt(message.repoId, message.branchName);
 			return true;
 		case 'branchMove':
-			void ctx.handleBranchMove(message.branchName, message.newParent);
+			void ctx.handleBranchMove(message.repoId, message.branchName, message.newParent);
 			return true;
 		case 'upstackMovePrompt':
-			void ctx.handleUpstackMovePrompt(message.branchName);
+			void ctx.handleUpstackMovePrompt(message.repoId, message.branchName);
 			return true;
 		case 'upstackMove':
-			void ctx.handleUpstackMove(message.branchName, message.newParent);
+			void ctx.handleUpstackMove(message.repoId, message.branchName, message.newParent);
 			return true;
 		default:
 			return false;
@@ -145,16 +146,16 @@ function routeBranchMoveMessage(message: WebviewMessage, ctx: MessageHandlerCont
 function routeCommitMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'getCommitFiles':
-			void ctx.handleGetCommitFiles(message.sha);
+			void ctx.handleGetCommitFiles(message.repoId, message.sha);
 			return true;
 		case 'commitCopySha':
-			void ctx.handleCommitCopySha(message.sha);
+			void ctx.handleCommitCopySha(message.repoId, message.sha);
 			return true;
 		case 'commitFixup':
-			void ctx.handleCommitFixup(message.sha);
+			void ctx.handleCommitFixup(message.repoId, message.sha);
 			return true;
 		case 'commitSplit':
-			void ctx.handleCommitSplit(message.sha, message.branchName);
+			void ctx.handleCommitSplit(message.repoId, message.sha, message.branchName);
 			return true;
 		default:
 			return false;
@@ -165,16 +166,16 @@ function routeCommitMessage(message: WebviewMessage, ctx: MessageHandlerContext)
 function routeFileMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'openFileDiff':
-			void ctx.handleOpenFileDiff(message.sha, message.path);
+			void ctx.handleOpenFileDiff(message.repoId, message.sha, message.path);
 			return true;
 		case 'openCurrentFile':
-			void ctx.handleOpenCurrentFile(message.path);
+			void ctx.handleOpenCurrentFile(message.repoId, message.path);
 			return true;
 		case 'getBranchFiles':
-			void ctx.handleGetBranchFiles(message.branchName);
+			void ctx.handleGetBranchFiles(message.repoId, message.branchName);
 			return true;
 		case 'openBranchFileDiff':
-			void ctx.handleOpenBranchFileDiff(message.branchName, message.path);
+			void ctx.handleOpenBranchFileDiff(message.repoId, message.branchName, message.path);
 			return true;
 		default:
 			return false;
@@ -190,16 +191,16 @@ function routeWorkingCopyMessage(message: WebviewMessage, ctx: MessageHandlerCon
 function routeStagingMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'stageFile':
-			void ctx.handleStageFile(message.path);
+			void ctx.handleStageFile(message.repoId, message.path);
 			return true;
 		case 'unstageFile':
-			void ctx.handleUnstageFile(message.path);
+			void ctx.handleUnstageFile(message.repoId, message.path);
 			return true;
 		case 'discardFile':
-			void ctx.handleDiscardFile(message.path);
+			void ctx.handleDiscardFile(message.repoId, message.path);
 			return true;
 		case 'openWorkingCopyDiff':
-			void ctx.handleOpenWorkingCopyDiff(message.path, message.staged);
+			void ctx.handleOpenWorkingCopyDiff(message.repoId, message.path, message.staged);
 			return true;
 		default:
 			return false;
@@ -210,10 +211,10 @@ function routeStagingMessage(message: WebviewMessage, ctx: MessageHandlerContext
 function routeCommitFormMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'commitChanges':
-			void ctx.handleCommitChanges(message.message);
+			void ctx.handleCommitChanges(message.repoId, message.message);
 			return true;
 		case 'createBranch':
-			void ctx.handleCreateBranch(message.message);
+			void ctx.handleCreateBranch(message.repoId, message.message);
 			return true;
 		default:
 			return false;
@@ -236,9 +237,9 @@ function routeBranchCommand(message: WebviewMessage, ctx: MessageHandlerContext)
 	if (!commandName) return false;
 
 	const execFn = ctx.getExecFunctions()[commandName];
-	const branchMsg = message as { branchName?: string };
+	const branchMsg = message as { repoId?: string; branchName?: string };
 	if (typeof branchMsg.branchName === 'string' && execFn) {
-		void ctx.handleBranchCommandInternal(commandName, branchMsg.branchName, execFn);
+		void ctx.handleBranchCommandInternal(branchMsg.repoId, commandName, branchMsg.branchName, execFn);
 	}
 	return true;
 }
