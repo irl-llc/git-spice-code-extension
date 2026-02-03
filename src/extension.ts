@@ -271,7 +271,7 @@ function registerCoreProvider(context: vscode.ExtensionContext, provider: StackV
 		vscode.window.registerWebviewViewProvider('gitSpice.branches', provider, {
 			webviewOptions: { retainContextWhenHidden: true },
 		}),
-		vscode.commands.registerCommand('git-spice.refresh', () => provider.refresh()),
+		vscode.commands.registerCommand('git-spice.refresh', () => provider.refresh(true)),
 		vscode.commands.registerCommand('git-spice.syncRepo', () => provider.sync()),
 	);
 }

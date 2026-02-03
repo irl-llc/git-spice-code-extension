@@ -18,8 +18,8 @@ export type ExecFunctionMap = Record<string, ExecFunction>;
  * This interface decouples the router from StackViewProvider.
  */
 export interface MessageHandlerContext {
-	pushState(): void;
-	refresh(): Promise<void>;
+	pushState(force?: boolean): void;
+	refresh(force?: boolean): Promise<void>;
 	handleOpenExternal(url: string): void;
 	handleOpenCommit(sha: string): void;
 	handleOpenCommitDiff(sha: string): Promise<void>;
@@ -70,7 +70,7 @@ function routeStateMessage(message: WebviewMessage, ctx: MessageHandlerContext):
 			ctx.pushState();
 			return true;
 		case 'refresh':
-			void ctx.refresh();
+			void ctx.refresh(true);
 			return true;
 		default:
 			return false;
