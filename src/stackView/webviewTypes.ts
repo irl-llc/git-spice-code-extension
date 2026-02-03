@@ -38,7 +38,7 @@ export type WebviewMessage =
 
 // Messages from extension to webview
 export type ExtensionMessage =
-	| { type: 'state'; payload: DisplayState }
+	| { type: 'state'; payload: DisplayState; force?: boolean }
 	| { type: 'commitFiles'; sha: string; files: CommitFileChange[] };
 
 /**
