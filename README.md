@@ -8,6 +8,28 @@ Forked from the original version by [Smexey (Pavle Divovic)](https://github.com/
 
 A Visual Studio Code extension that provides a rich UI for [git-spice](https://abhinav.github.io/git-spice/), a tool for stacking Git branches and managing change requests.
 
+## Installation
+
+### From VSIX File
+
+If you have a `.vsix` file, install it with the VS Code CLI:
+
+```sh
+code --install-extension git-spice-*.vsix
+```
+
+Or via the GUI: open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run **Extensions: Install from VSIX...**, and select the file.
+
+### Build from Source
+
+```sh
+git clone https://github.com/irl-llc/git-spice-code-extension.git
+cd git-spice-code-extension
+npm install
+npx vsce package --no-dependencies
+code --install-extension git-spice-*.vsix
+```
+
 ## Features
 
 ### Branch Stack Visualization
