@@ -68,15 +68,15 @@ class StackView {
 			if (!message) return;
 
 			if (message.type === 'state') {
-				this.updateState(message.payload);
+				this.updateState(message.payload, message.force);
 			} else if (message.type === 'commitFiles') {
 				this.handleCommitFiles(message.sha, message.files);
 			}
 		});
 	}
 
-	private updateState(newState: DisplayState): void {
-		if (this.stateUnchanged(newState)) return;
+	private updateState(newState: DisplayState, force?: boolean): void {
+		if (!force && this.stateUnchanged(newState)) return;
 
 		const oldBranches = this.currentState?.branches ?? [];
 		this.currentState = newState;
