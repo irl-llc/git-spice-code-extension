@@ -46,6 +46,10 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 			calls.push(`handleUpstackMove:${branchName}:${newParent}`);
 		},
 		handleGetCommitFiles: async (sha: string) => { calls.push(`handleGetCommitFiles:${sha}`); },
+		handleGetBranchFiles: async (branchName: string) => { calls.push(`handleGetBranchFiles:${branchName}`); },
+		handleOpenBranchFileDiff: async (branchName: string, path: string) => {
+			calls.push(`handleOpenBranchFileDiff:${branchName}:${path}`);
+		},
 		handleOpenFileDiff: async (sha: string, path: string) => { calls.push(`handleOpenFileDiff:${sha}:${path}`); },
 		handleOpenCurrentFile: async (path: string) => { calls.push(`handleOpenCurrentFile:${path}`); },
 		handleStageFile: async (path: string) => { calls.push(`handleStageFile:${path}`); },
@@ -209,6 +213,20 @@ describe('messageRouter', () => {
 				const result = routeMessage({ type: 'openCurrentFile', path: 'src/file.ts' }, ctx);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleOpenCurrentFile:src/file.ts']);
+			});
+
+			it('should route getBranchFiles message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'getBranchFiles', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleGetBranchFiles:feature-1']);
+			});
+
+			it('should route openBranchFileDiff message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'openBranchFileDiff', branchName: 'feature-1', path: 'src/file.ts' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleOpenBranchFileDiff:feature-1:src/file.ts']);
 			});
 		});
 

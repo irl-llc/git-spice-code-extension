@@ -16,15 +16,37 @@ export type PostMessage = (message: WebviewMessage) => void;
 /** Delegate for rendering commits container within a branch card. */
 export type CommitsContainerRenderer = (branch: BranchViewModel, card: HTMLElement) => HTMLElement;
 
+/** Delegate for rendering the branch summary section. */
+export type SummaryRenderer = (branchName: string, card: HTMLElement) => HTMLElement;
+
+/** Options for rendering expandable content within a branch card. */
+type BranchContentRenderers = {
+	renderCommitsContainer: CommitsContainerRenderer;
+	renderSummary?: SummaryRenderer;
+};
+
 /**
- * Renders a branch card element with header, metadata, and commits.
+ * Renders a branch card element with header, metadata, summary, and commits.
  */
 export function renderBranch(
 	branch: BranchViewModel,
 	postMessage: PostMessage,
 	renderCommitsContainer: CommitsContainerRenderer,
+	renderSummary?: SummaryRenderer,
 ): HTMLElement {
 	const card = createBranchCard(branch);
+	const content = buildBranchContent(branch, card, postMessage, { renderCommitsContainer, renderSummary });
+	card.appendChild(content);
+	return card;
+}
+
+/** Assembles the branch content element with header, meta, summary, and commits. */
+function buildBranchContent(
+	branch: BranchViewModel,
+	card: HTMLElement,
+	postMessage: PostMessage,
+	renderers: BranchContentRenderers,
+): HTMLElement {
 	const content = document.createElement('div');
 	content.className = 'branch-content';
 
@@ -34,12 +56,24 @@ export function renderBranch(
 		content.appendChild(renderBranchMeta(branch));
 	}
 
-	if (branch.commits && branch.commits.length > 0) {
-		content.appendChild(renderCommitsContainer(branch, card));
-	}
+	appendExpandableContent(content, branch, card, renderers);
+	return content;
+}
 
-	card.appendChild(content);
-	return card;
+/** Appends summary and commits sections when the branch has commits. */
+function appendExpandableContent(
+	content: HTMLElement,
+	branch: BranchViewModel,
+	card: HTMLElement,
+	renderers: BranchContentRenderers,
+): void {
+	const hasCommits = branch.commits && branch.commits.length > 0;
+	if (!hasCommits) return;
+
+	if (renderers.renderSummary) {
+		content.appendChild(renderers.renderSummary(branch.name, card));
+	}
+	content.appendChild(renderers.renderCommitsContainer(branch, card));
 }
 
 /** Creates the base branch card element with data attributes. */
@@ -95,6 +129,7 @@ export function updateBranch(
 	branch: BranchViewModel,
 	postMessage: PostMessage,
 	renderCommitsContainer: CommitsContainerRenderer,
+	renderSummary?: SummaryRenderer,
 ): void {
 	const oldData = getBranchData(card);
 
@@ -108,6 +143,7 @@ export function updateBranch(
 
 	updateHeader(card, branch, postMessage, oldData);
 	updateMeta(card, branch);
+	updateSummary(card, branch, renderSummary);
 	updateCommits(card, branch, renderCommitsContainer);
 }
 
@@ -197,6 +233,26 @@ function updateMeta(card: HTMLElement, branch: BranchViewModel): void {
 		}
 	} else if (existingMeta) {
 		existingMeta.remove();
+	}
+}
+
+/** Updates the branch summary section. */
+function updateSummary(card: HTMLElement, branch: BranchViewModel, renderSummary?: SummaryRenderer): void {
+	const existingSummary = card.querySelector('.branch-summary');
+	const hasCommits = branch.commits && branch.commits.length > 0;
+
+	if (hasCommits && renderSummary) {
+		const newSummary = renderSummary(branch.name, card);
+		if (existingSummary) {
+			existingSummary.replaceWith(newSummary);
+		} else {
+			const commitsEl = card.querySelector('.branch-commits');
+			if (commitsEl) {
+				commitsEl.parentElement?.insertBefore(newSummary, commitsEl);
+			}
+		}
+	} else if (existingSummary) {
+		existingSummary.remove();
 	}
 }
 
