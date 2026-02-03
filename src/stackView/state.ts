@@ -2,7 +2,7 @@ import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type {
 	BranchChangeViewModel,
 	BranchViewModel,
-	DisplayState,
+	RepositoryViewModel,
 	TreeFragmentData,
 	TreePosition,
 	UncommittedState,
@@ -15,33 +15,47 @@ type BranchWithTree = {
 	tree: TreePosition;
 };
 
-/**
- * Builds the display state showing ALL tracked branches (like `gs ll -a`).
- * Branches are organized in a tree structure based on parent-child relationships.
- */
 /** Special name for the uncommitted pseudo-branch. */
 export const UNCOMMITTED_BRANCH_NAME = '__uncommitted__';
 
-export function buildDisplayState(
-	branches: GitSpiceBranch[],
-	error?: string,
-	uncommitted?: UncommittedState,
-): DisplayState {
-	const branchMap = new Map(branches.map((branch) => [branch.name, branch]));
-	const ordered = orderStackWithTree(branches, branchMap);
+/** Input parameters for building a repository display state. */
+export type RepoDisplayInput = {
+	repoId: string;
+	repoName: string;
+	branches: GitSpiceBranch[];
+	error?: string;
+	uncommitted?: UncommittedState;
+};
 
-	const hasUncommittedChanges = uncommitted && (uncommitted.staged.length > 0 || uncommitted.unstaged.length > 0);
-	const treeFragments = buildTreeFragments(ordered, hasUncommittedChanges ? uncommitted : undefined);
+/**
+ * Builds a single repository's display state from its branch data.
+ * Branches are organized in a tree structure based on parent-child relationships.
+ */
+export function buildRepoDisplayState(input: RepoDisplayInput): RepositoryViewModel {
+	const ordered = orderStackWithTree(input.branches, new Map(input.branches.map((b) => [b.name, b])));
+	const uncommitted = filterEmptyUncommitted(input.uncommitted);
+	const treeFragments = buildTreeFragments(ordered, uncommitted);
 
 	return {
-		branches: ordered.map((item) => {
-			const fragment = treeFragments.get(item.branch.name)!;
-			return createBranchViewModel(item.branch, item.tree, fragment);
-		}),
-		uncommitted: hasUncommittedChanges ? uncommitted : undefined,
-		uncommittedTreeFragment: hasUncommittedChanges ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
-		error,
+		id: input.repoId,
+		name: input.repoName,
+		branches: mapToBranchViewModels(ordered, treeFragments),
+		uncommitted,
+		uncommittedTreeFragment: uncommitted ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
+		error: input.error,
 	};
+}
+
+/** Returns uncommitted state only if it contains changes, otherwise undefined. */
+function filterEmptyUncommitted(uncommitted?: UncommittedState): UncommittedState | undefined {
+	if (!uncommitted) return undefined;
+	if (uncommitted.staged.length === 0 && uncommitted.unstaged.length === 0) return undefined;
+	return uncommitted;
+}
+
+/** Maps ordered branches to view models using precomputed tree fragments. */
+function mapToBranchViewModels(ordered: BranchWithTree[], fragments: Map<string, TreeFragmentData>): BranchViewModel[] {
+	return ordered.map((item) => createBranchViewModel(item.branch, item.tree, fragments.get(item.branch.name)!));
 }
 
 /** Context passed during tree traversal */
