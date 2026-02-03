@@ -3,8 +3,7 @@
  */
 
 import * as vscode from 'vscode';
-
-const EXTENSION_ID = 'ekohlwey.git-spice';
+import { EXTENSION_ID } from '../constants';
 
 /** Ensures the extension is activated. */
 export async function activateExtension(): Promise<vscode.Extension<unknown>> {

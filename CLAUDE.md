@@ -260,16 +260,24 @@ For complete command reference: https://abhinav.github.io/git-spice/cli/referenc
 
 ### Testing
 
-1. **Unit Tests**:
-   - Write tests in `src/test/` directory
-   - Use Mocha as the test runner (VSCode standard)
-   - Test utilities and pure functions thoroughly
-   - Mock VSCode APIs using appropriate patterns
+1. **Unit Tests** (`npm run test:unit`):
+   - Located in `src/test/unit/`, mirroring source file structure
+   - Run with Mocha directly (no VSCode instance required)
+   - Test pure functions and utilities only — no `vscode` module imports
+   - To test code that uses `vscode` APIs, extract logic into pure functions with dependency injection (see `messageRouter.ts` and its `MessageHandlerContext` interface as an example)
 
-2. **Integration Tests**:
-   - Test extension activation and command registration
-   - Test git-spice CLI invocation with fixtures
-   - Validate data parsing and transformation
+2. **E2E Tests** (`npm run test:e2e`):
+   - Located in `src/test/e2e/suite/`, with helpers in `src/test/e2e/helpers/`
+   - Run inside a real VSCode instance via `@vscode/test-cli`
+   - Config: `.vscode-test.e2e.mjs` (60s timeout, BDD style)
+   - Can import `vscode` directly since they run in the extension host
+   - CI runs with `xvfb-run -a` for headless display on Linux
+
+3. **Keeping E2E Tests Current**:
+   - When adding new commands, add the command ID to `EXTENSION_COMMANDS` in `activation.test.ts`
+   - When changing the extension ID or activation events, update the `EXTENSION_ID` constant
+   - E2E tests verify the extension loads and registers commands — they are the safety net for integration regressions that unit tests cannot catch
+   - Helper utilities in `src/test/e2e/helpers/extensionHelper.ts` provide `activateExtension()`, `delay()`, `executeCommand()`, and `getCommandsWithPrefix()`
 
 ### File Organization
 
@@ -281,7 +289,8 @@ src/
 │   ├── StackViewProvider.ts
 │   ├── state.ts          # State transformation for display
 │   └── types.ts          # View-specific types
-├── utils/             │   ├── gitSpice.ts       # git-spice CLI execution utilities
+├── utils/
+│   ├── gitSpice.ts       # git-spice CLI execution utilities
 │   ├── error.ts          # Error formatting utilities
 │   ├── validation.ts     # Input validation utilities
 │   └── diffUri.ts        # Git diff URI construction
