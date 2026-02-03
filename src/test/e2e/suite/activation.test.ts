@@ -5,8 +5,9 @@
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { EXTENSION_ID } from '../constants';
+import { activateExtension } from '../helpers/extensionHelper';
 
-const EXTENSION_ID = 'ekohlwey.git-spice';
 const EXTENSION_COMMANDS = [
 	'git-spice.refresh',
 	'git-spice.syncRepo',
@@ -39,49 +40,34 @@ describe('Extension Activation', () => {
 	});
 
 	it('should activate successfully', async () => {
-		const extension = vscode.extensions.getExtension(EXTENSION_ID);
-		assert.ok(extension, 'Extension should be installed');
-
-		if (!extension.isActive) {
-			await extension.activate();
-		}
+		const extension = await activateExtension();
 		assert.strictEqual(extension.isActive, true, 'Extension should be active');
 	});
 
 	describe('Command Registration', () => {
 		before(async () => {
-			const extension = vscode.extensions.getExtension(EXTENSION_ID);
-			if (extension && !extension.isActive) {
-				await extension.activate();
-			}
+			await activateExtension();
 		});
 
 		it('should register all expected commands', async () => {
 			const allCommands = await vscode.commands.getCommands(true);
-
-			for (const command of EXTENSION_COMMANDS) {
-				assert.ok(
-					allCommands.includes(command),
-					`Command ${command} should be registered`,
-				);
-			}
+			const missing = EXTENSION_COMMANDS.filter((cmd) => !allCommands.includes(cmd));
+			assert.strictEqual(missing.length, 0, `Missing commands: ${missing.join(', ')}`);
 		});
 	});
 
 	describe('Webview Provider Registration', () => {
 		before(async () => {
-			const extension = vscode.extensions.getExtension(EXTENSION_ID);
-			if (extension && !extension.isActive) {
-				await extension.activate();
-			}
+			await activateExtension();
 		});
 
-		it('should register the branches webview provider', () => {
-			// The webview provider is registered when the extension activates.
-			// We can verify it exists by checking the extension's exports or
-			// attempting to open the view.
-			const extension = vscode.extensions.getExtension(EXTENSION_ID);
-			assert.ok(extension?.isActive, 'Extension should be active');
+		it('should register the branches webview provider', async () => {
+			// Focusing the view exercises the provider registration path;
+			// if the provider was not registered this command would throw.
+			await assert.doesNotReject(
+				() => vscode.commands.executeCommand('gitSpice.branches.focus'),
+				'Focusing the branches view should not throw',
+			);
 		});
 	});
 });
