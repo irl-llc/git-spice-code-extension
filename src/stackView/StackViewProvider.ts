@@ -236,7 +236,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
 			refresh: () => this.refresh(),
 			postCommitFilesToWebview: (sha, files) =>
-				this.view?.webview.postMessage({ type: 'commitFiles', sha, files }),
+				this.view?.webview.postMessage({ type: 'commitFiles', repoId, sha, files }),
 		};
 	}
 
@@ -258,7 +258,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			workspaceFolder: this.resolveWorkspaceFolder(repoId),
 			branches: state?.branches ?? [],
 			postBranchFilesToWebview: (branchName, files) =>
-				this.view?.webview.postMessage({ type: 'branchFiles', branchName, files }),
+				this.view?.webview.postMessage({ type: 'branchFiles', repoId, branchName, files }),
 		};
 	}
 

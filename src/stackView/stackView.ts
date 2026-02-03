@@ -2,7 +2,7 @@
  * Git-Spice Stack View - Main Entry Point
  *
  * Orchestrates the webview UI by coordinating:
- * - State management and updates
+ * - Per-repository state management and rendering
  * - Branch/commit/working-copy rendering via extracted modules
  * - Animation and diffing via dedicated engines
  */
@@ -35,38 +35,48 @@ import {
 	renderUncommittedCard,
 	type WorkingCopyState,
 } from './webview/workingCopyRenderer';
+import {
+	renderRepoSection,
+	getBranchList,
+	getErrorElement,
+	getEmptyElement,
+} from './webview/repoSectionRenderer';
+
+/** Per-repository view state. */
+interface RepoViewState {
+	currentState: RepositoryViewModel | null;
+	commitState: CommitRendererState;
+	branchSummaryState: BranchSummaryState;
+	workingCopyState: WorkingCopyState;
+	sectionElement: HTMLElement;
+}
+
+/** Creates a fresh per-repo view state with a new section element. */
+function createRepoViewState(repoId: string, repoName: string): RepoViewState {
+	return {
+		currentState: null,
+		commitState: { expandedCommits: new Set(), fileCache: new Map() },
+		branchSummaryState: { expandedBranches: new Set(), fileCache: new Map() },
+		workingCopyState: { expandedStagedSection: true, expandedUnstagedSection: true, commitMessageValue: '' },
+		sectionElement: renderRepoSection(repoId, repoName),
+	};
+}
 
 /**
  * Main stack view controller.
- * Manages state and coordinates rendering of branches and commits.
+ * Manages per-repo state and coordinates rendering across repositories.
  */
 class StackView {
 	private readonly vscode = acquireVsCodeApi();
-	private readonly stackList: HTMLElement;
-	private readonly errorEl: HTMLElement;
-	private readonly emptyEl: HTMLElement;
-	private currentState: RepositoryViewModel | null = null;
-
-	private readonly commitState: CommitRendererState = {
-		expandedCommits: new Set(),
-		fileCache: new Map(),
-	};
-
-	private readonly branchSummaryState: BranchSummaryState = {
-		expandedBranches: new Set(),
-		fileCache: new Map(),
-	};
-
-	private readonly workingCopyState: WorkingCopyState = {
-		expandedStagedSection: true,
-		expandedUnstagedSection: true,
-		commitMessageValue: '',
-	};
+	private readonly repoContainer: HTMLElement;
+	private readonly globalErrorEl: HTMLElement;
+	private readonly globalEmptyEl: HTMLElement;
+	private readonly repoViews = new Map<string, RepoViewState>();
 
 	constructor() {
-		this.stackList = document.getElementById('stackList')!;
-		this.errorEl = document.getElementById('error')!;
-		this.emptyEl = document.getElementById('empty')!;
+		this.repoContainer = document.getElementById('repoContainer')!;
+		this.globalErrorEl = document.getElementById('error')!;
+		this.globalEmptyEl = document.getElementById('empty')!;
 
 		this.setupEventListeners();
 		this.vscode.postMessage({ type: 'ready' });
@@ -74,56 +84,221 @@ class StackView {
 
 	private setupEventListeners(): void {
 		window.addEventListener('message', (event: MessageEvent) => {
-			const message = event.data as ExtensionMessage;
-			if (!message) return;
-
-			if (message.type === 'state') {
-				this.updateState(message.payload, message.force);
-			} else if (message.type === 'commitFiles') {
-				this.handleCommitFiles(message.sha, message.files);
-			} else if (message.type === 'branchFiles') {
-				this.handleBranchFiles(message.branchName, message.files);
-			}
+			this.handleMessage(event.data as ExtensionMessage);
 		});
 	}
 
-	/** Extracts the first repository from the display state (single-repo shim). */
-	private extractRepo(state: DisplayState): RepositoryViewModel | undefined {
-		return state.repositories[0];
+	private handleMessage(message: ExtensionMessage): void {
+		if (!message) return;
+		if (message.type === 'state') this.updateState(message.payload, message.force);
+		if (message.type === 'commitFiles') this.handleCommitFiles(message.repoId, message.sha, message.files);
+		if (message.type === 'branchFiles') this.handleBranchFiles(message.repoId, message.branchName, message.files);
 	}
+
+	// --- State Updates ---
 
 	private updateState(newState: DisplayState, force?: boolean): void {
-		const repo = this.extractRepo(newState);
-		if (!repo) return;
-		if (!force && this.stateUnchanged(repo)) return;
+		if (newState.repositories.length === 0) {
+			this.showGlobalEmpty();
+			return;
+		}
 
-		const oldBranches = this.currentState?.branches ?? [];
-		this.currentState = repo;
-
-		this.updateErrorDisplay(repo);
-		this.updateGraphWidth(repo.branches);
-		this.updateBranchItems(oldBranches, repo);
-		this.updateUncommittedCard(repo);
+		this.globalEmptyEl.classList.add('hidden');
+		this.globalErrorEl.classList.add('hidden');
+		this.reconcileRepoSections(newState.repositories);
+		this.updateAllRepos(newState.repositories, force);
+		this.applySingleRepoMode(newState.repositories.length === 1);
 	}
 
-	private stateUnchanged(repo: RepositoryViewModel): boolean {
+	private showGlobalEmpty(): void {
+		this.globalEmptyEl.textContent = 'No git-spice repositories found.';
+		this.globalEmptyEl.classList.remove('hidden');
+		this.removeAllRepoSections();
+	}
+
+	private removeAllRepoSections(): void {
+		for (const view of this.repoViews.values()) {
+			view.sectionElement.remove();
+		}
+		this.repoViews.clear();
+	}
+
+	/** Adds/removes repo sections to match the current repository list. */
+	private reconcileRepoSections(repos: RepositoryViewModel[]): void {
+		const repoIds = new Set(repos.map((r) => r.id));
+		this.removeStaleRepoSections(repoIds);
+		for (const repo of repos) this.ensureRepoSection(repo);
+	}
+
+	private removeStaleRepoSections(activeIds: Set<string>): void {
+		for (const [id, view] of this.repoViews) {
+			if (activeIds.has(id)) continue;
+			view.sectionElement.remove();
+			this.repoViews.delete(id);
+		}
+	}
+
+	private ensureRepoSection(repo: RepositoryViewModel): void {
+		if (this.repoViews.has(repo.id)) return;
+		const view = createRepoViewState(repo.id, repo.name);
+		this.repoViews.set(repo.id, view);
+		this.repoContainer.appendChild(view.sectionElement);
+	}
+
+	private updateAllRepos(repos: RepositoryViewModel[], force?: boolean): void {
+		for (const repo of repos) this.updateRepoSection(repo, force);
+	}
+
+	/** Toggles .single-repo class on all sections for single-repo mode. */
+	private applySingleRepoMode(isSingle: boolean): void {
+		for (const view of this.repoViews.values()) {
+			view.sectionElement.classList.toggle('single-repo', isSingle);
+		}
+	}
+
+	// --- Per-Repo Rendering ---
+
+	private updateRepoSection(repo: RepositoryViewModel, force?: boolean): void {
+		const view = this.repoViews.get(repo.id);
+		if (!view) return;
+		if (!force && this.repoUnchanged(view, repo)) return;
+
+		const oldBranches = view.currentState?.branches ?? [];
+		view.currentState = repo;
+
+		const branchList = getBranchList(view.sectionElement);
+		this.updateRepoError(view.sectionElement, repo);
+		this.updateGraphWidth(branchList, repo.branches);
+		this.updateRepoBranches(branchList, oldBranches, repo, view);
+		this.updateRepoUncommitted(branchList, repo, view);
+	}
+
+	private repoUnchanged(view: RepoViewState, repo: RepositoryViewModel): boolean {
 		try {
-			return JSON.stringify(this.currentState) === JSON.stringify(repo);
+			return JSON.stringify(view.currentState) === JSON.stringify(repo);
 		} catch {
 			return false;
 		}
 	}
 
-	private updateErrorDisplay(repo: RepositoryViewModel): void {
-		this.errorEl.classList.toggle('hidden', !repo.error);
-		this.errorEl.textContent = repo.error ?? '';
+	private updateRepoError(section: HTMLElement, repo: RepositoryViewModel): void {
+		const errorEl = getErrorElement(section);
+		errorEl.classList.toggle('hidden', !repo.error);
+		errorEl.textContent = repo.error ?? '';
 	}
 
-	private updateGraphWidth(branches: BranchViewModel[]): void {
+	private updateGraphWidth(branchList: HTMLElement, branches: BranchViewModel[]): void {
 		const maxLane = branches.reduce((max, b) => Math.max(max, b.treeFragment.maxLane), 0);
 		const width = LANE_WIDTH * (maxLane + 1) + NODE_RADIUS_CURRENT + NODE_STROKE;
-		this.stackList.style.setProperty('--tree-graph-width', `${width}px`);
+		branchList.style.setProperty('--tree-graph-width', `${width}px`);
 	}
+
+	private updateRepoBranches(
+		branchList: HTMLElement,
+		oldBranches: BranchViewModel[],
+		repo: RepositoryViewModel,
+		view: RepoViewState,
+	): void {
+		const emptyEl = getEmptyElement(view.sectionElement);
+
+		if (repo.branches.length === 0) {
+			emptyEl.textContent = repo.error ?? 'No branches in the current stack.';
+			emptyEl.classList.remove('hidden');
+			this.animateOutAllItems(branchList);
+			return;
+		}
+
+		emptyEl.classList.add('hidden');
+		this.reconcileBranches(branchList, oldBranches, repo.branches, view);
+	}
+
+	private animateOutAllItems(branchList: HTMLElement): void {
+		const items = branchList.querySelectorAll('.stack-item');
+		items.forEach((item, index) => {
+			(item as HTMLElement).style.animationDelay = `${index * ANIMATION_STAGGER_MS}ms`;
+			animations.animateOut(item as HTMLElement, () => {});
+		});
+
+		setTimeout(() => {
+			branchList.innerHTML = '';
+		}, items.length * ANIMATION_STAGGER_MS + ANIMATION_DURATION_MS);
+	}
+
+	// --- Branch Reconciliation ---
+
+	private reconcileBranches(
+		branchList: HTMLElement,
+		oldBranches: BranchViewModel[],
+		newBranches: BranchViewModel[],
+		view: RepoViewState,
+	): void {
+		diffList(branchList, oldBranches, newBranches, {
+			getKey: (branch) => branch.name,
+			render: (branch) => this.renderBranchCard(branch, view),
+			update: (card, branch) => this.updateBranchCard(card, branch, view),
+			needsUpdate: (card, branch) => branchNeedsUpdate(card, branch),
+			itemSelector: '.stack-item',
+			itemClass: 'stack-item',
+		}, animations, this.getTreeColors());
+	}
+
+	private renderBranchCard(branch: BranchViewModel, view: RepoViewState): HTMLElement {
+		const postMessage = this.getPostMessage(view.currentState?.id);
+		return renderBranch(
+			branch,
+			postMessage,
+			(b, card) => this.createCommitsContainer(b, card, view),
+			(name) => this.createSummaryContainer(name, view),
+		);
+	}
+
+	private updateBranchCard(card: HTMLElement, branch: BranchViewModel, view: RepoViewState): void {
+		const postMessage = this.getPostMessage(view.currentState?.id);
+		updateBranch(
+			card,
+			branch,
+			postMessage,
+			(b, c) => this.createCommitsContainer(b, c, view),
+			(name) => this.createSummaryContainer(name, view),
+		);
+	}
+
+	private createCommitsContainer(branch: BranchViewModel, _card: HTMLElement, view: RepoViewState): HTMLElement {
+		return renderCommitsContainer(branch, view.commitState, this.getPostMessage(view.currentState?.id), animations, this.getTreeColors());
+	}
+
+	private createSummaryContainer(branchName: string, view: RepoViewState): HTMLElement {
+		return renderBranchSummary(branchName, view.branchSummaryState, this.getPostMessage(view.currentState?.id));
+	}
+
+	// --- Uncommitted Changes ---
+
+	private updateRepoUncommitted(branchList: HTMLElement, repo: RepositoryViewModel, view: RepoViewState): void {
+		branchList.querySelector('.uncommitted-item')?.remove();
+		if (!repo.uncommitted || !repo.uncommittedTreeFragment) return;
+
+		const hasChanges = repo.uncommitted.staged.length > 0 || repo.uncommitted.unstaged.length > 0;
+		if (!hasChanges) return;
+
+		const newCard = renderUncommittedCard(
+			repo.uncommitted, repo.uncommittedTreeFragment, this.getTreeColors(), view.workingCopyState, this.getPostMessage(view.currentState?.id),
+		);
+
+		const insertionPoint = this.findCurrentBranchElement(branchList, repo.branches);
+		if (insertionPoint) {
+			branchList.insertBefore(newCard, insertionPoint);
+		} else {
+			branchList.appendChild(newCard);
+		}
+	}
+
+	private findCurrentBranchElement(branchList: HTMLElement, branches: BranchViewModel[]): HTMLElement | null {
+		const currentBranch = branches.find((b) => b.current);
+		if (!currentBranch) return null;
+		return branchList.querySelector(`.stack-item[data-key="${currentBranch.name}"]`);
+	}
+
+	// --- Shared Helpers ---
 
 	private getTreeColors(): TreeColors {
 		const styles = getComputedStyle(document.documentElement);
@@ -136,8 +311,7 @@ class StackView {
 		};
 	}
 
-	private getPostMessage(): PostMessage {
-		const repoId = this.currentState?.id;
+	private getPostMessage(repoId?: string): PostMessage {
 		return (message) => {
 			const isGlobal = message.type === 'ready' || message.type === 'refresh';
 			const enriched = isGlobal || !repoId ? message : { ...message, repoId };
@@ -145,113 +319,26 @@ class StackView {
 		};
 	}
 
-	private updateBranchItems(oldBranches: BranchViewModel[], repo: RepositoryViewModel): void {
-		if (repo.branches.length === 0) {
-			this.handleEmptyState(repo);
-			return;
-		}
+	// --- File Response Handlers ---
 
-		this.emptyEl.classList.add('hidden');
-		this.reconcileBranches(oldBranches, repo.branches);
-	}
-
-	private handleEmptyState(repo: RepositoryViewModel): void {
-		this.emptyEl.textContent = repo.error ?? 'No branches in the current stack.';
-		this.emptyEl.classList.remove('hidden');
-		this.animateOutAllItems();
-	}
-
-	private animateOutAllItems(): void {
-		const items = this.stackList.querySelectorAll('.stack-item');
-		items.forEach((item, index) => {
-			(item as HTMLElement).style.animationDelay = `${index * ANIMATION_STAGGER_MS}ms`;
-			animations.animateOut(item as HTMLElement, () => {});
-		});
-
-		setTimeout(() => {
-			this.stackList.innerHTML = '';
-		}, items.length * ANIMATION_STAGGER_MS + ANIMATION_DURATION_MS);
-	}
-
-	private reconcileBranches(oldBranches: BranchViewModel[], newBranches: BranchViewModel[]): void {
-		const treeColors = this.getTreeColors();
-
-		diffList(this.stackList, oldBranches, newBranches, {
-			getKey: (branch) => branch.name,
-			render: (branch) => this.renderBranchCard(branch),
-			update: (card, branch) => this.updateBranchCard(card, branch),
-			needsUpdate: (card, branch) => branchNeedsUpdate(card, branch),
-			itemSelector: '.stack-item',
-			itemClass: 'stack-item',
-		}, animations, treeColors);
-	}
-
-	private renderBranchCard(branch: BranchViewModel): HTMLElement {
-		return renderBranch(
-			branch,
-			this.getPostMessage(),
-			(b, card) => this.createCommitsContainer(b, card),
-			(name) => this.createSummaryContainer(name),
-		);
-	}
-
-	private updateBranchCard(card: HTMLElement, branch: BranchViewModel): void {
-		updateBranch(
-			card,
-			branch,
-			this.getPostMessage(),
-			(b, c) => this.createCommitsContainer(b, c),
-			(name) => this.createSummaryContainer(name),
-		);
-	}
-
-	private createCommitsContainer(branch: BranchViewModel, _card: HTMLElement): HTMLElement {
-		return renderCommitsContainer(
-			branch,
-			this.commitState,
-			this.getPostMessage(),
-			animations,
-			this.getTreeColors(),
-		);
-	}
-
-	private createSummaryContainer(branchName: string): HTMLElement {
-		return renderBranchSummary(branchName, this.branchSummaryState, this.getPostMessage());
-	}
-
-	private updateUncommittedCard(repo: RepositoryViewModel): void {
-		this.stackList.querySelector('.uncommitted-item')?.remove();
-
-		if (!repo.uncommitted || !repo.uncommittedTreeFragment) return;
-
-		const newCard = renderUncommittedCard(
-			repo.uncommitted,
-			repo.uncommittedTreeFragment,
-			this.getTreeColors(),
-			this.workingCopyState,
-			this.getPostMessage(),
-		);
-
-		const insertionPoint = this.findCurrentBranchElement(repo.branches);
-		if (insertionPoint) {
-			this.stackList.insertBefore(newCard, insertionPoint);
-		} else {
-			this.stackList.appendChild(newCard);
+	/** Handles commit file responses — targets the specified repo section if repoId is set. */
+	private handleCommitFiles(repoId: string | undefined, sha: string, files: CommitFileChange[]): void {
+		const targets = repoId ? [this.repoViews.get(repoId)] : this.repoViews.values();
+		for (const view of targets) {
+			if (!view) continue;
+			const branchList = getBranchList(view.sectionElement);
+			handleCommitFilesResponse(sha, files, branchList, view.commitState, this.getPostMessage());
 		}
 	}
 
-	private findCurrentBranchElement(branches: BranchViewModel[]): HTMLElement | null {
-		const currentBranch = branches.find((b) => b.current);
-		if (!currentBranch) return null;
-		return this.stackList.querySelector(`.stack-item[data-key="${currentBranch.name}"]`);
-	}
-
-	private handleCommitFiles(sha: string, files: CommitFileChange[]): void {
-		handleCommitFilesResponse(sha, files, this.stackList, this.commitState, this.getPostMessage());
-	}
-
-	private handleBranchFiles(branchName: string, files: CommitFileChange[]): void {
-		handleBranchFilesResponse(branchName, files, this.stackList, this.branchSummaryState, this.getPostMessage());
+	/** Handles branch file responses — targets the specified repo section if repoId is set. */
+	private handleBranchFiles(repoId: string | undefined, branchName: string, files: CommitFileChange[]): void {
+		const targets = repoId ? [this.repoViews.get(repoId)] : this.repoViews.values();
+		for (const view of targets) {
+			if (!view) continue;
+			const branchList = getBranchList(view.sectionElement);
+			handleBranchFilesResponse(branchName, files, branchList, view.branchSummaryState, this.getPostMessage());
+		}
 	}
 }
 
