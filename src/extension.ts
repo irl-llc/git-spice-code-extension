@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { POST_COMMIT_REFRESH_DELAY_MS } from './constants';
+import { createRepoDiscovery } from './repoDiscovery';
 import { StackViewProvider } from './stackView/StackViewProvider';
 import {
 	execBranchCreate,
@@ -279,8 +280,10 @@ function registerCoreProvider(context: vscode.ExtensionContext, provider: StackV
 export function activate(context: vscode.ExtensionContext): void {
 	updateCommentProgressContext();
 
-	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-	const provider = new StackViewProvider(workspaceFolder, context.extensionUri);
+	const discovery = createRepoDiscovery();
+	if (discovery) context.subscriptions.push(discovery);
+	const fallbackFolder = vscode.workspace.workspaceFolders?.[0];
+	const provider = new StackViewProvider(discovery, context.extensionUri, fallbackFolder);
 
 	registerCoreProvider(context, provider);
 	registerNavigationCommands(context, provider);

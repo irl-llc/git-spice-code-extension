@@ -1,29 +1,18 @@
 /**
  * Stack View Provider - Main orchestrator for the git-spice webview.
- * Manages state and delegates operations to specialized handlers.
+ * Manages per-repo state and delegates operations to specialized handlers.
  */
 
 import * as vscode from 'vscode';
 
 import type { GitSpiceBranch } from '../gitSpiceSchema';
+import type { DiscoveredRepo, RepoDiscovery } from '../repoDiscovery';
 import { buildRepoDisplayState, type RepoDisplayInput } from './state';
-import type { UncommittedState } from './types';
+import { fetchRepoState, fetchFolderState, type RepoState } from './repoStateBuilder';
+import type { DisplayState, RepositoryViewModel, UncommittedState } from './types';
 import type { WebviewMessage } from './webviewTypes';
-import {
-	execGitSpice,
-	execBranchUntrack,
-	execBranchCheckout,
-	execBranchFold,
-	execBranchSquash,
-	execBranchEdit,
-	execBranchRestack,
-	execBranchSubmit,
-	execRepoSync,
-	type BranchCommandResult,
-} from '../utils/gitSpice';
-import { fetchWorkingCopyChanges } from './workingCopy';
 import { renderWebviewHtml } from './webviewHtml';
-import { routeMessage, type MessageHandlerContext, type ExecFunctionMap } from './messageRouter';
+import { routeMessage, type MessageHandlerContext, type ExecFunctionMap, type ExecFunction } from './messageRouter';
 import { FileWatcherManager } from './fileWatcher';
 
 import {
@@ -56,6 +45,14 @@ import {
 	handleOpenBranchFileDiff,
 	type BranchFileHandlerDeps,
 } from './handlers/branchFileHandlers';
+import { handleSync } from './handlers/syncHandler';
+import {
+	executeBranchCommand,
+	executeBranchCommandWithExec,
+	getExecFunctions,
+	runWithProgress,
+	type BranchCommandRunnerDeps,
+} from './handlers/branchCommandRunner';
 import {
 	handleStageFile,
 	handleUnstageFile,
@@ -67,16 +64,19 @@ import {
 
 export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext {
 	private view: vscode.WebviewView | undefined;
-	private branches: GitSpiceBranch[] = [];
-	private uncommitted: UncommittedState | undefined;
-	private lastError: string | undefined;
+	private readonly repoStates = new Map<string, RepoState>();
 	private readonly fileWatcher: FileWatcherManager;
+	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(
-		private workspaceFolder: vscode.WorkspaceFolder | undefined,
+		private readonly discovery: RepoDiscovery | undefined,
 		private readonly extensionUri: vscode.Uri,
+		private fallbackFolder?: vscode.WorkspaceFolder,
 	) {
 		this.fileWatcher = new FileWatcherManager(() => void this.refresh());
+		if (discovery) {
+			this.disposables.push(discovery.onDidChange(() => this.onReposChanged()));
+		}
 	}
 
 	async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
@@ -85,11 +85,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 		webviewView.webview.html = await renderWebviewHtml(webviewView.webview, this.extensionUri);
 		webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
-		webviewView.onDidDispose(() => {
-			this.view = undefined;
-		});
+		webviewView.onDidDispose(() => { this.view = undefined; });
 
-		if (this.workspaceFolder) this.fileWatcher.watch(this.workspaceFolder);
+		this.syncWatchers();
 		void this.refresh();
 	}
 
@@ -104,147 +102,141 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		};
 	}
 
-	setWorkspaceFolder(folder: vscode.WorkspaceFolder | undefined): void {
-		this.workspaceFolder = folder;
-		if (folder) {
-			this.fileWatcher.watch(folder);
-		} else {
-			this.fileWatcher.dispose();
+	/** Called when repo discovery fires a change event. */
+	private onReposChanged(): void {
+		this.syncWatchers();
+		void this.refresh();
+	}
+
+	/** Starts file watchers for all discovered repos. */
+	private syncWatchers(): void {
+		const repos = this.getDiscoveredRepos();
+		if (repos.length > 0) {
+			this.fileWatcher.watchAll(repos);
+		} else if (this.fallbackFolder) {
+			this.fileWatcher.watch(this.fallbackFolder);
 		}
+	}
+
+	/** Returns discovered repos, or synthesizes one from fallback folder. */
+	private getDiscoveredRepos(): ReadonlyArray<DiscoveredRepo> {
+		if (this.discovery && this.discovery.repositories.length > 0) {
+			return this.discovery.repositories;
+		}
+		return [];
+	}
+
+	/** Backward-compat: update the fallback workspace folder. */
+	setWorkspaceFolder(folder: vscode.WorkspaceFolder | undefined): void {
+		this.fallbackFolder = folder;
+		this.syncWatchers();
 		void this.refresh();
 	}
 
 	async refresh(force = false): Promise<void> {
-		if (!this.workspaceFolder) {
-			this.setEmptyState('Open a workspace folder to view git-spice stacks.', force);
-			return;
-		}
-
-		const [branchResult, uncommittedResult] = await Promise.all([
-			execGitSpice(this.workspaceFolder),
-			this.getWorkingCopyChanges(),
-		]);
-
-		this.processBranchResult(branchResult);
-		this.uncommitted = uncommittedResult;
-		this.pushState(force);
-	}
-
-	private setEmptyState(error: string, force = false): void {
-		this.branches = [];
-		this.uncommitted = undefined;
-		this.lastError = error;
-		this.pushState(force);
-	}
-
-	private processBranchResult(result: { value: GitSpiceBranch[] } | { error: string }): void {
-		if ('error' in result) {
-			this.branches = [];
-			this.lastError = result.error;
+		const repos = this.getDiscoveredRepos();
+		if (repos.length > 0) {
+			await this.refreshRepos(repos);
+		} else if (this.fallbackFolder) {
+			await this.refreshFallback();
 		} else {
-			this.branches = result.value;
-			this.lastError = undefined;
+			this.repoStates.clear();
 		}
+		this.pushState(force);
+	}
+
+	/** Refreshes all discovered repos in parallel. */
+	private async refreshRepos(repos: ReadonlyArray<DiscoveredRepo>): Promise<void> {
+		const results = await Promise.all(repos.map((repo) => fetchRepoState(repo)));
+		this.repoStates.clear();
+		for (const state of results) this.repoStates.set(state.rootPath, state);
+	}
+
+	/** Fallback: single-folder mode (no discovery). */
+	private async refreshFallback(): Promise<void> {
+		const state = await fetchFolderState(this.fallbackFolder!);
+		this.repoStates.clear();
+		this.repoStates.set(state.rootPath, state);
 	}
 
 	pushState(force = false): void {
 		if (!this.view) return;
-		const input: RepoDisplayInput = {
-			repoId: this.workspaceFolder?.uri.fsPath ?? '',
-			repoName: this.workspaceFolder?.name ?? 'unknown',
-			branches: this.branches,
-			error: this.lastError,
-			uncommitted: this.uncommitted,
-		};
-		const repo = buildRepoDisplayState(input);
-		void this.view.webview.postMessage({ type: 'state', payload: { repositories: [repo] }, force });
+		const state = this.buildDisplayState();
+		void this.view.webview.postMessage({ type: 'state', payload: state, force });
+	}
+
+	/** Builds the full DisplayState from all repo states. */
+	private buildDisplayState(): DisplayState {
+		const repositories: RepositoryViewModel[] = [];
+		for (const state of this.repoStates.values()) {
+			const input: RepoDisplayInput = {
+				repoId: state.rootPath,
+				repoName: state.name,
+				branches: state.branches,
+				error: state.error,
+				uncommitted: state.uncommitted,
+			};
+			repositories.push(buildRepoDisplayState(input));
+		}
+		return { repositories };
 	}
 
 	async sync(): Promise<void> {
-		if (!this.workspaceFolder) {
+		const folder = this.getActiveWorkspaceFolder();
+		if (!folder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
 		}
-
-		await this.executeSyncWithProgress();
+		await handleSync({ folder, refresh: () => this.refresh() });
 	}
 
-	private async executeSyncWithProgress(): Promise<void> {
-		await vscode.window.withProgress(
-			{
-				location: vscode.ProgressLocation.Notification,
-				title: 'Syncing repository with remote...',
-				cancellable: false,
-			},
-			async () => {
-				try {
-					const result = await execRepoSync(this.workspaceFolder!, this.createBranchDeletePrompt());
-					this.handleSyncResult(result);
-					await this.refresh();
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					void vscode.window.showErrorMessage(`Unexpected error during repository sync: ${message}`);
-				}
-			},
-		);
+	// --- Repo Resolution ---
+
+	/**
+	 * Returns the workspace folder for the "active" repo (the one with current branch).
+	 * Falls back to the first repo or fallback folder.
+	 */
+	private getActiveWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
+		const active = this.findActiveRepoState();
+		if (active) return { uri: active.rootUri, name: active.name, index: 0 };
+		return this.fallbackFolder;
 	}
 
-	private createBranchDeletePrompt(): (branchName: string) => Promise<boolean> {
-		return async (branchName: string) => {
-			const answer = await vscode.window.showWarningMessage(
-				`Branch '${branchName}' has a closed pull request. Delete this branch?`,
-				{ modal: true },
-				'Yes',
-				'No',
-			);
-			return answer === 'Yes';
-		};
-	}
-
-	private handleSyncResult(result: { value: { deletedBranches: string[]; syncedBranches: number } } | { error: string }): void {
-		if ('error' in result) {
-			void vscode.window.showErrorMessage(`Failed to sync repository: ${result.error}`);
-			return;
+	/** Returns the repo state that has the current branch, or the alphabetically first by path. */
+	private findActiveRepoState(): RepoState | undefined {
+		for (const state of this.repoStates.values()) {
+			if (state.branches.some((b) => b.current === true)) return state;
 		}
-
-		const { deletedBranches, syncedBranches } = result.value;
-		const message = this.buildSyncMessage(deletedBranches, syncedBranches);
-		void vscode.window.showInformationMessage(message);
+		const sorted = [...this.repoStates.values()].sort((a, b) => a.rootPath.localeCompare(b.rootPath));
+		return sorted[0];
 	}
 
-	private buildSyncMessage(deletedBranches: string[], syncedBranches: number): string {
-		let message = 'Repository synced successfully.';
+	/** Returns branches from the active repo. */
+	private getActiveBranches(): GitSpiceBranch[] {
+		return this.findActiveRepoState()?.branches ?? [];
+	}
 
-		if (syncedBranches > 0) {
-			message += ` ${syncedBranches} branch${syncedBranches === 1 ? '' : 'es'} updated.`;
-		}
-
-		if (deletedBranches.length > 0) {
-			message += ` Deleted ${deletedBranches.length} branch${deletedBranches.length === 1 ? '' : 'es'}: ${deletedBranches.join(', ')}.`;
-		}
-
-		return message;
+	/** Returns uncommitted state from the active repo. */
+	private getActiveUncommitted(): UncommittedState | undefined {
+		return this.findActiveRepoState()?.uncommitted;
 	}
 
 	// --- Handler Dependency Factories ---
 
 	private getBranchHandlerDeps(): BranchHandlerDeps {
 		return {
-			workspaceFolder: this.workspaceFolder,
-			branches: this.branches,
-			runBranchCommand: (title, operation, successMessage) =>
-				this.runBranchCommand(title, operation, successMessage),
-			handleBranchCommandInternal: (commandName, branchName, execFunction) =>
-				this.handleBranchCommandInternal(commandName, branchName, execFunction),
+			workspaceFolder: this.getActiveWorkspaceFolder(),
+			branches: this.getActiveBranches(),
+			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
+			handleBranchCommandInternal: (cmd, branch, fn) => this.handleBranchCommandInternal(cmd, branch, fn),
 			postMessageToWebview: (message) => this.view?.webview.postMessage(message),
 		};
 	}
 
 	private getCommitHandlerDeps(): CommitHandlerDeps {
 		return {
-			workspaceFolder: this.workspaceFolder,
-			runBranchCommand: (title, operation, successMessage) =>
-				this.runBranchCommand(title, operation, successMessage),
+			workspaceFolder: this.getActiveWorkspaceFolder(),
+			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
 			refresh: () => this.refresh(),
 			postCommitFilesToWebview: (sha, files) =>
 				this.view?.webview.postMessage({ type: 'commitFiles', sha, files }),
@@ -252,21 +244,21 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	private getDiffHandlerDeps(): DiffHandlerDeps {
-		return { workspaceFolder: this.workspaceFolder };
+		return { workspaceFolder: this.getActiveWorkspaceFolder() };
 	}
 
 	private getWorkingCopyHandlerDeps(): WorkingCopyHandlerDeps {
 		return {
-			workspaceFolder: this.workspaceFolder,
-			uncommitted: this.uncommitted,
+			workspaceFolder: this.getActiveWorkspaceFolder(),
+			uncommitted: this.getActiveUncommitted(),
 			refresh: () => this.refresh(),
 		};
 	}
 
 	private getBranchFileHandlerDeps(): BranchFileHandlerDeps {
 		return {
-			workspaceFolder: this.workspaceFolder,
-			branches: this.branches,
+			workspaceFolder: this.getActiveWorkspaceFolder(),
+			branches: this.getActiveBranches(),
 			postBranchFilesToWebview: (branchName, files) =>
 				this.view?.webview.postMessage({ type: 'branchFiles', branchName, files }),
 		};
@@ -376,94 +368,32 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	// --- Branch Command Infrastructure ---
 
-	public async handleBranchCommand(commandName: string, branchName: string): Promise<void> {
-		const commandMap: Record<
-			string,
-			(folder: vscode.WorkspaceFolder, branchName: string) => Promise<BranchCommandResult>
-		> = {
-			untrack: execBranchUntrack,
-			checkout: execBranchCheckout,
-			fold: execBranchFold,
-			squash: execBranchSquash,
-			edit: execBranchEdit,
-			restack: execBranchRestack,
-			submit: execBranchSubmit,
+	private getCommandRunnerDeps(): BranchCommandRunnerDeps {
+		return {
+			getActiveWorkspaceFolder: () => this.getActiveWorkspaceFolder(),
+			refresh: () => this.refresh(),
 		};
+	}
 
-		const execFunction = commandMap[commandName];
-		if (!execFunction) {
-			void vscode.window.showErrorMessage(`Unknown command: ${commandName}`);
-			return;
-		}
-
-		await this.handleBranchCommandInternal(commandName, branchName, execFunction);
+	public async handleBranchCommand(commandName: string, branchName: string): Promise<void> {
+		await executeBranchCommand(commandName, branchName, this.getCommandRunnerDeps());
 	}
 
 	async handleBranchCommandInternal(
 		commandName: string,
 		branchName: string,
-		execFunction: (folder: vscode.WorkspaceFolder, branchName: string) => Promise<BranchCommandResult>,
+		execFunction: ExecFunction,
 	): Promise<void> {
-		const trimmedName = branchName?.trim();
-		if (!trimmedName) {
-			void vscode.window.showErrorMessage(`Branch name for ${commandName} cannot be empty.`);
-			return;
-		}
-
-		if (!this.workspaceFolder) {
-			void vscode.window.showErrorMessage('No workspace folder available.');
-			return;
-		}
-
-		const title = `${commandName.charAt(0).toUpperCase() + commandName.slice(1)}ing branch: ${trimmedName}`;
-		const successMessage = `Branch ${trimmedName} ${commandName}ed successfully.`;
-
-		await this.runBranchCommand(title, () => execFunction(this.workspaceFolder!, trimmedName), successMessage);
-	}
-
-	/** Shows result of a branch command and returns success status. */
-	private showBranchCommandResult(result: BranchCommandResult, successMessage: string): boolean {
-		if ('error' in result) {
-			void vscode.window.showErrorMessage(result.error);
-			return false;
-		}
-		void vscode.window.showInformationMessage(successMessage);
-		return true;
-	}
-
-	/** Executes a branch command with progress notification. */
-	private async runBranchCommand(title: string, operation: () => Promise<BranchCommandResult>, successMessage: string): Promise<boolean> {
-		let success = false;
-		await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, async () => {
-			try {
-				const result = await operation();
-				success = this.showBranchCommandResult(result, successMessage);
-				await this.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
-			}
-		});
-		return success;
+		await executeBranchCommandWithExec(commandName, branchName, execFunction, this.getCommandRunnerDeps());
 	}
 
 	getExecFunctions(): ExecFunctionMap {
-		return {
-			untrack: execBranchUntrack,
-			checkout: execBranchCheckout,
-			fold: execBranchFold,
-			squash: execBranchSquash,
-			edit: execBranchEdit,
-			restack: execBranchRestack,
-			submit: execBranchSubmit,
-		};
-	}
-
-	private getWorkingCopyChanges(): Promise<UncommittedState> {
-		return fetchWorkingCopyChanges(this.workspaceFolder?.uri.fsPath);
+		return getExecFunctions();
 	}
 
 	dispose(): void {
 		this.fileWatcher.dispose();
+		for (const d of this.disposables) d.dispose();
+		this.disposables.length = 0;
 	}
 }
