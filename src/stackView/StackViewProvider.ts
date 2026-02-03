@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 
 import type { GitSpiceBranch } from '../gitSpiceSchema';
-import { buildDisplayState } from './state';
+import { buildRepoDisplayState, type RepoDisplayInput } from './state';
 import type { UncommittedState } from './types';
 import type { WebviewMessage } from './webviewTypes';
 import {
@@ -149,8 +149,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	pushState(force = false): void {
 		if (!this.view) return;
-		const state = buildDisplayState(this.branches, this.lastError, this.uncommitted);
-		void this.view.webview.postMessage({ type: 'state', payload: state, force });
+		const input: RepoDisplayInput = {
+			repoId: this.workspaceFolder?.uri.fsPath ?? '',
+			repoName: this.workspaceFolder?.name ?? 'unknown',
+			branches: this.branches,
+			error: this.lastError,
+			uncommitted: this.uncommitted,
+		};
+		const repo = buildRepoDisplayState(input);
+		void this.view.webview.postMessage({ type: 'state', payload: { repositories: [repo] }, force });
 	}
 
 	async sync(): Promise<void> {

@@ -1,49 +1,53 @@
-import type { CommitFileChange, DisplayState, UncommittedState } from './types';
+import type { CommitFileChange, DisplayState } from './types';
 
-// Messages from webview to extension
-export type WebviewMessage =
+/** Global messages not scoped to a specific repository. */
+type GlobalWebviewMessage =
 	| { type: 'ready' }
-	| { type: 'refresh' }
-	| { type: 'openChange'; url: string }
-	| { type: 'openCommit'; sha: string }
-	| { type: 'openCommitDiff'; sha: string }
-	| { type: 'branchContextMenu'; branchName: string }
-	| { type: 'branchUntrack'; branchName: string }
-	| { type: 'branchDelete'; branchName: string }
-	| { type: 'branchCheckout'; branchName: string }
-	| { type: 'branchFold'; branchName: string }
-	| { type: 'branchSquash'; branchName: string }
-	| { type: 'branchEdit'; branchName: string }
-	| { type: 'branchRenamePrompt'; branchName: string }
-	| { type: 'branchRename'; branchName: string; newName: string }
-	| { type: 'branchRestack'; branchName: string }
-	| { type: 'branchSubmit'; branchName: string }
-	| { type: 'commitCopySha'; sha: string }
-	| { type: 'commitFixup'; sha: string }
-	| { type: 'commitSplit'; sha: string; branchName: string }
-	| { type: 'branchMovePrompt'; branchName: string }
-	| { type: 'branchMove'; branchName: string; newParent: string }
-	| { type: 'upstackMovePrompt'; branchName: string }
-	| { type: 'upstackMove'; branchName: string; newParent: string }
-	| { type: 'getCommitFiles'; sha: string }
-	| { type: 'openFileDiff'; sha: string; path: string }
-	| { type: 'openCurrentFile'; path: string }
-	// Branch summary operations
-	| { type: 'getBranchFiles'; branchName: string }
-	| { type: 'openBranchFileDiff'; branchName: string; path: string }
-	// Working copy operations
-	| { type: 'stageFile'; path: string }
-	| { type: 'unstageFile'; path: string }
-	| { type: 'discardFile'; path: string }
-	| { type: 'openWorkingCopyDiff'; path: string; staged: boolean }
-	| { type: 'commitChanges'; message: string }
-	| { type: 'createBranch'; message: string };
+	| { type: 'refresh' };
 
-// Messages from extension to webview
+/** Repo-scoped messages sent from webview to extension. */
+type RepoWebviewMessage =
+	| { type: 'openChange'; repoId?: string; url: string }
+	| { type: 'openCommit'; repoId?: string; sha: string }
+	| { type: 'openCommitDiff'; repoId?: string; sha: string }
+	| { type: 'branchContextMenu'; repoId?: string; branchName: string }
+	| { type: 'branchUntrack'; repoId?: string; branchName: string }
+	| { type: 'branchDelete'; repoId?: string; branchName: string }
+	| { type: 'branchCheckout'; repoId?: string; branchName: string }
+	| { type: 'branchFold'; repoId?: string; branchName: string }
+	| { type: 'branchSquash'; repoId?: string; branchName: string }
+	| { type: 'branchEdit'; repoId?: string; branchName: string }
+	| { type: 'branchRenamePrompt'; repoId?: string; branchName: string }
+	| { type: 'branchRename'; repoId?: string; branchName: string; newName: string }
+	| { type: 'branchRestack'; repoId?: string; branchName: string }
+	| { type: 'branchSubmit'; repoId?: string; branchName: string }
+	| { type: 'commitCopySha'; repoId?: string; sha: string }
+	| { type: 'commitFixup'; repoId?: string; sha: string }
+	| { type: 'commitSplit'; repoId?: string; sha: string; branchName: string }
+	| { type: 'branchMovePrompt'; repoId?: string; branchName: string }
+	| { type: 'branchMove'; repoId?: string; branchName: string; newParent: string }
+	| { type: 'upstackMovePrompt'; repoId?: string; branchName: string }
+	| { type: 'upstackMove'; repoId?: string; branchName: string; newParent: string }
+	| { type: 'getCommitFiles'; repoId?: string; sha: string }
+	| { type: 'openFileDiff'; repoId?: string; sha: string; path: string }
+	| { type: 'openCurrentFile'; repoId?: string; path: string }
+	| { type: 'getBranchFiles'; repoId?: string; branchName: string }
+	| { type: 'openBranchFileDiff'; repoId?: string; branchName: string; path: string }
+	| { type: 'stageFile'; repoId?: string; path: string }
+	| { type: 'unstageFile'; repoId?: string; path: string }
+	| { type: 'discardFile'; repoId?: string; path: string }
+	| { type: 'openWorkingCopyDiff'; repoId?: string; path: string; staged: boolean }
+	| { type: 'commitChanges'; repoId?: string; message: string }
+	| { type: 'createBranch'; repoId?: string; message: string };
+
+/** All messages from webview to extension. */
+export type WebviewMessage = GlobalWebviewMessage | RepoWebviewMessage;
+
+/** Messages from extension to webview. */
 export type ExtensionMessage =
 	| { type: 'state'; payload: DisplayState; force?: boolean }
-	| { type: 'commitFiles'; sha: string; files: CommitFileChange[] }
-	| { type: 'branchFiles'; branchName: string; files: CommitFileChange[] };
+	| { type: 'commitFiles'; repoId?: string; sha: string; files: CommitFileChange[] }
+	| { type: 'branchFiles'; repoId?: string; branchName: string; files: CommitFileChange[] };
 
 /**
  * State persisted by the webview across sessions.

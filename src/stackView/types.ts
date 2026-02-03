@@ -125,9 +125,19 @@ export type BranchViewModel = {
 	treeFragment: TreeFragmentData;
 };
 
-export type DisplayState = {
+/** Per-repository display state containing all branch and working-copy data. */
+export type RepositoryViewModel = {
+	/** Unique identifier — the repository root path (rootUri.fsPath). */
+	id: string;
+	/** Human-readable name (folder basename). */
+	name: string;
 	branches: BranchViewModel[];
 	uncommitted?: UncommittedState;
 	uncommittedTreeFragment?: TreeFragmentData;
 	error?: string;
+};
+
+/** Top-level display state sent to the webview. */
+export type DisplayState = {
+	repositories: RepositoryViewModel[];
 };
