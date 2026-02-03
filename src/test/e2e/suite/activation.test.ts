@@ -65,7 +65,7 @@ describe('Extension Activation', () => {
 			// Focusing the view exercises the provider registration path;
 			// if the provider was not registered this command would throw.
 			await assert.doesNotReject(
-				() => vscode.commands.executeCommand('gitSpice.branches.focus'),
+				() => Promise.resolve(vscode.commands.executeCommand('gitSpice.branches.focus')),
 				'Focusing the branches view should not throw',
 			);
 		});
