@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { buildDisplayState } from '../../stackView/state';
+import { buildRepoDisplayState, type RepoDisplayInput } from '../../stackView/state';
 import type { GitSpiceBranch } from '../../gitSpiceSchema';
 
 /**
@@ -9,10 +9,15 @@ function createBranch(name: string, options: Partial<GitSpiceBranch> = {}): GitS
 	return { name, ...options };
 }
 
+/** Creates a RepoDisplayInput for testing with sensible defaults. */
+function repoInput(branches: GitSpiceBranch[], error?: string, uncommitted?: RepoDisplayInput['uncommitted']): RepoDisplayInput {
+	return { repoId: 'test-repo', repoName: 'test', branches, error, uncommitted };
+}
+
 describe('state', () => {
-	describe('buildDisplayState', () => {
+	describe('buildRepoDisplayState', () => {
 		it('should return empty branches array for empty input', () => {
-			const result = buildDisplayState([], undefined, undefined);
+			const result = buildRepoDisplayState(repoInput([], undefined, undefined));
 
 			assert.deepStrictEqual(result.branches, []);
 			assert.strictEqual(result.error, undefined);
@@ -20,7 +25,7 @@ describe('state', () => {
 		});
 
 		it('should include error when provided', () => {
-			const result = buildDisplayState([], 'Test error', undefined);
+			const result = buildRepoDisplayState(repoInput([], 'Test error', undefined));
 
 			assert.strictEqual(result.error, 'Test error');
 		});
@@ -30,21 +35,21 @@ describe('state', () => {
 				staged: [{ path: 'file.ts', status: 'M' as const }],
 				unstaged: [],
 			};
-			const result = buildDisplayState([], undefined, uncommitted);
+			const result = buildRepoDisplayState(repoInput([], undefined, uncommitted));
 
 			assert.deepStrictEqual(result.uncommitted, uncommitted);
 		});
 
 		it('should omit uncommitted when both staged and unstaged are empty', () => {
 			const uncommitted = { staged: [], unstaged: [] };
-			const result = buildDisplayState([], undefined, uncommitted);
+			const result = buildRepoDisplayState(repoInput([], undefined, uncommitted));
 
 			assert.strictEqual(result.uncommitted, undefined);
 		});
 
 		it('should assign tree depth 0 to root branches', () => {
 			const branches: GitSpiceBranch[] = [createBranch('main')];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			assert.strictEqual(result.branches[0].tree.depth, 0);
 		});
@@ -56,7 +61,7 @@ describe('state', () => {
 				createBranch('feature-1', { down: { name: 'main' }, ups: [{ name: 'feature-2' }] }),
 				createBranch('feature-2', { down: { name: 'feature-1' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			// Branches should be ordered post-order: children before parents
 			// So: feature-2, feature-1, main
@@ -75,7 +80,7 @@ describe('state', () => {
 				createBranch('main', { ups: [{ name: 'feature-1' }] }),
 				createBranch('feature-1', { down: { name: 'main' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			// Post-order: feature-1 should appear before main
 			assert.strictEqual(result.branches[0].name, 'feature-1');
@@ -87,7 +92,7 @@ describe('state', () => {
 				createBranch('main', { ups: [{ name: 'feature-1' }] }),
 				createBranch('feature-1', { down: { name: 'main' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			const feature1 = result.branches.find((b) => b.name === 'feature-1');
 			const main = result.branches.find((b) => b.name === 'main');
@@ -102,7 +107,7 @@ describe('state', () => {
 				createBranch('feature-1', { down: { name: 'main' } }),
 				createBranch('feature-2', { down: { name: 'main' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			const feature1 = result.branches.find((b) => b.name === 'feature-1');
 			const feature2 = result.branches.find((b) => b.name === 'feature-2');
@@ -122,7 +127,7 @@ describe('state', () => {
 				createBranch('feature-1', { down: { name: 'main' } }),
 				createBranch('feature-2', { down: { name: 'main' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			// The last sibling should have isLastChild = true
 			const lastSibling = result.branches.find((b) => b.tree.siblingIndex === 1 && b.tree.depth === 1);
@@ -138,7 +143,7 @@ describe('state', () => {
 				createBranch('feature-1', { down: { name: 'main' } }),
 				createBranch('feature-2', { down: { name: 'main' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			// All branches should have lane assignments
 			for (const branch of result.branches) {
@@ -149,7 +154,7 @@ describe('state', () => {
 
 		it('should preserve current flag', () => {
 			const branches: GitSpiceBranch[] = [createBranch('feature', { current: true })];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			assert.strictEqual(result.branches[0].current, true);
 		});
@@ -159,7 +164,7 @@ describe('state', () => {
 				createBranch('main', { ups: [{ name: 'feature' }] }),
 				createBranch('feature', { down: { name: 'main', needsRestack: true } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			const feature = result.branches.find((b) => b.name === 'feature');
 			assert.strictEqual(feature?.restack, true);
@@ -170,7 +175,7 @@ describe('state', () => {
 				createBranch('main', { ups: [{ name: 'feature', needsRestack: true }] }),
 				createBranch('feature', { down: { name: 'main' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			const main = result.branches.find((b) => b.name === 'main');
 			assert.strictEqual(main?.restack, true);
@@ -182,7 +187,7 @@ describe('state', () => {
 					change: { id: '#123', url: 'https://example.com', status: 'open' },
 				}),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			assert.strictEqual(result.branches[0].change?.id, '#123');
 			assert.strictEqual(result.branches[0].change?.url, 'https://example.com');
@@ -195,7 +200,7 @@ describe('state', () => {
 					commits: [{ sha: 'abc123def456', subject: 'Test commit' }],
 				}),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			assert.strictEqual(result.branches[0].commits?.length, 1);
 			assert.strictEqual(result.branches[0].commits?.[0].sha, 'abc123def456');
@@ -210,7 +215,7 @@ describe('state', () => {
 				createBranch('b', { down: { name: 'main' } }),
 				createBranch('a1', { down: { name: 'a' } }),
 			];
-			const result = buildDisplayState(branches, undefined, undefined);
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
 
 			const a1 = result.branches.find((b) => b.name === 'a1');
 			// a1's ancestor (a) is not the last child of main, so ancestorIsLast should contain false
