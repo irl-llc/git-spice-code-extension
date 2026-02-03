@@ -52,6 +52,11 @@ import {
 	type DiffHandlerDeps,
 } from './handlers/diffHandlers';
 import {
+	handleGetBranchFiles,
+	handleOpenBranchFileDiff,
+	type BranchFileHandlerDeps,
+} from './handlers/branchFileHandlers';
+import {
 	handleStageFile,
 	handleUnstageFile,
 	handleDiscardFile,
@@ -251,6 +256,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		};
 	}
 
+	private getBranchFileHandlerDeps(): BranchFileHandlerDeps {
+		return {
+			workspaceFolder: this.workspaceFolder,
+			branches: this.branches,
+			postBranchFilesToWebview: (branchName, files) =>
+				this.view?.webview.postMessage({ type: 'branchFiles', branchName, files }),
+		};
+	}
+
 	// --- Public Handler Methods (Exposed for Message Router) ---
 
 	async handleBranchContextMenu(branchName: string): Promise<void> {
@@ -299,6 +313,14 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async handleGetCommitFiles(sha: string): Promise<void> {
 		await handleGetCommitFiles(sha, this.getCommitHandlerDeps());
+	}
+
+	async handleGetBranchFiles(branchName: string): Promise<void> {
+		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps());
+	}
+
+	async handleOpenBranchFileDiff(branchName: string, filePath: string): Promise<void> {
+		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps());
 	}
 
 	handleOpenExternal(url: string): void {

@@ -27,6 +27,11 @@ import {
 	type CommitRendererState,
 } from './webview/commitRenderer';
 import {
+	renderBranchSummary,
+	handleBranchFilesResponse,
+	type BranchSummaryState,
+} from './webview/branchSummaryRenderer';
+import {
 	renderUncommittedCard,
 	type WorkingCopyState,
 } from './webview/workingCopyRenderer';
@@ -44,6 +49,11 @@ class StackView {
 
 	private readonly commitState: CommitRendererState = {
 		expandedCommits: new Set(),
+		fileCache: new Map(),
+	};
+
+	private readonly branchSummaryState: BranchSummaryState = {
+		expandedBranches: new Set(),
 		fileCache: new Map(),
 	};
 
@@ -71,6 +81,8 @@ class StackView {
 				this.updateState(message.payload, message.force);
 			} else if (message.type === 'commitFiles') {
 				this.handleCommitFiles(message.sha, message.files);
+			} else if (message.type === 'branchFiles') {
+				this.handleBranchFiles(message.branchName, message.files);
 			}
 		});
 	}
@@ -169,6 +181,7 @@ class StackView {
 			branch,
 			this.getPostMessage(),
 			(b, card) => this.createCommitsContainer(b, card),
+			(name) => this.createSummaryContainer(name),
 		);
 	}
 
@@ -178,6 +191,7 @@ class StackView {
 			branch,
 			this.getPostMessage(),
 			(b, c) => this.createCommitsContainer(b, c),
+			(name) => this.createSummaryContainer(name),
 		);
 	}
 
@@ -189,6 +203,10 @@ class StackView {
 			animations,
 			this.getTreeColors(),
 		);
+	}
+
+	private createSummaryContainer(branchName: string): HTMLElement {
+		return renderBranchSummary(branchName, this.branchSummaryState, this.getPostMessage());
 	}
 
 	private updateUncommittedCard(state: DisplayState): void {
@@ -225,6 +243,10 @@ class StackView {
 
 	private handleCommitFiles(sha: string, files: CommitFileChange[]): void {
 		handleCommitFilesResponse(sha, files, this.stackList, this.commitState, this.getPostMessage());
+	}
+
+	private handleBranchFiles(branchName: string, files: CommitFileChange[]): void {
+		handleBranchFilesResponse(branchName, files, this.stackList, this.branchSummaryState, this.getPostMessage());
 	}
 }
 
