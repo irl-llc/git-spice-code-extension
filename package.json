@@ -151,7 +151,7 @@
       {
         "command": "git-spice.toggleCommentProgress",
         "title": "Show Comment Progress (Beta)",
-        "toggled": "git-spice.showCommentProgress"
+        "toggled": "config.git-spice.showCommentProgress"
       }
     ],
     "keybindings": [
