@@ -27,7 +27,7 @@ export function renderBranchSummary(
 	postMessage: PostMessage,
 ): HTMLElement {
 	const container = document.createElement('div');
-	container.className = 'branch-summary';
+	container.className = 'branch-summary expandable-section';
 	container.dataset.branchSummary = branchName;
 
 	const header = renderSummaryHeader(branchName, container, state, postMessage);

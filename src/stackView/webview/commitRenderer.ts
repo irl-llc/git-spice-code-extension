@@ -34,7 +34,7 @@ export function renderCommitsContainer(
 	treeColors: TreeColors,
 ): HTMLElement {
 	const container = document.createElement('div');
-	container.className = 'branch-commits';
+	container.className = 'branch-commits expandable-section';
 	container.dataset.commitsContainer = 'true';
 
 	const initialCount = Math.min(branch.commits!.length, COMMIT_RENDER_CHUNK_SIZE);

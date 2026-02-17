@@ -70,8 +70,9 @@ function appendExpandableContent(
 	const hasCommits = branch.commits && branch.commits.length > 0;
 	if (!hasCommits) return;
 
-	if (renderers.renderSummary) {
-		content.appendChild(renderers.renderSummary(branch.name, card));
+	const showSummary = renderers.renderSummary && branch.commits!.length > 1;
+	if (showSummary) {
+		content.appendChild(renderers.renderSummary!(branch.name, card));
 	}
 	content.appendChild(renderers.renderCommitsContainer(branch, card));
 }
@@ -236,12 +237,12 @@ function updateMeta(card: HTMLElement, branch: BranchViewModel): void {
 	}
 }
 
-/** Updates the branch summary section. */
+/** Updates the branch summary section. Only shown for multi-commit branches. */
 function updateSummary(card: HTMLElement, branch: BranchViewModel, renderSummary?: SummaryRenderer): void {
 	const existingSummary = card.querySelector('.branch-summary');
-	const hasCommits = branch.commits && branch.commits.length > 0;
+	const showSummary = branch.commits && branch.commits.length > 1;
 
-	if (hasCommits && renderSummary) {
+	if (showSummary && renderSummary) {
 		const newSummary = renderSummary(branch.name, card);
 		if (existingSummary) {
 			existingSummary.replaceWith(newSummary);

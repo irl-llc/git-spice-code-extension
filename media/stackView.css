@@ -110,25 +110,29 @@ button {
   margin-bottom: 0;
 }
 
-.branch-card .branch-commits {
+/* Shared collapse/expand for card sub-sections (commits, summary) */
+.branch-card .expandable-section {
+  display: flex;
+  flex-direction: column;
   margin-top: 0;
   border-top: 0 solid var(--vscode-treeIndentGuidesStroke);
   padding-top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
   max-height: 0;
-  overflow: hidden;
   opacity: 0;
+  overflow: hidden;
   transition: max-height 0.2s ease-out, opacity 0.2s ease-out, margin-top 0.2s ease-out, padding-top 0.2s ease-out, border-top-width 0.2s ease-out;
 }
 
-.branch-card.expanded .branch-commits {
+.branch-card.expanded .expandable-section {
   margin-top: 0.3rem;
   border-top-width: 1px;
   padding-top: 0.35rem;
   max-height: 18rem;
   opacity: 1;
+}
+
+.branch-card .branch-commits {
+  gap: 0.3rem;
 }
 
 .branch-card.is-current {
@@ -741,24 +745,6 @@ button {
 /* ==========================================================================
    Branch Summary (Summarized Changes) Styles
    ========================================================================== */
-
-.branch-summary {
-  margin-top: 0;
-  border-top: 0 solid var(--vscode-treeIndentGuidesStroke);
-  padding-top: 0;
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: max-height 0.2s ease-out, opacity 0.2s ease-out, margin-top 0.2s ease-out, padding-top 0.2s ease-out, border-top-width 0.2s ease-out;
-}
-
-.branch-card.expanded .branch-summary {
-  margin-top: 0.3rem;
-  border-top-width: 1px;
-  padding-top: 0.35rem;
-  max-height: 18rem;
-  opacity: 1;
-}
 
 .branch-summary-header {
   display: flex;
