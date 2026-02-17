@@ -39,6 +39,7 @@ type RepoWebviewMessage =
 	| { type: 'openWorkingCopyDiff'; repoId?: string; path: string; staged: boolean }
 	| { type: 'commitChanges'; repoId?: string; message: string }
 	| { type: 'createBranch'; repoId?: string; message: string }
+	| { type: 'branchTrack'; repoId?: string; branchName: string }
 	| { type: 'repoSync'; repoId?: string }
 	| { type: 'stackRestack'; repoId?: string }
 	| { type: 'stackSubmit'; repoId?: string };

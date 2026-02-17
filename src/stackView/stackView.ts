@@ -33,6 +33,7 @@ import {
 } from './webview/branchSummaryRenderer';
 import {
 	renderUncommittedCard,
+	renderTreelessUncommittedCard,
 	type WorkingCopyState,
 } from './webview/workingCopyRenderer';
 import {
@@ -41,6 +42,7 @@ import {
 	getErrorElement,
 	getEmptyElement,
 } from './webview/repoSectionRenderer';
+import { renderUntrackedCard } from './webview/untrackedCardRenderer';
 
 /** Per-repository view state. */
 interface RepoViewState {
@@ -170,6 +172,7 @@ class StackView {
 		this.updateRepoError(view.sectionElement, repo);
 		this.updateGraphWidth(branchList, repo.branches);
 		this.updateRepoBranches(branchList, oldBranches, repo, view);
+		this.updateUntrackedCard(branchList, repo, view);
 		this.updateRepoUncommitted(branchList, repo, view);
 	}
 
@@ -271,24 +274,71 @@ class StackView {
 		return renderBranchSummary(branchName, view.branchSummaryState, this.getPostMessage(view.currentState?.id));
 	}
 
+	// --- Untracked Branch ---
+
+	private updateUntrackedCard(branchList: HTMLElement, repo: RepositoryViewModel, view: RepoViewState): void {
+		branchList.querySelector('.untracked-item')?.remove();
+		if (!repo.untrackedBranch) return;
+
+		const card = renderUntrackedCard(repo.untrackedBranch, this.getPostMessage(view.currentState?.id));
+		branchList.prepend(card);
+	}
+
 	// --- Uncommitted Changes ---
 
 	private updateRepoUncommitted(branchList: HTMLElement, repo: RepositoryViewModel, view: RepoViewState): void {
 		branchList.querySelector('.uncommitted-item')?.remove();
-		if (!repo.uncommitted || !repo.uncommittedTreeFragment) return;
+		if (!repo.uncommitted) return;
 
 		const hasChanges = repo.uncommitted.staged.length > 0 || repo.uncommitted.unstaged.length > 0;
 		if (!hasChanges) return;
 
-		const newCard = renderUncommittedCard(
-			repo.uncommitted, repo.uncommittedTreeFragment, this.getTreeColors(), view.workingCopyState, this.getPostMessage(view.currentState?.id),
-		);
+		const insertionPoint = this.findUncommittedInsertionPoint(branchList, repo);
+		if (repo.untrackedBranch) {
+			this.insertUncommittedWithoutTree(branchList, repo.uncommitted, view, insertionPoint);
+		} else if (repo.uncommittedTreeFragment) {
+			this.insertUncommittedWithTree(branchList, repo, view, insertionPoint);
+		}
+	}
 
-		const insertionPoint = this.findCurrentBranchElement(branchList, repo.branches);
-		if (insertionPoint) {
-			branchList.insertBefore(newCard, insertionPoint);
+	/** Finds where to insert the uncommitted card: before current branch or before untracked card. */
+	private findUncommittedInsertionPoint(branchList: HTMLElement, repo: RepositoryViewModel): HTMLElement | null {
+		if (repo.untrackedBranch) {
+			return branchList.querySelector('.untracked-item');
+		}
+		return this.findCurrentBranchElement(branchList, repo.branches);
+	}
+
+	/** Inserts uncommitted card with tree SVG (normal tracked branch case). */
+	private insertUncommittedWithTree(
+		branchList: HTMLElement,
+		repo: RepositoryViewModel,
+		view: RepoViewState,
+		insertionPoint: HTMLElement | null,
+	): void {
+		const newCard = renderUncommittedCard(
+			repo.uncommitted!, repo.uncommittedTreeFragment!, this.getTreeColors(), view.workingCopyState, this.getPostMessage(view.currentState?.id),
+		);
+		this.insertBeforeOrAppend(branchList, newCard, insertionPoint);
+	}
+
+	/** Inserts uncommitted card without tree SVG (untracked branch case). */
+	private insertUncommittedWithoutTree(
+		branchList: HTMLElement,
+		uncommitted: NonNullable<RepositoryViewModel['uncommitted']>,
+		view: RepoViewState,
+		insertionPoint: HTMLElement | null,
+	): void {
+		const card = renderTreelessUncommittedCard(uncommitted, view.workingCopyState, this.getPostMessage(view.currentState?.id));
+		this.insertBeforeOrAppend(branchList, card, insertionPoint);
+	}
+
+	/** Inserts an element before the reference, or appends if no reference. */
+	private insertBeforeOrAppend(parent: HTMLElement, node: HTMLElement, reference: HTMLElement | null): void {
+		if (reference) {
+			parent.insertBefore(node, reference);
 		} else {
-			branchList.appendChild(newCard);
+			parent.appendChild(node);
 		}
 	}
 

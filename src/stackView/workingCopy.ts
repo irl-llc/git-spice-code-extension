@@ -44,6 +44,19 @@ export function parseGitStatusOutput(stdout: string): UncommittedState {
 	return { staged, unstaged };
 }
 
+/** Fetches the name of the currently checked-out git branch. */
+export async function fetchCurrentBranchName(cwd: string | undefined): Promise<string | undefined> {
+	if (!cwd) return undefined;
+	try {
+		const { stdout } = await execGit(cwd, ['branch', '--show-current']);
+		const name = stdout.trim();
+		return name || undefined;
+	} catch (err) {
+		console.error('Failed to fetch current branch name:', err);
+		return undefined;
+	}
+}
+
 /**
  * Fetches the current working copy changes from git.
  * Returns empty state if cwd is not provided.

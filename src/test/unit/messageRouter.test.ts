@@ -29,6 +29,7 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 		handleOpenCommit: (_repoId, sha) => { calls.push(`handleOpenCommit:${sha}`); },
 		handleOpenCommitDiff: async (_repoId, sha) => { calls.push(`handleOpenCommitDiff:${sha}`); },
 		handleBranchContextMenu: async (_repoId, branchName) => { calls.push(`handleBranchContextMenu:${branchName}`); },
+		handleBranchTrack: async (_repoId, branchName) => { calls.push(`handleBranchTrack:${branchName}`); },
 		handleBranchCommandInternal: async (_repoId, commandName, branchName) => {
 			calls.push(`handleBranchCommandInternal:${commandName}:${branchName}`);
 		},
@@ -285,6 +286,13 @@ describe('messageRouter', () => {
 		});
 
 		describe('branch command messages', () => {
+			it('should route branchTrack message to dedicated handler', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'branchTrack', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleBranchTrack:feature-1']);
+			});
+
 			it('should route branchUntrack message', () => {
 				const ctx = createMockContext();
 				const result = routeMessage({ type: 'branchUntrack', branchName: 'feature-1' }, ctx);

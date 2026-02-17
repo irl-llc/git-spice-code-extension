@@ -18,6 +18,7 @@ import { FileWatcherManager } from './fileWatcher';
 
 import {
 	handleBranchContextMenu,
+	handleBranchTrack,
 	handleBranchDelete,
 	handleBranchRenamePrompt,
 	handleBranchRename,
@@ -176,6 +177,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 				branches: state.branches,
 				error: state.error,
 				uncommitted: state.uncommitted,
+				untrackedBranch: state.untrackedBranch,
 			};
 			repositories.push(buildRepoDisplayState(input));
 		}
@@ -267,6 +269,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void> {
 		await handleBranchContextMenu(branchName, this.getBranchHandlerDeps(repoId));
+	}
+
+	async handleBranchTrack(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleBranchTrack(branchName, this.getBranchHandlerDeps(repoId));
 	}
 
 	public async handleBranchDelete(repoId: string | undefined, branchName: string): Promise<void> {
