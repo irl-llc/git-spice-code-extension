@@ -38,19 +38,28 @@ interface GitExtensionApi {
 
 /**
  * Creates a RepoDiscovery instance backed by VS Code's Git extension.
- * Returns undefined if the Git extension is unavailable.
+ * Activates the git extension if needed. Returns undefined if unavailable.
  */
-export function createRepoDiscovery(): RepoDiscovery | undefined {
-	const api = getGitExtensionApi();
+export async function createRepoDiscovery(): Promise<RepoDiscovery | undefined> {
+	const api = await getGitExtensionApi();
 	if (!api) return undefined;
 	return new GitExtensionDiscovery(api);
 }
 
-/** Extracts the Git extension API (v1) from VS Code. */
-function getGitExtensionApi(): GitExtensionApi | undefined {
-	const extension = vscode.extensions.getExtension('vscode.git')?.exports;
+/** Activates the vscode.git extension and extracts its API (v1). */
+async function getGitExtensionApi(): Promise<GitExtensionApi | undefined> {
+	const extension = vscode.extensions.getExtension('vscode.git');
 	if (!extension) return undefined;
-	return extension.getAPI(1) as GitExtensionApi | undefined;
+
+	try {
+		if (!extension.isActive) await extension.activate();
+		const exports = extension.exports;
+		if (!exports) return undefined;
+		return exports.getAPI(1) as GitExtensionApi | undefined;
+	} catch (err) {
+		console.error('Failed to activate git extension:', err);
+		return undefined;
+	}
 }
 
 /** Maps a Git extension repository to a DiscoveredRepo. */

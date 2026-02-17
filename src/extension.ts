@@ -177,21 +177,26 @@ function registerStackCommands(context: vscode.ExtensionContext, provider: Stack
 	);
 }
 
-/** Gets the first Git repository from the Git extension API. */
-function getGitRepository(): GitRepo | undefined {
-	const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
-	if (!gitExtension) {
-		void vscode.window.showErrorMessage('Git extension not found');
+/** Gets the Git extension API and first repository. */
+async function getGitRepository(): Promise<GitRepo | undefined> {
+	try {
+		const ext = vscode.extensions.getExtension('vscode.git');
+		if (!ext) {
+			void vscode.window.showErrorMessage('Git extension not found');
+			return undefined;
+		}
+		if (!ext.isActive) await ext.activate();
+		const git = ext.exports?.getAPI(1);
+		if (!git || git.repositories.length === 0) {
+			void vscode.window.showErrorMessage('No Git repository found');
+			return undefined;
+		}
+		return git.repositories[0] as GitRepo;
+	} catch (err) {
+		console.error('Failed to access Git extension:', err);
+		void vscode.window.showErrorMessage('Git extension is not available');
 		return undefined;
 	}
-
-	const git = gitExtension.getAPI(1);
-	if (!git || git.repositories.length === 0) {
-		void vscode.window.showErrorMessage('No Git repository found');
-		return undefined;
-	}
-
-	return git.repositories[0];
 }
 
 /** Git repository interface for branch creation. */
@@ -215,7 +220,7 @@ function refreshAfterBranchCreate(repository: GitRepo, provider: StackViewProvid
 
 /** Executes branch creation from the commit message input box. */
 async function executeBranchCreateFromCommitMessage(provider: StackViewProvider): Promise<void> {
-	const repository = getGitRepository();
+	const repository = await getGitRepository();
 	if (!repository) return;
 
 	const commitMessage = repository.inputBox.value;
@@ -259,6 +264,7 @@ function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: 
 		}),
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
+				updateCommentProgressContext();
 				void provider.refresh();
 			}
 		}),
@@ -277,10 +283,10 @@ function registerCoreProvider(context: vscode.ExtensionContext, provider: StackV
 	);
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	updateCommentProgressContext();
 
-	const discovery = createRepoDiscovery();
+	const discovery = await createRepoDiscovery();
 	if (discovery) context.subscriptions.push(discovery);
 	const fallbackFolder = vscode.workspace.workspaceFolders?.[0];
 	const provider = new StackViewProvider(discovery, context.extensionUri, fallbackFolder);
