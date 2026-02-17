@@ -75,6 +75,22 @@ export async function execGitSpice(folder: FolderUri): Promise<BranchLoadResult>
 	}
 }
 
+export async function execBranchTrack(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+	baseBranch: string,
+): Promise<BranchCommandResult> {
+	const context = 'Branch track';
+	const validated = validateInputs([
+		[branchName, 'Branch name'],
+		[baseBranch, 'Base branch'],
+	], context);
+	if ('error' in validated) {
+		return { error: formatError(context, validated.error) };
+	}
+	return runGitSpiceCommand(folder, ['branch', 'track', '--base', baseBranch.trim(), branchName.trim()], context);
+}
+
 export async function execBranchUntrack(
 	folder: vscode.WorkspaceFolder,
 	branchName: string,

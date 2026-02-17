@@ -135,6 +135,8 @@ export type RepositoryViewModel = {
 	uncommitted?: UncommittedState;
 	uncommittedTreeFragment?: TreeFragmentData;
 	error?: string;
+	/** Name of the current branch when it is not tracked by git-spice. */
+	untrackedBranch?: string;
 };
 
 /** Top-level display state sent to the webview. */
