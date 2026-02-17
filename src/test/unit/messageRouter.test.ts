@@ -65,6 +65,9 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 		handleCommitSplit: async (_repoId, sha, branchName) => {
 			calls.push(`handleCommitSplit:${sha}:${branchName}`);
 		},
+		handleRepoSync: async (_repoId) => { calls.push('handleRepoSync'); },
+		handleStackRestack: async (_repoId) => { calls.push('handleStackRestack'); },
+		handleStackSubmit: async (_repoId) => { calls.push('handleStackSubmit'); },
 		getExecFunctions: () => mockExecFunctions,
 	};
 }
@@ -329,6 +332,40 @@ describe('messageRouter', () => {
 				const result = routeMessage({ type: 'branchSubmit', branchName: 'feature-1' }, ctx);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleBranchCommandInternal:submit:feature-1']);
+			});
+		});
+
+		describe('repo toolbar messages', () => {
+			it('should route repoSync message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'repoSync' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleRepoSync']);
+			});
+
+			it('should route stackRestack message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'stackRestack' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleStackRestack']);
+			});
+
+			it('should route stackSubmit message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'stackSubmit' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleStackSubmit']);
+			});
+
+			it('should pass repoId to repo toolbar handlers', () => {
+				const ctx = createMockContext();
+				const repoIdCapture: (string | undefined)[] = [];
+				ctx.handleRepoSync = async (repoId) => {
+					repoIdCapture.push(repoId);
+					ctx.calls.push('handleRepoSync');
+				};
+				routeMessage({ type: 'repoSync', repoId: '/path/to/repo' }, ctx);
+				assert.deepStrictEqual(repoIdCapture, ['/path/to/repo']);
 			});
 		});
 

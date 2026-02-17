@@ -52,13 +52,13 @@ interface RepoViewState {
 }
 
 /** Creates a fresh per-repo view state with a new section element. */
-function createRepoViewState(repoId: string, repoName: string): RepoViewState {
+function createRepoViewState(repoId: string, repoName: string, postMessage: PostMessage): RepoViewState {
 	return {
 		currentState: null,
 		commitState: { expandedCommits: new Set(), fileCache: new Map() },
 		branchSummaryState: { expandedBranches: new Set(), fileCache: new Map() },
 		workingCopyState: { expandedStagedSection: true, expandedUnstagedSection: true, commitMessageValue: '' },
-		sectionElement: renderRepoSection(repoId, repoName),
+		sectionElement: renderRepoSection(repoId, repoName, postMessage),
 	};
 }
 
@@ -140,7 +140,7 @@ class StackView {
 
 	private ensureRepoSection(repo: RepositoryViewModel): void {
 		if (this.repoViews.has(repo.id)) return;
-		const view = createRepoViewState(repo.id, repo.name);
+		const view = createRepoViewState(repo.id, repo.name, this.getPostMessage());
 		this.repoViews.set(repo.id, view);
 		this.repoContainer.appendChild(view.sectionElement);
 	}
