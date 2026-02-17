@@ -333,5 +333,14 @@ class StackView {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-	new StackView();
+	try {
+		new StackView();
+	} catch (err) {
+		const errorEl = document.getElementById('error');
+		if (errorEl) {
+			errorEl.textContent = `StackView init error: ${err instanceof Error ? err.message : String(err)}`;
+			errorEl.classList.remove('hidden');
+		}
+		console.error('StackView initialization error:', err);
+	}
 });
