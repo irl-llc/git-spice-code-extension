@@ -25,6 +25,8 @@ export type RepoDisplayInput = {
 	branches: GitSpiceBranch[];
 	error?: string;
 	uncommitted?: UncommittedState;
+	/** Name of the current branch when not tracked by git-spice. */
+	untrackedBranch?: string;
 };
 
 /**
@@ -43,6 +45,7 @@ export function buildRepoDisplayState(input: RepoDisplayInput): RepositoryViewMo
 		uncommitted,
 		uncommittedTreeFragment: uncommitted ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
 		error: input.error,
+		untrackedBranch: input.untrackedBranch,
 	};
 }
 

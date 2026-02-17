@@ -26,6 +26,7 @@ export interface MessageHandlerContext {
 	handleOpenCommitDiff(repoId: string | undefined, sha: string): Promise<void>;
 	handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void>;
 	handleBranchCommandInternal(repoId: string | undefined, commandName: string, branchName: string, execFunction: ExecFunction): Promise<void>;
+	handleBranchTrack(repoId: string | undefined, branchName: string): Promise<void>;
 	handleBranchDelete(repoId: string | undefined, branchName: string): Promise<void>;
 	handleBranchRenamePrompt(repoId: string | undefined, branchName: string): Promise<void>;
 	handleBranchRename(repoId: string | undefined, branchName: string, newName: string): Promise<void>;
@@ -118,9 +119,16 @@ function routeNavigationMessage(message: WebviewMessage, ctx: MessageHandlerCont
 	}
 }
 
-/** Routes branch management messages (context menu, rename, move, delete). */
+/** Routes branch management messages (context menu, track, rename, move, delete). */
 function routeBranchManagementMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
-	return routeBranchContextMessage(message, ctx) || routeBranchMoveMessage(message, ctx);
+	return routeBranchTrackMessage(message, ctx) || routeBranchContextMessage(message, ctx) || routeBranchMoveMessage(message, ctx);
+}
+
+/** Routes branch track message to its dedicated prompt handler. */
+function routeBranchTrackMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
+	if (message.type !== 'branchTrack') return false;
+	void ctx.handleBranchTrack(message.repoId, message.branchName);
+	return true;
 }
 
 /** Routes branch context/rename/delete messages. */
