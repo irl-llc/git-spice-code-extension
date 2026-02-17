@@ -47,6 +47,9 @@ export interface MessageHandlerContext {
 	handleCommitCopySha(repoId: string | undefined, sha: string): Promise<void>;
 	handleCommitFixup(repoId: string | undefined, sha: string): Promise<void>;
 	handleCommitSplit(repoId: string | undefined, sha: string, branchName: string): Promise<void>;
+	handleRepoSync(repoId: string | undefined): Promise<void>;
+	handleStackRestack(repoId: string | undefined): Promise<void>;
+	handleStackSubmit(repoId: string | undefined): Promise<void>;
 	getExecFunctions(): ExecFunctionMap;
 }
 
@@ -57,6 +60,7 @@ export interface MessageHandlerContext {
 export function routeMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	return (
 		routeStateMessage(message, ctx) ||
+		routeRepoToolbarMessage(message, ctx) ||
 		routeNavigationMessage(message, ctx) ||
 		routeBranchManagementMessage(message, ctx) ||
 		routeCommitMessage(message, ctx) ||
@@ -74,6 +78,23 @@ function routeStateMessage(message: WebviewMessage, ctx: MessageHandlerContext):
 			return true;
 		case 'refresh':
 			void ctx.refresh(true);
+			return true;
+		default:
+			return false;
+	}
+}
+
+/** Routes per-repo toolbar messages (sync, restack, submit). */
+function routeRepoToolbarMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
+	switch (message.type) {
+		case 'repoSync':
+			void ctx.handleRepoSync(message.repoId);
+			return true;
+		case 'stackRestack':
+			void ctx.handleStackRestack(message.repoId);
+			return true;
+		case 'stackSubmit':
+			void ctx.handleStackSubmit(message.repoId);
 			return true;
 		default:
 			return false;
