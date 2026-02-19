@@ -179,19 +179,24 @@ function registerStackCommands(context: vscode.ExtensionContext, provider: Stack
 
 /** Gets the Git extension API and first repository. */
 function getGitRepository(): { repository: GitRepo } | undefined {
-	const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
-	if (!gitExtension) {
-		void vscode.window.showErrorMessage('Git extension not found');
+	try {
+		const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
+		if (!gitExtension) {
+			void vscode.window.showErrorMessage('Git extension not found');
+			return undefined;
+		}
+
+		const git = gitExtension.getAPI(1);
+		if (!git || git.repositories.length === 0) {
+			void vscode.window.showErrorMessage('No Git repository found');
+			return undefined;
+		}
+
+		return { repository: git.repositories[0] };
+	} catch {
+		void vscode.window.showErrorMessage('Git extension is not available');
 		return undefined;
 	}
-
-	const git = gitExtension.getAPI(1);
-	if (!git || git.repositories.length === 0) {
-		void vscode.window.showErrorMessage('No Git repository found');
-		return undefined;
-	}
-
-	return { repository: git.repositories[0] };
 }
 
 /** Git repository interface for branch creation. */
@@ -260,6 +265,7 @@ function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: 
 		}),
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
+				updateCommentProgressContext();
 				void provider.refresh();
 			}
 		}),
@@ -278,10 +284,10 @@ function registerCoreProvider(context: vscode.ExtensionContext, provider: StackV
 	);
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	updateCommentProgressContext();
 
-	const discovery = createRepoDiscovery();
+	const discovery = await createRepoDiscovery();
 	if (discovery) context.subscriptions.push(discovery);
 	const fallbackFolder = vscode.workspace.workspaceFolders?.[0];
 	const provider = new StackViewProvider(discovery, context.extensionUri, fallbackFolder);
