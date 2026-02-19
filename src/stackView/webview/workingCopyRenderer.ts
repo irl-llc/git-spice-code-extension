@@ -40,6 +40,20 @@ export function renderUncommittedCard(
 	return wrapper;
 }
 
+/** Renders the uncommitted changes card without tree SVG (for untracked branch mode). */
+export function renderTreelessUncommittedCard(
+	uncommitted: UncommittedState,
+	state: WorkingCopyState,
+	postMessage: PostMessage,
+): HTMLElement {
+	const wrapper = document.createElement('li');
+	wrapper.className = 'stack-item uncommitted-item treeless';
+	wrapper.dataset.branch = '__uncommitted__';
+
+	wrapper.appendChild(createUncommittedCard(uncommitted, state, postMessage));
+	return wrapper;
+}
+
 /** Creates the uncommitted card element. */
 function createUncommittedCard(
 	uncommitted: UncommittedState,
