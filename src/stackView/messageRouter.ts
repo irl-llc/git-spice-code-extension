@@ -18,8 +18,8 @@ export type ExecFunctionMap = Record<string, ExecFunction>;
  * This interface decouples the router from StackViewProvider.
  */
 export interface MessageHandlerContext {
-	pushState(): void;
-	refresh(): Promise<void>;
+	pushState(force?: boolean): void;
+	refresh(force?: boolean): Promise<void>;
 	handleOpenExternal(url: string): void;
 	handleOpenCommit(sha: string): void;
 	handleOpenCommitDiff(sha: string): Promise<void>;
@@ -33,6 +33,8 @@ export interface MessageHandlerContext {
 	handleUpstackMovePrompt(branchName: string): Promise<void>;
 	handleUpstackMove(branchName: string, newParent: string): Promise<void>;
 	handleGetCommitFiles(sha: string): Promise<void>;
+	handleGetBranchFiles(branchName: string): Promise<void>;
+	handleOpenBranchFileDiff(branchName: string, path: string): Promise<void>;
 	handleOpenFileDiff(sha: string, path: string): Promise<void>;
 	handleOpenCurrentFile(path: string): Promise<void>;
 	handleStageFile(path: string): Promise<void>;
@@ -70,7 +72,7 @@ function routeStateMessage(message: WebviewMessage, ctx: MessageHandlerContext):
 			ctx.pushState();
 			return true;
 		case 'refresh':
-			void ctx.refresh();
+			void ctx.refresh(true);
 			return true;
 		default:
 			return false;
@@ -159,7 +161,7 @@ function routeCommitMessage(message: WebviewMessage, ctx: MessageHandlerContext)
 	}
 }
 
-/** Routes file operation messages (diff, open). */
+/** Routes file operation messages (diff, open, branch files). */
 function routeFileMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'openFileDiff':
@@ -167,6 +169,12 @@ function routeFileMessage(message: WebviewMessage, ctx: MessageHandlerContext): 
 			return true;
 		case 'openCurrentFile':
 			void ctx.handleOpenCurrentFile(message.path);
+			return true;
+		case 'getBranchFiles':
+			void ctx.handleGetBranchFiles(message.branchName);
+			return true;
+		case 'openBranchFileDiff':
+			void ctx.handleOpenBranchFileDiff(message.branchName, message.path);
 			return true;
 		default:
 			return false;
