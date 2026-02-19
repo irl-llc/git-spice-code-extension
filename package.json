@@ -181,21 +181,6 @@
           "group": "navigation@1"
         },
         {
-          "command": "git-spice.stackRestack",
-          "when": "view == gitSpice.branches",
-          "group": "navigation@2"
-        },
-        {
-          "command": "git-spice.syncRepo",
-          "when": "view == gitSpice.branches",
-          "group": "navigation@3"
-        },
-        {
-          "command": "git-spice.stackSubmit",
-          "when": "view == gitSpice.branches",
-          "group": "navigation@4"
-        },
-        {
           "command": "git-spice.toggleCommentProgress",
           "when": "view == gitSpice.branches",
           "group": "2_options@1"
