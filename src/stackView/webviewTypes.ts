@@ -41,11 +41,17 @@ export type ExtensionMessage =
 	| { type: 'state'; payload: DisplayState }
 	| { type: 'commitFiles'; sha: string; files: CommitFileChange[] };
 
+/**
+ * State persisted by the webview across sessions.
+ * Currently unused but typed for future use.
+ */
+export type WebviewState = Record<string, unknown>;
+
 // VSCode webview API type declaration
 declare global {
 	const acquireVsCodeApi: () => {
 		postMessage(message: WebviewMessage): void;
-		setState(state: any): void;
-		getState(): any;
+		setState(state: WebviewState): void;
+		getState(): WebviewState | undefined;
 	};
 }
