@@ -38,7 +38,10 @@ type RepoWebviewMessage =
 	| { type: 'discardFile'; repoId?: string; path: string }
 	| { type: 'openWorkingCopyDiff'; repoId?: string; path: string; staged: boolean }
 	| { type: 'commitChanges'; repoId?: string; message: string }
-	| { type: 'createBranch'; repoId?: string; message: string };
+	| { type: 'createBranch'; repoId?: string; message: string }
+	| { type: 'repoSync'; repoId?: string }
+	| { type: 'stackRestack'; repoId?: string }
+	| { type: 'stackSubmit'; repoId?: string };
 
 /** All messages from webview to extension. */
 export type WebviewMessage = GlobalWebviewMessage | RepoWebviewMessage;

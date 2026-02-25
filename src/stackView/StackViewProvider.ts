@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 
+import { execStackRestack, execStackSubmit } from '../utils/gitSpice';
 import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type { DiscoveredRepo, RepoDiscovery } from '../repoDiscovery';
 import { buildRepoDisplayState, type RepoDisplayInput } from './state';
@@ -362,6 +363,29 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async handleCreateBranch(repoId: string | undefined, message: string): Promise<void> {
 		await handleCreateBranch(message, this.getWorkingCopyHandlerDeps(repoId));
+	}
+
+	// --- Repo Toolbar Handlers ---
+
+	/** Syncs a specific repo with its remote. */
+	async handleRepoSync(repoId: string | undefined): Promise<void> {
+		const folder = this.resolveWorkspaceFolder(repoId);
+		if (!folder) return;
+		await handleSync({ folder, refresh: () => this.refresh() });
+	}
+
+	/** Restacks all branches in the specified repo's stack. */
+	async handleStackRestack(repoId: string | undefined): Promise<void> {
+		const folder = this.resolveWorkspaceFolder(repoId);
+		if (!folder) return;
+		await runWithProgress('Restacking stack...', () => execStackRestack(folder), 'Stack restacked successfully', () => this.refresh());
+	}
+
+	/** Submits the specified repo's stack. */
+	async handleStackSubmit(repoId: string | undefined): Promise<void> {
+		const folder = this.resolveWorkspaceFolder(repoId);
+		if (!folder) return;
+		await runWithProgress('Submitting stack...', () => execStackSubmit(folder), 'Stack submitted successfully', () => this.refresh());
 	}
 
 	// --- Branch Command Infrastructure ---
