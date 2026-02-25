@@ -1,3 +1,5 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import type { FileChangeStatus, UncommittedState, WorkingCopyChange } from './types';
 import { execGit } from '../utils/git';
 
@@ -70,9 +72,34 @@ export async function unstageFile(cwd: string, filePath: string): Promise<void> 
 	await execGit(cwd, ['restore', '--staged', '--', filePath]);
 }
 
-/** Discards changes to a file using git restore. */
+/**
+ * Discards changes to a file.
+ * For tracked files: uses git restore.
+ * For untracked files: deletes the file directly.
+ */
 export async function discardFile(cwd: string, filePath: string): Promise<void> {
-	await execGit(cwd, ['restore', '--', filePath]);
+	const isUntracked = await checkIfUntracked(cwd, filePath);
+
+	if (isUntracked) {
+		await deleteUntracked(cwd, filePath);
+	} else {
+		await execGit(cwd, ['restore', '--', filePath]);
+	}
+}
+
+/**
+ * Checks if a file is untracked (not in git index) by using `git ls-files --others`.
+ * Unlike plain `git ls-files`, this correctly returns false for files staged for deletion.
+ */
+async function checkIfUntracked(cwd: string, filePath: string): Promise<boolean> {
+	const { stdout } = await execGit(cwd, ['ls-files', '--others', '--', filePath]);
+	return stdout.trim() !== '';
+}
+
+/** Deletes an untracked file. */
+async function deleteUntracked(cwd: string, filePath: string): Promise<void> {
+	const absolutePath = path.join(cwd, filePath);
+	await fs.unlink(absolutePath);
 }
 
 /** Stages all changes via git add -A. */
