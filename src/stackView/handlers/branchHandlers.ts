@@ -7,8 +7,8 @@ import * as vscode from 'vscode';
 
 import type { GitSpiceBranch } from '../../gitSpiceSchema';
 import type { BranchContextMenuItem } from '../types';
-import type { BranchCommandResult } from '../../utils/gitSpice';
 import {
+	type BranchCommandResult,
 	execBranchUntrack,
 	execBranchDelete,
 	execBranchCheckout,
@@ -54,67 +54,73 @@ export async function handleBranchContextMenu(branchName: string, deps: BranchHa
 	dispatchContextMenuAction(selected.action, branchName, deps);
 }
 
-/** Builds the context menu items based on branch state. */
-function buildContextMenuItems(branch: GitSpiceBranch): BranchContextMenuItem[] {
-	const isCurrent = branch.current === true;
-	const needsRestack =
-		branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
-	const hasPR = Boolean(branch.change);
-
-	const items: BranchContextMenuItem[] = [
+/** Returns base context menu items available for all branches. */
+function getBaseMenuItems(): BranchContextMenuItem[] {
+	return [
 		{ label: '$(git-branch) Checkout', action: 'checkout' },
 		{ label: '$(tag) Rename...', action: 'rename' },
 		{ label: '$(move) Move onto...', action: 'move' },
 		{ label: '$(type-hierarchy) Move with children onto...', action: 'upstackMove' },
 	];
-
-	if (isCurrent) {
-		items.push({ label: '$(edit) Edit', action: 'edit' });
-	}
-
-	if (needsRestack) {
-		items.push({ label: '$(refresh) Restack', action: 'restack', description: 'Needs restack' });
-	}
-
-	items.push({
-		label: hasPR ? '$(cloud-upload) Submit' : '$(git-pull-request) Submit (create PR)',
-		action: 'submit',
-	});
-
-	items.push({ label: '$(fold) Fold', action: 'fold' });
-	items.push({ label: '$(fold-down) Squash', action: 'squash' });
-	items.push({ label: '$(eye-closed) Untrack', action: 'untrack' });
-	items.push({ label: '$(trash) Delete', action: 'delete' });
-
-	return items;
 }
 
-/** Dispatches a context menu action to the appropriate handler. */
-function dispatchContextMenuAction(action: string, branchName: string, deps: BranchHandlerDeps): void {
-	const execActions: Record<string, typeof execBranchCheckout> = {
-		checkout: execBranchCheckout,
-		edit: execBranchEdit,
-		restack: execBranchRestack,
-		submit: execBranchSubmit,
-		fold: execBranchFold,
-		squash: execBranchSquash,
-		untrack: execBranchUntrack,
-	};
+/** Returns menu items that appear at the end for all branches. */
+function getTrailingMenuItems(hasPR: boolean): BranchContextMenuItem[] {
+	const submitLabel = hasPR ? '$(cloud-upload) Submit' : '$(git-pull-request) Submit (create PR)';
+	return [
+		{ label: submitLabel, action: 'submit' },
+		{ label: '$(fold) Fold', action: 'fold' },
+		{ label: '$(fold-down) Squash', action: 'squash' },
+		{ label: '$(eye-closed) Untrack', action: 'untrack' },
+		{ label: '$(trash) Delete', action: 'delete' },
+	];
+}
 
-	const execFn = execActions[action];
-	if (execFn) {
-		void deps.handleBranchCommandInternal(action, branchName, execFn);
-		return;
-	}
+/** Checks if branch needs restacking. */
+function branchNeedsRestack(branch: GitSpiceBranch): boolean {
+	return branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
+}
 
-	const promptActions: Record<string, () => void> = {
+/** Builds the context menu items based on branch state. */
+function buildContextMenuItems(branch: GitSpiceBranch): BranchContextMenuItem[] {
+	const items = getBaseMenuItems();
+
+	if (branch.current === true) items.push({ label: '$(edit) Edit', action: 'edit' });
+	if (branchNeedsRestack(branch)) items.push({ label: '$(refresh) Restack', action: 'restack', description: 'Needs restack' });
+
+	return [...items, ...getTrailingMenuItems(Boolean(branch.change))];
+}
+
+/** Map of actions to their exec functions for simple branch commands. */
+const EXEC_ACTION_MAP: Record<string, typeof execBranchCheckout> = {
+	checkout: execBranchCheckout,
+	edit: execBranchEdit,
+	restack: execBranchRestack,
+	submit: execBranchSubmit,
+	fold: execBranchFold,
+	squash: execBranchSquash,
+	untrack: execBranchUntrack,
+};
+
+/** Dispatches actions that require prompts or confirmations. */
+function dispatchPromptAction(action: string, branchName: string, deps: BranchHandlerDeps): void {
+	const actions: Record<string, () => void> = {
 		rename: () => void handleBranchRenamePrompt(branchName, deps),
 		move: () => void handleBranchMovePrompt(branchName, deps),
 		upstackMove: () => void handleUpstackMovePrompt(branchName, deps),
 		delete: () => void handleBranchDelete(branchName, deps),
 	};
+	actions[action]?.();
+}
 
-	promptActions[action]?.();
+/** Dispatches a context menu action to the appropriate handler. */
+function dispatchContextMenuAction(action: string, branchName: string, deps: BranchHandlerDeps): void {
+	const execFn = EXEC_ACTION_MAP[action];
+	if (execFn) {
+		void deps.handleBranchCommandInternal(action, branchName, execFn);
+		return;
+	}
+	dispatchPromptAction(action, branchName, deps);
 }
 
 /** Handles branch deletion with confirmation dialog. */
@@ -138,6 +144,15 @@ export async function handleBranchDelete(branchName: string, deps: BranchHandler
 	);
 }
 
+/** Validates rename input against current branch name. */
+function createRenameValidator(currentName: string): (input: string) => string | null {
+	return (input: string) => {
+		if (!input || !input.trim()) return 'Branch name cannot be empty.';
+		if (input.trim() === currentName) return 'New name must be different from current name.';
+		return null;
+	};
+}
+
 /** Prompts user for new branch name and dispatches rename message. */
 export async function handleBranchRenamePrompt(branchName: string, deps: BranchHandlerDeps): Promise<void> {
 	const trimmedName = requireNonEmpty(branchName, 'branch name for rename');
@@ -147,13 +162,8 @@ export async function handleBranchRenamePrompt(branchName: string, deps: BranchH
 		const newName = await vscode.window.showInputBox({
 			prompt: `Enter new name for branch '${trimmedName}':`,
 			value: trimmedName,
-			validateInput: (input) => {
-				if (!input || !input.trim()) return 'Branch name cannot be empty.';
-				if (input.trim() === trimmedName) return 'New name must be different from current name.';
-				return null;
-			},
+			validateInput: createRenameValidator(trimmedName),
 		});
-
 		if (newName && newName.trim() && newName !== trimmedName) {
 			deps.postMessageToWebview({ type: 'branchRename', branchName: trimmedName, newName: newName.trim() });
 		}
