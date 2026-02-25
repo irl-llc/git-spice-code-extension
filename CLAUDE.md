@@ -260,16 +260,24 @@ For complete command reference: https://abhinav.github.io/git-spice/cli/referenc
 
 ### Testing
 
-1. **Unit Tests**:
-   - Write tests in `src/test/` directory
-   - Use Mocha as the test runner (VSCode standard)
-   - Test utilities and pure functions thoroughly
-   - Mock VSCode APIs using appropriate patterns
+1. **Unit Tests** (`npm run test:unit`):
+   - Located in `src/test/unit/`, mirroring source file structure
+   - Run with Mocha directly (no VSCode instance required)
+   - Test pure functions and utilities only — no `vscode` module imports
+   - To test code that uses `vscode` APIs, extract logic into pure functions with dependency injection (see `messageRouter.ts` and its `MessageHandlerContext` interface as an example)
 
-2. **Integration Tests**:
-   - Test extension activation and command registration
-   - Test git-spice CLI invocation with fixtures
-   - Validate data parsing and transformation
+2. **E2E Tests** (`npm run test:e2e`):
+   - Located in `src/test/e2e/suite/`, with helpers in `src/test/e2e/helpers/`
+   - Run inside a real VSCode instance via `@vscode/test-cli`
+   - Config: `.vscode-test.e2e.mjs` (60s timeout, BDD style)
+   - Can import `vscode` directly since they run in the extension host
+   - CI runs with `xvfb-run -a` for headless display on Linux
+
+3. **Keeping E2E Tests Current**:
+   - When adding new commands, add the command ID to `EXTENSION_COMMANDS` in `activation.test.ts`
+   - When changing the extension ID or activation events, update the `EXTENSION_ID` constant
+   - E2E tests verify the extension loads and registers commands — they are the safety net for integration regressions that unit tests cannot catch
+   - Helper utilities in `src/test/e2e/helpers/extensionHelper.ts` provide `activateExtension()`, `delay()`, `executeCommand()`, and `getCommandsWithPrefix()`
 
 ### File Organization
 
@@ -281,4 +289,60 @@ src/
 │   ├── StackViewProvider.ts
 │   ├── state.ts          # State transformation for display
 │   └── types.ts          # View-specific types
-├── utils/             
+├── utils/
+│   ├── gitSpice.ts       # git-spice CLI execution utilities
+│   ├── error.ts          # Error formatting utilities
+│   ├── validation.ts     # Input validation utilities
+│   └── diffUri.ts        # Git diff URI construction
+├── test/
+│   ├── unit/             # Pure function tests (no VSCode mocking)
+│   ├── integration/      # Tests requiring VSCode APIs
+│   └── e2e/              # End-to-end extension tests
+└── constants.ts          # Shared constants
+```
+
+## Code Quality Standards
+
+### File and Function Limits
+
+- **Files**: Maximum 400 lines per file. Split at ~300 lines proactively.
+- **Functions**: Maximum 20 lines per function. Extract helpers with descriptive names.
+- **Nesting**: Maximum 2 levels of conditional nesting. Use early returns to flatten.
+- **Parameters**: Maximum 4 parameters per function. Use options objects for more.
+
+### Naming Conventions for Extracted Code
+
+When decomposing functions:
+- Use semantic names describing the action (not generic like "helper", "process", "handle")
+- Prefix handlers with `handle`: `handleBranchRename`, `handleCommitFixup`
+- Prefix validators with `validate` or `require`: `requireNonEmpty`, `validateInputs`
+- Prefix builders with `build` or `create`: `buildDisplayState`, `createMockContext`
+- Prefix formatters with `format`: `formatError`, `formatSyncMessage`
+
+### Test Coverage Expectations
+
+- All new code should have corresponding unit tests
+- Pure utility functions: aim for 100% coverage
+- Handler functions: test happy path and error cases
+- Test file naming: `<module>.test.ts` in parallel directory structure
+
+### Commit Message Format
+
+Follow conventional commits:
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `refactor:` - Code restructuring without behavior change
+- `test:` - Adding or updating tests
+- `docs:` - Documentation only
+- `ci:` - CI/CD configuration
+- `chore:` - Maintenance tasks
+
+For refactoring PRs, include metrics:
+```
+refactor: decompose StackViewProvider handlers
+
+- Extract branch handlers to separate module
+- Extract commit handlers to separate module
+- Lines: 677 → 150 (main file)
+- Functions: all under 20 lines
+```
