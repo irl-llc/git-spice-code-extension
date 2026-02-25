@@ -52,6 +52,11 @@ import {
 	type DiffHandlerDeps,
 } from './handlers/diffHandlers';
 import {
+	handleGetBranchFiles,
+	handleOpenBranchFileDiff,
+	type BranchFileHandlerDeps,
+} from './handlers/branchFileHandlers';
+import {
 	handleStageFile,
 	handleUnstageFile,
 	handleDiscardFile,
@@ -61,7 +66,7 @@ import {
 } from './handlers/workingCopyHandlers';
 
 export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext {
-	private view!: vscode.WebviewView;
+	private view: vscode.WebviewView | undefined;
 	private branches: GitSpiceBranch[] = [];
 	private uncommitted: UncommittedState | undefined;
 	private lastError: string | undefined;
@@ -80,6 +85,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 		webviewView.webview.html = await renderWebviewHtml(webviewView.webview, this.extensionUri);
 		webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
+		webviewView.onDidDispose(() => {
+			this.view = undefined;
+		});
 
 		if (this.workspaceFolder) this.fileWatcher.watch(this.workspaceFolder);
 		void this.refresh();
@@ -106,9 +114,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		void this.refresh();
 	}
 
-	async refresh(): Promise<void> {
+	async refresh(force = false): Promise<void> {
 		if (!this.workspaceFolder) {
-			this.setEmptyState('Open a workspace folder to view git-spice stacks.');
+			this.setEmptyState('Open a workspace folder to view git-spice stacks.', force);
 			return;
 		}
 
@@ -119,14 +127,14 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 		this.processBranchResult(branchResult);
 		this.uncommitted = uncommittedResult;
-		this.pushState();
+		this.pushState(force);
 	}
 
-	private setEmptyState(error: string): void {
+	private setEmptyState(error: string, force = false): void {
 		this.branches = [];
 		this.uncommitted = undefined;
 		this.lastError = error;
-		this.pushState();
+		this.pushState(force);
 	}
 
 	private processBranchResult(result: { value: GitSpiceBranch[] } | { error: string }): void {
@@ -139,9 +147,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		}
 	}
 
-	pushState(): void {
+	pushState(force = false): void {
+		if (!this.view) return;
 		const state = buildDisplayState(this.branches, this.lastError, this.uncommitted);
-		void this.view.webview.postMessage({ type: 'state', payload: state });
+		void this.view.webview.postMessage({ type: 'state', payload: state, force });
 	}
 
 	async sync(): Promise<void> {
@@ -220,7 +229,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 				this.runBranchCommand(title, operation, successMessage),
 			handleBranchCommandInternal: (commandName, branchName, execFunction) =>
 				this.handleBranchCommandInternal(commandName, branchName, execFunction),
-			postMessageToWebview: (message) => this.view.webview.postMessage(message),
+			postMessageToWebview: (message) => this.view?.webview.postMessage(message),
 		};
 	}
 
@@ -231,7 +240,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 				this.runBranchCommand(title, operation, successMessage),
 			refresh: () => this.refresh(),
 			postCommitFilesToWebview: (sha, files) =>
-				this.view.webview.postMessage({ type: 'commitFiles', sha, files }),
+				this.view?.webview.postMessage({ type: 'commitFiles', sha, files }),
 		};
 	}
 
@@ -244,6 +253,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			workspaceFolder: this.workspaceFolder,
 			uncommitted: this.uncommitted,
 			refresh: () => this.refresh(),
+		};
+	}
+
+	private getBranchFileHandlerDeps(): BranchFileHandlerDeps {
+		return {
+			workspaceFolder: this.workspaceFolder,
+			branches: this.branches,
+			postBranchFilesToWebview: (branchName, files) =>
+				this.view?.webview.postMessage({ type: 'branchFiles', branchName, files }),
 		};
 	}
 
@@ -295,6 +313,14 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async handleGetCommitFiles(sha: string): Promise<void> {
 		await handleGetCommitFiles(sha, this.getCommitHandlerDeps());
+	}
+
+	async handleGetBranchFiles(branchName: string): Promise<void> {
+		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps());
+	}
+
+	async handleOpenBranchFileDiff(branchName: string, filePath: string): Promise<void> {
+		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps());
 	}
 
 	handleOpenExternal(url: string): void {

@@ -28,6 +28,9 @@ export type WebviewMessage =
 	| { type: 'getCommitFiles'; sha: string }
 	| { type: 'openFileDiff'; sha: string; path: string }
 	| { type: 'openCurrentFile'; path: string }
+	// Branch summary operations
+	| { type: 'getBranchFiles'; branchName: string }
+	| { type: 'openBranchFileDiff'; branchName: string; path: string }
 	// Working copy operations
 	| { type: 'stageFile'; path: string }
 	| { type: 'unstageFile'; path: string }
@@ -38,8 +41,9 @@ export type WebviewMessage =
 
 // Messages from extension to webview
 export type ExtensionMessage =
-	| { type: 'state'; payload: DisplayState }
-	| { type: 'commitFiles'; sha: string; files: CommitFileChange[] };
+	| { type: 'state'; payload: DisplayState; force?: boolean }
+	| { type: 'commitFiles'; sha: string; files: CommitFileChange[] }
+	| { type: 'branchFiles'; branchName: string; files: CommitFileChange[] };
 
 /**
  * State persisted by the webview across sessions.

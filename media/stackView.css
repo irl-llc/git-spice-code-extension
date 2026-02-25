@@ -738,6 +738,83 @@ button {
   opacity: 1 !important;
 }
 
+/* ==========================================================================
+   Branch Summary (Summarized Changes) Styles
+   ========================================================================== */
+
+.branch-summary {
+  margin-top: 0;
+  border-top: 0 solid var(--vscode-treeIndentGuidesStroke);
+  padding-top: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.2s ease-out, opacity 0.2s ease-out, margin-top 0.2s ease-out, padding-top 0.2s ease-out, border-top-width 0.2s ease-out;
+}
+
+.branch-card.expanded .branch-summary {
+  margin-top: 0.3rem;
+  border-top-width: 1px;
+  padding-top: 0.35rem;
+  max-height: 18rem;
+  opacity: 1;
+}
+
+.branch-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 0.15rem 0;
+  user-select: none;
+}
+
+.branch-summary-header:hover {
+  color: var(--vscode-foreground);
+}
+
+.branch-summary-toggle {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vscode-icon-foreground);
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.branch-summary-toggle:hover {
+  opacity: 1;
+}
+
+.branch-summary-label {
+  font-weight: 500;
+}
+
+.branch-summary-files {
+  padding: 0.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.branch-summary-files.hidden {
+  display: none;
+}
+
+.branch-summary-loading,
+.branch-summary-empty {
+  font-size: 0.65rem;
+  color: var(--vscode-descriptionForeground);
+  padding: 0.15rem 0;
+}
+
 /* ============================================
    Uncommitted Changes Card
    ============================================ */
