@@ -4,6 +4,13 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 /**
+ * Environment that suppresses optional index locks (e.g. stat-cache refresh).
+ * Non-optional locks (writes) are unaffected.
+ * Prevents lock conflicts when multiple git commands run concurrently.
+ */
+const NO_OPTIONAL_LOCKS_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+
+/**
  * Result of a git command execution.
  */
 export interface GitExecResult {
@@ -19,7 +26,7 @@ export interface GitExecResult {
  * @returns The stdout and stderr from git
  */
 export async function execGit(cwd: string, args: string[]): Promise<GitExecResult> {
-	return execFileAsync('git', args, { cwd });
+	return execFileAsync('git', args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
 }
 
 /**

@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 
+import { AsyncCoalescer } from '../utils/asyncCoalescer';
 import { execStackRestack, execStackSubmit } from '../utils/gitSpice';
 import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type { DiscoveredRepo, RepoDiscovery } from '../repoDiscovery';
@@ -68,6 +69,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	private view: vscode.WebviewView | undefined;
 	private readonly repoStates = new Map<string, RepoState>();
 	private readonly fileWatcher: FileWatcherManager;
+	private readonly refreshCoalescer = new AsyncCoalescer();
 	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(
@@ -136,6 +138,11 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async refresh(force = false): Promise<void> {
+		await this.refreshCoalescer.run(() => this.doRefresh(force));
+	}
+
+	/** Fetches latest state from all repos and pushes to webview. */
+	private async doRefresh(force: boolean): Promise<void> {
 		const repos = this.getDiscoveredRepos();
 		if (repos.length > 0) {
 			await this.refreshRepos(repos);

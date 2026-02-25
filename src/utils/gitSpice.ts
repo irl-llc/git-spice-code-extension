@@ -13,6 +13,13 @@ import { formatError, toErrorMessage } from './error';
 const execFileAsync = promisify(execFile);
 const GIT_SPICE_BINARY = 'gs';
 
+/**
+ * Environment that suppresses optional index locks (e.g. stat-cache refresh).
+ * Non-optional locks (writes) are unaffected.
+ * Inherited by child git processes spawned by git-spice.
+ */
+const NO_OPTIONAL_LOCKS_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+
 type NormalizedString = { value: string } | { error: string };
 type GitSpiceArgs = ReadonlyArray<string>;
 
@@ -50,7 +57,7 @@ async function runGitSpiceCommand(
 		return { error: formatError(context, 'Workspace folder path is unavailable') };
 	}
 	try {
-		await execFileAsync(GIT_SPICE_BINARY, args, { cwd, timeout });
+		await execFileAsync(GIT_SPICE_BINARY, args, { cwd, timeout, env: NO_OPTIONAL_LOCKS_ENV });
 		return { value: undefined };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };
@@ -68,7 +75,7 @@ export async function execGitSpice(folder: FolderUri): Promise<BranchLoadResult>
 		const showComments = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
 		const args = showComments ? ['ll', '-a', '-c', '--json'] : ['ll', '-a', '--json'];
 
-		const { stdout } = await execFileAsync(GIT_SPICE_BINARY, args, { cwd });
+		const { stdout } = await execFileAsync(GIT_SPICE_BINARY, args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
 		return { value: parseGitSpiceBranches(stdout) };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };
@@ -413,7 +420,7 @@ export async function execRepoSync(folder: vscode.WorkspaceFolder, promptCallbac
 			}
 		};
 
-		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: NO_OPTIONAL_LOCKS_ENV });
 		const timeout = setTimeout(() => {
 			process.kill();
 			resolveOnce({ error: 'Repository sync timed out after 30 seconds' });
