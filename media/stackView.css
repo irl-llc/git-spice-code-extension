@@ -608,6 +608,7 @@ button {
   cursor: pointer;
   border-radius: 3px;
   font-size: 0.7rem;
+  min-width: 0; /* Allow flex children to shrink properly */
 }
 
 .file-change:hover {
@@ -622,16 +623,21 @@ button {
   opacity: 0.8;
 }
 
-/* File name - bold */
+/* File name - bold, truncatable */
 .file-name {
+  flex: 0 1 auto; /* Can shrink but starts at content size */
+  min-width: 3ch; /* Minimum visible characters */
   font-weight: 500;
   color: var(--vscode-foreground);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Folder path - muted, flexible */
+/* Folder path - muted, flexible, shrinks first */
 .file-folder {
-  flex: 1;
+  flex: 1 1 0; /* Grows and shrinks, base size 0 */
+  min-width: 0; /* Allow shrinking to nothing */
   color: var(--vscode-descriptionForeground);
   font-size: 0.65rem;
   white-space: nowrap;
@@ -674,26 +680,32 @@ button {
   color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
 
-/* Open file button */
-.open-file-btn {
-  flex-shrink: 0;
+/* File action buttons (open, stage, unstage, discard) - collapse width when hidden */
+.open-file-btn,
+.file-action-btn {
+  flex: 0 0 auto;
   border: none;
   background: transparent;
   padding: 0.1rem;
   cursor: pointer;
   color: var(--vscode-icon-foreground);
+  width: 0;
+  overflow: hidden;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: width 0.15s ease, opacity 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.file-change:hover .open-file-btn {
+.file-change:hover .open-file-btn,
+.file-change:hover .file-action-btn {
+  width: 1rem;
   opacity: 0.7;
 }
 
-.open-file-btn:hover {
+.open-file-btn:hover,
+.file-action-btn:hover {
   opacity: 1 !important;
 }
 
@@ -841,31 +853,36 @@ button {
   background: var(--vscode-button-secondaryHoverBackground);
 }
 
-/* File action buttons (stage, unstage, discard) */
-.file-action-btn {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  padding: 0.1rem;
-  cursor: pointer;
-  color: var(--vscode-icon-foreground);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-change:hover .file-action-btn {
-  opacity: 0.7;
-}
-
-.file-action-btn:hover {
-  opacity: 1 !important;
-}
-
 /* Untracked file status */
 .file-status.status-u {
   color: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
+}
+
+/* ==========================================================================
+   Comments Indicator Styles
+   ========================================================================== */
+
+.comments-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--vscode-descriptionForeground);
+}
+
+.comments-indicator .codicon {
+  font-size: 0.8rem;
+}
+
+.comments-indicator.all-resolved .codicon {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+}
+
+.comments-indicator.has-unresolved .codicon {
+  color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+}
+
+.comments-indicator.item-updated {
+  animation: element-flash 0.3s ease-out;
 }
 

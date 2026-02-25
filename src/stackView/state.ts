@@ -156,5 +156,6 @@ function toChangeViewModel(change: NonNullable<BranchRecord['change']>): BranchC
 		id: change.id,
 		url: change.url,
 		status: change.status,
+		comments: change.comments,
 	};
 }

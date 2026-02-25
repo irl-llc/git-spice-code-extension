@@ -1,4 +1,4 @@
-import type { GitSpiceBranch, GitSpiceChangeStatus } from '../gitSpiceSchema';
+import type { GitSpiceBranch, GitSpiceChangeStatus, GitSpiceComments } from '../gitSpiceSchema';
 
 export type BranchRecord = GitSpiceBranch;
 
@@ -37,6 +37,7 @@ export type BranchChangeViewModel = {
 	id: string;
 	url?: string;
 	status?: GitSpiceChangeStatus;
+	comments?: GitSpiceComments;
 };
 
 /**
