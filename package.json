@@ -36,6 +36,16 @@
     "LICENSE"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Git Spice",
+      "properties": {
+        "git-spice.showCommentProgress": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show PR comment progress indicator (beta). Requires git-spice with comments support."
+        }
+      }
+    },
     "commands": [
       {
         "command": "git-spice.refresh",
@@ -137,6 +147,11 @@
         "command": "git-spice.commitSplit",
         "title": "Split Branch",
         "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "git-spice.toggleCommentProgress",
+        "title": "Show Comment Progress (Beta)",
+        "toggled": "config.git-spice.showCommentProgress"
       }
     ],
     "keybindings": [
@@ -179,6 +194,11 @@
           "command": "git-spice.stackSubmit",
           "when": "view == gitSpice.branches",
           "group": "navigation@4"
+        },
+        {
+          "command": "git-spice.toggleCommentProgress",
+          "when": "view == gitSpice.branches",
+          "group": "2_options@1"
         }
       ],
       "webview/context": [
