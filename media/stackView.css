@@ -802,6 +802,59 @@ button {
 }
 
 /* ============================================
+   Untracked Branch Card
+   ============================================ */
+
+/* Untracked card - dashed red border */
+.branch-card.untracked {
+  border-style: dashed;
+  border-color: var(--vscode-errorForeground);
+}
+
+/* Full-width cards: no tree lane indent for untracked and treeless uncommitted */
+.untracked-item .branch-card,
+.stack-item.treeless .branch-card {
+  margin-left: 0;
+}
+
+.tag-error {
+  background-color: var(--vscode-errorForeground);
+  color: var(--vscode-editor-background);
+}
+
+/* Branch name row with current icon */
+.branch-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Hint text and track button */
+.untracked-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--vscode-descriptionForeground);
+  padding-top: 0.3rem;
+}
+
+.untracked-track-btn {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.untracked-track-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* ============================================
    Uncommitted Changes Card
    ============================================ */
 

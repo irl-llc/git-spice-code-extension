@@ -9,6 +9,7 @@ import type { GitSpiceBranch } from '../../gitSpiceSchema';
 import type { BranchContextMenuItem } from '../types';
 import {
 	type BranchCommandResult,
+	execBranchTrack,
 	execBranchUntrack,
 	execBranchDelete,
 	execBranchCheckout,
@@ -278,5 +279,31 @@ export async function handleUpstackMove(
 		`Moving branch with children: ${trimmedBranch} → ${trimmedParent}`,
 		() => execUpstackMove(deps.workspaceFolder!, trimmedBranch, trimmedParent),
 		`Branch ${trimmedBranch} and children moved onto ${trimmedParent} successfully.`,
+	);
+}
+
+/** Prompts user to select a base branch, then tracks the given branch. */
+export async function handleBranchTrack(branchName: string, deps: BranchHandlerDeps): Promise<void> {
+	const trimmedName = requireNonEmpty(branchName, 'branch name for track');
+	if (!trimmedName) return;
+
+	const availableBases = deps.branches.map((b) => b.name);
+	if (availableBases.length === 0) {
+		void vscode.window.showWarningMessage('No branches available to use as base.');
+		return;
+	}
+
+	const selected = await vscode.window.showQuickPick(availableBases, {
+		placeHolder: `Select base branch for '${trimmedName}'`,
+		title: 'Track Branch',
+	});
+	if (!selected) return;
+
+	if (!requireWorkspace(deps.workspaceFolder)) return;
+
+	await deps.runBranchCommand(
+		`Tracking branch: ${trimmedName}`,
+		() => execBranchTrack(deps.workspaceFolder!, trimmedName, selected),
+		`Branch ${trimmedName} tracked successfully.`,
 	);
 }
