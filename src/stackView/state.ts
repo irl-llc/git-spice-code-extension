@@ -1,6 +1,6 @@
+import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type {
 	BranchChangeViewModel,
-	BranchRecord,
 	BranchViewModel,
 	DisplayState,
 	TreeFragmentData,
@@ -11,7 +11,7 @@ import { buildTreeFragments as buildTreeFragmentsFromModel, type BranchTreeInput
 
 /** Branch with computed tree position */
 type BranchWithTree = {
-	branch: BranchRecord;
+	branch: GitSpiceBranch;
 	tree: TreePosition;
 };
 
@@ -23,7 +23,7 @@ type BranchWithTree = {
 export const UNCOMMITTED_BRANCH_NAME = '__uncommitted__';
 
 export function buildDisplayState(
-	branches: BranchRecord[],
+	branches: GitSpiceBranch[],
 	error?: string,
 	uncommitted?: UncommittedState,
 ): DisplayState {
@@ -59,7 +59,7 @@ type TraversalContext = {
  * Children appear before (above) their parents, with first sibling's subtree before second's.
  * Lane compaction: first child inherits parent's lane, additional children fork to new lanes.
  */
-function orderStackWithTree(branches: BranchRecord[], branchMap: Map<string, BranchRecord>): BranchWithTree[] {
+function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, GitSpiceBranch>): BranchWithTree[] {
 	const result: BranchWithTree[] = [];
 	const visited = new Set<string>();
 	const laneCounter = { value: 0 };
@@ -84,7 +84,7 @@ function orderStackWithTree(branches: BranchRecord[], branchMap: Map<string, Bra
 
 	return result;
 
-	function postOrderTraverse(branch: BranchRecord, ctx: TraversalContext): void {
+	function postOrderTraverse(branch: GitSpiceBranch, ctx: TraversalContext): void {
 		if (visited.has(branch.name)) {
 			return;
 		}
@@ -126,13 +126,13 @@ function orderStackWithTree(branches: BranchRecord[], branchMap: Map<string, Bra
 
 /** Gets sorted children of a branch that are in the current branch set */
 function getChildren(
-	branch: BranchRecord,
-	branchMap: Map<string, BranchRecord>,
-	branches: BranchRecord[],
-): BranchRecord[] {
+	branch: GitSpiceBranch,
+	branchMap: Map<string, GitSpiceBranch>,
+	branches: GitSpiceBranch[],
+): GitSpiceBranch[] {
 	return (branch.ups ?? [])
 		.map((link) => branchMap.get(link.name))
-		.filter((child): child is BranchRecord => child !== undefined && branches.includes(child))
+		.filter((child): child is GitSpiceBranch => child !== undefined && branches.includes(child))
 		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -199,7 +199,7 @@ function toBranchTreeInput(item: BranchWithTree): BranchTreeInput {
 }
 
 function createBranchViewModel(
-	branch: BranchRecord,
+	branch: GitSpiceBranch,
 	tree: TreePosition,
 	treeFragment: TreeFragmentData,
 ): BranchViewModel {
@@ -228,7 +228,7 @@ function createBranchViewModel(
 	return model;
 }
 
-function toChangeViewModel(change: NonNullable<BranchRecord['change']>): BranchChangeViewModel {
+function toChangeViewModel(change: NonNullable<GitSpiceBranch['change']>): BranchChangeViewModel {
 	return {
 		id: change.id,
 		url: change.url,
