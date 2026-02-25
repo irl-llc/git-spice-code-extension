@@ -61,6 +61,49 @@ export type TreePosition = {
 	lane: number;
 };
 
+/** State of a single lane segment at a specific row. */
+export type LaneSegment = {
+	/** Lane continues from the row above. */
+	continuesFromAbove: boolean;
+	/** Lane continues to the row below. */
+	continuesBelow: boolean;
+	/** This row's node is on this lane. */
+	hasNode: boolean;
+	/** Lane segment needs restack styling. */
+	needsRestack: boolean;
+};
+
+/** Node styling variant for tree visualization. */
+export type TreeNodeStyle = 'normal' | 'current' | 'uncommitted';
+
+/** Styling information for a child fork connection. */
+export type ChildForkStyle = {
+	/** Lane number of the forked child. */
+	lane: number;
+	/** Whether the child needs restack. */
+	needsRestack: boolean;
+	/** Whether the child is the uncommitted pseudo-branch. */
+	isUncommitted: boolean;
+};
+
+/** Complete tree fragment data for rendering a single row's tree section. */
+export type TreeFragmentData = {
+	/** State of each lane (index = lane number). */
+	lanes: LaneSegment[];
+	/** Total number of lanes (for SVG width calculation). */
+	maxLane: number;
+	/** Lane where this row's node sits. */
+	nodeLane: number;
+	/** Lane of parent node (for horizontal connector going up), undefined if root. */
+	parentLane?: number;
+	/** Children that fork to different lanes, with styling info for each. */
+	childForkLanes: ChildForkStyle[];
+	/** Node styling variant. */
+	nodeStyle: TreeNodeStyle;
+	/** Node needs restack indicator. */
+	nodeNeedsRestack: boolean;
+};
+
 export type BranchViewModel = {
 	name: string;
 	current: boolean;
@@ -68,10 +111,12 @@ export type BranchViewModel = {
 	change?: BranchChangeViewModel;
 	commits?: BranchCommitViewModel[];
 	tree: TreePosition;
+	treeFragment: TreeFragmentData;
 };
 
 export type DisplayState = {
 	branches: BranchViewModel[];
 	uncommitted?: UncommittedState;
+	uncommittedTreeFragment?: TreeFragmentData;
 	error?: string;
 };
