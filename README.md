@@ -10,9 +10,9 @@ A Visual Studio Code extension that provides a rich UI for [git-spice](https://a
 
 ## Installation
 
-### From VSIX File
+### From Source/VSIX File
 
-If you have a `.vsix` file, install it with the VS Code CLI:
+Build the VSIX: `npx vsce package --no-dependencies`
 
 ```sh
 code --install-extension git-spice-*.vsix
