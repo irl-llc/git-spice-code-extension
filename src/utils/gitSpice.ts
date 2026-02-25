@@ -20,7 +20,10 @@ export type BranchLoadResult = { value: GitSpiceBranch[] } | { error: string };
 export type BranchCommandResult = { value: void } | { error: string };
 export type RepoSyncResult = { value: { deletedBranches: string[]; syncedBranches: number } } | { error: string };
 
-function getWorkspaceFolderPath(folder: vscode.WorkspaceFolder): string | null {
+/** Minimal folder shape required by execGitSpice. WorkspaceFolder satisfies this. */
+export type FolderUri = { uri: vscode.Uri };
+
+function getWorkspaceFolderPath(folder: FolderUri): string | null {
 	const fsPath = folder.uri.fsPath;
 	return typeof fsPath === 'string' && fsPath.length > 0 ? fsPath : null;
 }
@@ -54,7 +57,7 @@ async function runGitSpiceCommand(
 	}
 }
 
-export async function execGitSpice(folder: vscode.WorkspaceFolder): Promise<BranchLoadResult> {
+export async function execGitSpice(folder: FolderUri): Promise<BranchLoadResult> {
 	const context = 'Load branches';
 	try {
 		const cwd = getWorkspaceFolderPath(folder);
