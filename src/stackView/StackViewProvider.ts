@@ -182,7 +182,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async sync(): Promise<void> {
-		const folder = this.getActiveWorkspaceFolder();
+		const folder = this.resolveWorkspaceFolder();
 		if (!folder) {
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
@@ -193,12 +193,18 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	// --- Repo Resolution ---
 
 	/**
-	 * Returns the workspace folder for the "active" repo (the one with current branch).
-	 * Falls back to the first repo or fallback folder.
+	 * Resolves to a specific repo by ID, or falls back to the active repo.
+	 * The active repo is the one with the current branch checked out.
 	 */
-	private getActiveWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-		const active = this.findActiveRepoState();
-		if (active) return { uri: active.rootUri, name: active.name, index: 0 };
+	private resolveRepoState(repoId?: string): RepoState | undefined {
+		if (repoId) return this.repoStates.get(repoId);
+		return this.findActiveRepoState();
+	}
+
+	/** Returns the workspace folder for a resolved repo state. */
+	private resolveWorkspaceFolder(repoId?: string): vscode.WorkspaceFolder | undefined {
+		const state = this.resolveRepoState(repoId);
+		if (state) return { uri: state.rootUri, name: state.name, index: 0 };
 		return this.fallbackFolder;
 	}
 
@@ -211,166 +217,158 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		return sorted[0];
 	}
 
-	/** Returns branches from the active repo. */
-	private getActiveBranches(): GitSpiceBranch[] {
-		return this.findActiveRepoState()?.branches ?? [];
-	}
-
-	/** Returns uncommitted state from the active repo. */
-	private getActiveUncommitted(): UncommittedState | undefined {
-		return this.findActiveRepoState()?.uncommitted;
-	}
-
 	// --- Handler Dependency Factories ---
 
-	private getBranchHandlerDeps(): BranchHandlerDeps {
+	private getBranchHandlerDeps(repoId?: string): BranchHandlerDeps {
+		const state = this.resolveRepoState(repoId);
 		return {
-			workspaceFolder: this.getActiveWorkspaceFolder(),
-			branches: this.getActiveBranches(),
+			workspaceFolder: this.resolveWorkspaceFolder(repoId),
+			branches: state?.branches ?? [],
 			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
-			handleBranchCommandInternal: (cmd, branch, fn) => this.handleBranchCommandInternal(cmd, branch, fn),
+			handleBranchCommandInternal: (cmd, branch, fn) => this.handleBranchCommandInternal(repoId, cmd, branch, fn),
 			postMessageToWebview: (message) => this.view?.webview.postMessage(message),
 		};
 	}
 
-	private getCommitHandlerDeps(): CommitHandlerDeps {
+	private getCommitHandlerDeps(repoId?: string): CommitHandlerDeps {
 		return {
-			workspaceFolder: this.getActiveWorkspaceFolder(),
+			workspaceFolder: this.resolveWorkspaceFolder(repoId),
 			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
 			refresh: () => this.refresh(),
 			postCommitFilesToWebview: (sha, files) =>
-				this.view?.webview.postMessage({ type: 'commitFiles', sha, files }),
+				this.view?.webview.postMessage({ type: 'commitFiles', repoId, sha, files }),
 		};
 	}
 
-	private getDiffHandlerDeps(): DiffHandlerDeps {
-		return { workspaceFolder: this.getActiveWorkspaceFolder() };
+	private getDiffHandlerDeps(repoId?: string): DiffHandlerDeps {
+		return { workspaceFolder: this.resolveWorkspaceFolder(repoId) };
 	}
 
-	private getWorkingCopyHandlerDeps(): WorkingCopyHandlerDeps {
+	private getWorkingCopyHandlerDeps(repoId?: string): WorkingCopyHandlerDeps {
 		return {
-			workspaceFolder: this.getActiveWorkspaceFolder(),
-			uncommitted: this.getActiveUncommitted(),
+			workspaceFolder: this.resolveWorkspaceFolder(repoId),
+			uncommitted: this.resolveRepoState(repoId)?.uncommitted,
 			refresh: () => this.refresh(),
 		};
 	}
 
-	private getBranchFileHandlerDeps(): BranchFileHandlerDeps {
+	private getBranchFileHandlerDeps(repoId?: string): BranchFileHandlerDeps {
+		const state = this.resolveRepoState(repoId);
 		return {
-			workspaceFolder: this.getActiveWorkspaceFolder(),
-			branches: this.getActiveBranches(),
+			workspaceFolder: this.resolveWorkspaceFolder(repoId),
+			branches: state?.branches ?? [],
 			postBranchFilesToWebview: (branchName, files) =>
-				this.view?.webview.postMessage({ type: 'branchFiles', branchName, files }),
+				this.view?.webview.postMessage({ type: 'branchFiles', repoId, branchName, files }),
 		};
 	}
 
 	// --- Public Handler Methods (Exposed for Message Router) ---
 
-	async handleBranchContextMenu(branchName: string): Promise<void> {
-		await handleBranchContextMenu(branchName, this.getBranchHandlerDeps());
+	async handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleBranchContextMenu(branchName, this.getBranchHandlerDeps(repoId));
 	}
 
-	public async handleBranchDelete(branchName: string): Promise<void> {
-		await handleBranchDelete(branchName, this.getBranchHandlerDeps());
+	public async handleBranchDelete(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleBranchDelete(branchName, this.getBranchHandlerDeps(repoId));
 	}
 
-	public async handleBranchRenamePrompt(branchName: string): Promise<void> {
-		await handleBranchRenamePrompt(branchName, this.getBranchHandlerDeps());
+	public async handleBranchRenamePrompt(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleBranchRenamePrompt(branchName, this.getBranchHandlerDeps(repoId));
 	}
 
-	async handleBranchRename(branchName: string, newName: string): Promise<void> {
-		await handleBranchRename(branchName, newName, this.getBranchHandlerDeps());
+	async handleBranchRename(repoId: string | undefined, branchName: string, newName: string): Promise<void> {
+		await handleBranchRename(branchName, newName, this.getBranchHandlerDeps(repoId));
 	}
 
-	public async handleBranchMovePrompt(branchName: string): Promise<void> {
-		await handleBranchMovePrompt(branchName, this.getBranchHandlerDeps());
+	public async handleBranchMovePrompt(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleBranchMovePrompt(branchName, this.getBranchHandlerDeps(repoId));
 	}
 
-	async handleBranchMove(branchName: string, newParent: string): Promise<void> {
-		await handleBranchMove(branchName, newParent, this.getBranchHandlerDeps());
+	async handleBranchMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void> {
+		await handleBranchMove(branchName, newParent, this.getBranchHandlerDeps(repoId));
 	}
 
-	public async handleUpstackMovePrompt(branchName: string): Promise<void> {
-		await handleUpstackMovePrompt(branchName, this.getBranchHandlerDeps());
+	public async handleUpstackMovePrompt(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleUpstackMovePrompt(branchName, this.getBranchHandlerDeps(repoId));
 	}
 
-	async handleUpstackMove(branchName: string, newParent: string): Promise<void> {
-		await handleUpstackMove(branchName, newParent, this.getBranchHandlerDeps());
+	async handleUpstackMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void> {
+		await handleUpstackMove(branchName, newParent, this.getBranchHandlerDeps(repoId));
 	}
 
-	public async handleCommitCopySha(sha: string): Promise<void> {
+	public async handleCommitCopySha(_repoId: string | undefined, sha: string): Promise<void> {
 		await handleCommitCopySha(sha);
 	}
 
-	async handleCommitFixup(sha: string): Promise<void> {
-		await handleCommitFixup(sha, this.getCommitHandlerDeps());
+	async handleCommitFixup(repoId: string | undefined, sha: string): Promise<void> {
+		await handleCommitFixup(sha, this.getCommitHandlerDeps(repoId));
 	}
 
-	public async handleCommitSplit(sha: string, branchName: string): Promise<void> {
-		await handleCommitSplit(sha, branchName, this.getCommitHandlerDeps());
+	public async handleCommitSplit(repoId: string | undefined, sha: string, branchName: string): Promise<void> {
+		await handleCommitSplit(sha, branchName, this.getCommitHandlerDeps(repoId));
 	}
 
-	async handleGetCommitFiles(sha: string): Promise<void> {
-		await handleGetCommitFiles(sha, this.getCommitHandlerDeps());
+	async handleGetCommitFiles(repoId: string | undefined, sha: string): Promise<void> {
+		await handleGetCommitFiles(sha, this.getCommitHandlerDeps(repoId));
 	}
 
-	async handleGetBranchFiles(branchName: string): Promise<void> {
-		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps());
+	async handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps(repoId));
 	}
 
-	async handleOpenBranchFileDiff(branchName: string, filePath: string): Promise<void> {
-		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps());
+	async handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, filePath: string): Promise<void> {
+		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps(repoId));
 	}
 
-	handleOpenExternal(url: string): void {
+	handleOpenExternal(_repoId: string | undefined, url: string): void {
 		void vscode.env.openExternal(vscode.Uri.parse(url));
 	}
 
-	handleOpenCommit(sha: string): void {
+	handleOpenCommit(_repoId: string | undefined, sha: string): void {
 		void vscode.commands.executeCommand('git.openCommit', sha);
 	}
 
-	async handleOpenCommitDiff(sha: string): Promise<void> {
-		await handleOpenCommitDiff(sha, this.getDiffHandlerDeps());
+	async handleOpenCommitDiff(repoId: string | undefined, sha: string): Promise<void> {
+		await handleOpenCommitDiff(sha, this.getDiffHandlerDeps(repoId));
 	}
 
-	async handleOpenFileDiff(sha: string, filePath: string): Promise<void> {
-		await handleOpenFileDiff(sha, filePath, this.getDiffHandlerDeps());
+	async handleOpenFileDiff(repoId: string | undefined, sha: string, filePath: string): Promise<void> {
+		await handleOpenFileDiff(sha, filePath, this.getDiffHandlerDeps(repoId));
 	}
 
-	async handleOpenCurrentFile(filePath: string): Promise<void> {
-		await handleOpenCurrentFile(filePath, this.getDiffHandlerDeps());
+	async handleOpenCurrentFile(repoId: string | undefined, filePath: string): Promise<void> {
+		await handleOpenCurrentFile(filePath, this.getDiffHandlerDeps(repoId));
 	}
 
-	async handleOpenWorkingCopyDiff(filePath: string, staged: boolean): Promise<void> {
-		await handleOpenWorkingCopyDiff(filePath, staged, this.getDiffHandlerDeps());
+	async handleOpenWorkingCopyDiff(repoId: string | undefined, filePath: string, staged: boolean): Promise<void> {
+		await handleOpenWorkingCopyDiff(filePath, staged, this.getDiffHandlerDeps(repoId));
 	}
 
-	async handleStageFile(filePath: string): Promise<void> {
-		await handleStageFile(filePath, this.getWorkingCopyHandlerDeps());
+	async handleStageFile(repoId: string | undefined, filePath: string): Promise<void> {
+		await handleStageFile(filePath, this.getWorkingCopyHandlerDeps(repoId));
 	}
 
-	async handleUnstageFile(filePath: string): Promise<void> {
-		await handleUnstageFile(filePath, this.getWorkingCopyHandlerDeps());
+	async handleUnstageFile(repoId: string | undefined, filePath: string): Promise<void> {
+		await handleUnstageFile(filePath, this.getWorkingCopyHandlerDeps(repoId));
 	}
 
-	async handleDiscardFile(filePath: string): Promise<void> {
-		await handleDiscardFile(filePath, this.getWorkingCopyHandlerDeps());
+	async handleDiscardFile(repoId: string | undefined, filePath: string): Promise<void> {
+		await handleDiscardFile(filePath, this.getWorkingCopyHandlerDeps(repoId));
 	}
 
-	async handleCommitChanges(message: string): Promise<void> {
-		await handleCommitChanges(message, this.getWorkingCopyHandlerDeps());
+	async handleCommitChanges(repoId: string | undefined, message: string): Promise<void> {
+		await handleCommitChanges(message, this.getWorkingCopyHandlerDeps(repoId));
 	}
 
-	async handleCreateBranch(message: string): Promise<void> {
-		await handleCreateBranch(message, this.getWorkingCopyHandlerDeps());
+	async handleCreateBranch(repoId: string | undefined, message: string): Promise<void> {
+		await handleCreateBranch(message, this.getWorkingCopyHandlerDeps(repoId));
 	}
 
 	// --- Branch Command Infrastructure ---
 
-	private getCommandRunnerDeps(): BranchCommandRunnerDeps {
+	private getCommandRunnerDeps(repoId?: string): BranchCommandRunnerDeps {
 		return {
-			getActiveWorkspaceFolder: () => this.getActiveWorkspaceFolder(),
+			getActiveWorkspaceFolder: () => this.resolveWorkspaceFolder(repoId),
 			refresh: () => this.refresh(),
 		};
 	}
@@ -380,11 +378,12 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async handleBranchCommandInternal(
+		repoId: string | undefined,
 		commandName: string,
 		branchName: string,
 		execFunction: ExecFunction,
 	): Promise<void> {
-		await executeBranchCommandWithExec(commandName, branchName, execFunction, this.getCommandRunnerDeps());
+		await executeBranchCommandWithExec(commandName, branchName, execFunction, this.getCommandRunnerDeps(repoId));
 	}
 
 	getExecFunctions(): ExecFunctionMap {

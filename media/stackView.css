@@ -992,3 +992,63 @@ button {
   animation: element-flash 0.3s ease-out;
 }
 
+/* ==========================================================================
+   Multi-Repository Section Styles
+   ========================================================================== */
+
+.repo-section {
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.repo-section:last-child {
+  border-bottom: none;
+}
+
+.repo-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--vscode-sideBarSectionHeader-foreground);
+  background: var(--vscode-sideBarSectionHeader-background);
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+}
+
+.repo-header:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.repo-name {
+  flex: 1;
+}
+
+.repo-toggle {
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.repo-header:hover .repo-toggle {
+  opacity: 1;
+}
+
+/* Collapsed state hides the branch list */
+.repo-section:not(.expanded) .repo-branch-list,
+.repo-section:not(.expanded) [data-role="repo-error"],
+.repo-section:not(.expanded) [data-role="repo-empty"] {
+  display: none;
+}
+
+/* Single-repo mode: hide the repo header */
+.repo-section.single-repo .repo-header {
+  display: none;
+}
+
+/* Single-repo mode: remove section border */
+.repo-section.single-repo {
+  border-bottom: none;
+}
+
