@@ -118,6 +118,7 @@ function storeBranchData(card: HTMLElement, branch: BranchViewModel): void {
 		treeIsLastChild: branch.tree.isLastChild,
 		treeAncestorIsLast: JSON.stringify(branch.tree.ancestorIsLast),
 		treeLane: branch.tree.lane,
+		treeFragmentSignature: JSON.stringify(branch.treeFragment),
 	});
 }
 
@@ -298,7 +299,8 @@ export function branchNeedsUpdate(card: HTMLElement, branch: BranchViewModel): b
 		oldData.treeDepth !== branch.tree.depth ||
 		oldData.treeIsLastChild !== branch.tree.isLastChild ||
 		oldData.treeAncestorIsLast !== newTreeAncestorIsLast ||
-		oldData.treeLane !== branch.tree.lane
+		oldData.treeLane !== branch.tree.lane ||
+		oldData.treeFragmentSignature !== JSON.stringify(branch.treeFragment)
 	);
 }
 
