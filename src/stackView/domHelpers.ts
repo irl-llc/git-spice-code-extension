@@ -20,6 +20,7 @@ export type BranchElementData = {
 	treeIsLastChild: boolean;
 	treeAncestorIsLast: string;
 	treeLane: number;
+	treeFragmentSignature: string;
 };
 
 /** WeakMap storing branch data keyed by DOM element. */
