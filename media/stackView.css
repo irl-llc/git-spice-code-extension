@@ -127,7 +127,7 @@ button {
   margin-top: 0.3rem;
   border-top-width: 1px;
   padding-top: 0.35rem;
-  max-height: 18rem;
+  max-height: 999rem;
   opacity: 1;
 }
 
@@ -800,8 +800,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  max-height: 12rem;
-  overflow-y: auto;
+  max-height: none;
 }
 
 .branch-summary-files.hidden {
