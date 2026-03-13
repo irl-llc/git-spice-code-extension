@@ -33,13 +33,6 @@ interface CommitContext {
 	branchName?: string;
 }
 
-/** Updates the context key for comment progress toggle checkmark. */
-function updateCommentProgressContext(): void {
-	const config = vscode.workspace.getConfiguration('git-spice');
-	const showComments = config.get<boolean>('showCommentProgress', false);
-	void vscode.commands.executeCommand('setContext', 'git-spice.showCommentProgress', showComments);
-}
-
 /** Returns the first workspace folder or shows an error. */
 function getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
 	const folder = vscode.workspace.workspaceFolders?.[0];
@@ -264,7 +257,6 @@ function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: 
 		}),
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
-				updateCommentProgressContext();
 				void provider.refresh();
 			}
 		}),
@@ -284,8 +276,6 @@ function registerCoreProvider(context: vscode.ExtensionContext, provider: StackV
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-	updateCommentProgressContext();
-
 	const discovery = await createRepoDiscovery();
 	if (discovery) context.subscriptions.push(discovery);
 	const fallbackFolder = vscode.workspace.workspaceFolders?.[0];
