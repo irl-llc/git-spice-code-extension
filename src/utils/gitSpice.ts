@@ -206,7 +206,7 @@ export async function execBranchSubmit(
 	if ('error' in normalized) {
 		return { error: `Branch submit: ${normalized.error}` };
 	}
-	return runGitSpiceCommand(folder, ['branch', 'submit', '--branch', normalized.value], 'Branch submit');
+	return runGitSpiceCommand(folder, ['branch', 'submit', '--fill', '--branch', normalized.value], 'Branch submit');
 }
 
 export async function execBranchCreate(folder: vscode.WorkspaceFolder, message: string): Promise<BranchCommandResult> {
