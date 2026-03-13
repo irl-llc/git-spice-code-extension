@@ -114,24 +114,24 @@ export async function handleOpenCurrentFile(filePath: string, deps: DiffHandlerD
 }
 
 /** Opens the diff view for a working copy file. */
-async function openWorkingCopyDiffView(cwd: string, filePath: string, staged: boolean): Promise<void> {
+async function openWorkingCopyDiffView(cwd: string, filePath: string, staged: boolean, status?: string): Promise<void> {
 	const path = await import('node:path');
 	const absolutePath = path.join(cwd, filePath);
 	const fileUri = vscode.Uri.file(absolutePath);
 	const fileName = path.basename(filePath);
 
-	const { left, right } = buildWorkingCopyDiffUris(fileUri, staged);
+	const { left, right } = buildWorkingCopyDiffUris(fileUri, staged, status);
 	const title = staged ? `${fileName} (Staged)` : `${fileName} (Working Copy)`;
 	await vscode.commands.executeCommand('vscode.diff', left, right, title);
 }
 
 /** Opens a diff for a working copy file (staged or unstaged). */
-export async function handleOpenWorkingCopyDiff(filePath: string, staged: boolean, deps: DiffHandlerDeps): Promise<void> {
+export async function handleOpenWorkingCopyDiff(filePath: string, staged: boolean, deps: DiffHandlerDeps, status?: string): Promise<void> {
 	const cwd = requireWorkspaceFolder(deps);
 	if (!cwd) return;
 
 	try {
-		await openWorkingCopyDiffView(cwd, filePath, staged);
+		await openWorkingCopyDiffView(cwd, filePath, staged, status);
 	} catch (error) {
 		showDiffError('open diff', error);
 	}

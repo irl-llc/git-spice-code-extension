@@ -330,8 +330,8 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps(repoId));
 	}
 
-	async handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, filePath: string): Promise<void> {
-		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps(repoId));
+	async handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, filePath: string, status?: string): Promise<void> {
+		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps(repoId), status);
 	}
 
 	handleOpenExternal(_repoId: string | undefined, url: string): void {
@@ -354,8 +354,8 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await handleOpenCurrentFile(filePath, this.getDiffHandlerDeps(repoId));
 	}
 
-	async handleOpenWorkingCopyDiff(repoId: string | undefined, filePath: string, staged: boolean): Promise<void> {
-		await handleOpenWorkingCopyDiff(filePath, staged, this.getDiffHandlerDeps(repoId));
+	async handleOpenWorkingCopyDiff(repoId: string | undefined, filePath: string, staged: boolean, status?: string): Promise<void> {
+		await handleOpenWorkingCopyDiff(filePath, staged, this.getDiffHandlerDeps(repoId), status);
 	}
 
 	async handleStageFile(repoId: string | undefined, filePath: string): Promise<void> {

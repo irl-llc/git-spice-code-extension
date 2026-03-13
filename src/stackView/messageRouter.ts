@@ -36,13 +36,13 @@ export interface MessageHandlerContext {
 	handleUpstackMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void>;
 	handleGetCommitFiles(repoId: string | undefined, sha: string): Promise<void>;
 	handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void>;
-	handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, path: string): Promise<void>;
+	handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, path: string, status?: string): Promise<void>;
 	handleOpenFileDiff(repoId: string | undefined, sha: string, path: string): Promise<void>;
 	handleOpenCurrentFile(repoId: string | undefined, path: string): Promise<void>;
 	handleStageFile(repoId: string | undefined, path: string): Promise<void>;
 	handleUnstageFile(repoId: string | undefined, path: string): Promise<void>;
 	handleDiscardFile(repoId: string | undefined, path: string): Promise<void>;
-	handleOpenWorkingCopyDiff(repoId: string | undefined, path: string, staged: boolean): Promise<void>;
+	handleOpenWorkingCopyDiff(repoId: string | undefined, path: string, staged: boolean, status?: string): Promise<void>;
 	handleCommitChanges(repoId: string | undefined, message: string): Promise<void>;
 	handleCreateBranch(repoId: string | undefined, message: string): Promise<void>;
 	handleCommitCopySha(repoId: string | undefined, sha: string): Promise<void>;
@@ -204,7 +204,7 @@ function routeFileMessage(message: WebviewMessage, ctx: MessageHandlerContext): 
 			void ctx.handleGetBranchFiles(message.repoId, message.branchName);
 			return true;
 		case 'openBranchFileDiff':
-			void ctx.handleOpenBranchFileDiff(message.repoId, message.branchName, message.path);
+			void ctx.handleOpenBranchFileDiff(message.repoId, message.branchName, message.path, message.status);
 			return true;
 		default:
 			return false;
@@ -229,7 +229,7 @@ function routeStagingMessage(message: WebviewMessage, ctx: MessageHandlerContext
 			void ctx.handleDiscardFile(message.repoId, message.path);
 			return true;
 		case 'openWorkingCopyDiff':
-			void ctx.handleOpenWorkingCopyDiff(message.repoId, message.path, message.staged);
+			void ctx.handleOpenWorkingCopyDiff(message.repoId, message.path, message.staged, message.status);
 			return true;
 		default:
 			return false;

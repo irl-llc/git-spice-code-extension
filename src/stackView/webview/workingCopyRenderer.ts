@@ -211,7 +211,7 @@ function renderWorkingCopyFileRow(
 	const row = createFileRow(file.path);
 	appendWorkingCopyActions(row, file, isStaged, postMessage);
 	appendFileStatus(row, file.status);
-	row.addEventListener('click', (e) => handleFileClick(e, file.path, isStaged, postMessage));
+	row.addEventListener('click', (e) => handleFileClick(e, file.path, isStaged, file.status, postMessage));
 	return row;
 }
 
@@ -243,10 +243,10 @@ function appendWorkingCopyActions(
 }
 
 /** Handles click on a working copy file row. */
-function handleFileClick(event: Event, path: string, staged: boolean, postMessage: PostMessage): void {
+function handleFileClick(event: Event, path: string, staged: boolean, status: string, postMessage: PostMessage): void {
 	if ((event.target as HTMLElement).closest('button')) return;
 	event.stopPropagation();
-	postMessage({ type: 'openWorkingCopyDiff', path, staged });
+	postMessage({ type: 'openWorkingCopyDiff', path, staged, status });
 }
 
 /** Renders the commit message input and action buttons. */

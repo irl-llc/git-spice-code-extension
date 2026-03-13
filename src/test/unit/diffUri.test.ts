@@ -179,5 +179,48 @@ describe('diffUri', () => {
 			assert.strictEqual(result.right.fsPath, testPath);
 			assert.strictEqual(result.right.scheme, 'file');
 		});
+
+		it('should compare empty tree to working copy for untracked unstaged files', () => {
+			const fileUri = createMockUri(testPath);
+			const result = buildWorkingCopyDiffUris(fileUri, false, 'U');
+
+			const leftQuery = JSON.parse(result.left.query);
+			assert.strictEqual(leftQuery.ref, EMPTY_TREE_SHA);
+			assert.strictEqual(result.right.scheme, 'file');
+			assert.strictEqual(result.right.fsPath, testPath);
+		});
+
+		it('should compare empty tree to index for staged added files', () => {
+			const fileUri = createMockUri(testPath);
+			const result = buildWorkingCopyDiffUris(fileUri, true, 'A');
+
+			const leftQuery = JSON.parse(result.left.query);
+			const rightQuery = JSON.parse(result.right.query);
+
+			assert.strictEqual(leftQuery.ref, EMPTY_TREE_SHA);
+			assert.strictEqual(rightQuery.ref, '~');
+		});
+
+		it('should compare HEAD to empty tree for staged deleted files', () => {
+			const fileUri = createMockUri(testPath);
+			const result = buildWorkingCopyDiffUris(fileUri, true, 'D');
+
+			const leftQuery = JSON.parse(result.left.query);
+			const rightQuery = JSON.parse(result.right.query);
+
+			assert.strictEqual(leftQuery.ref, 'HEAD');
+			assert.strictEqual(rightQuery.ref, EMPTY_TREE_SHA);
+		});
+
+		it('should fall through to default staged behavior for modified status', () => {
+			const fileUri = createMockUri(testPath);
+			const result = buildWorkingCopyDiffUris(fileUri, true, 'M');
+
+			const leftQuery = JSON.parse(result.left.query);
+			const rightQuery = JSON.parse(result.right.query);
+
+			assert.strictEqual(leftQuery.ref, 'HEAD');
+			assert.strictEqual(rightQuery.ref, '~');
+		});
 	});
 });

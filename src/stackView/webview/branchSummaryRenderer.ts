@@ -205,7 +205,7 @@ function renderBranchFileRow(file: CommitFileChange, branchName: string, postMes
 	row.addEventListener('click', (e) => {
 		if ((e.target as HTMLElement).closest('button')) return;
 		e.stopPropagation();
-		postMessage({ type: 'openBranchFileDiff', branchName, path: file.path });
+		postMessage({ type: 'openBranchFileDiff', branchName, path: file.path, status: file.status });
 	});
 
 	return row;

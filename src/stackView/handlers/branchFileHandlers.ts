@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 
 import { fetchBranchFiles, fetchBranchMergeBase } from '../branchFiles';
-import { buildGitUri } from '../../utils/diffUri';
+import { buildGitUri, EMPTY_TREE_SHA } from '../../utils/diffUri';
 import type { CommitFileChange } from '../types';
 import type { GitSpiceBranch } from '../../gitSpiceSchema';
 
@@ -71,26 +71,48 @@ export async function handleOpenBranchFileDiff(
 	branchName: string,
 	filePath: string,
 	deps: BranchFileHandlerDeps,
+	status?: string,
 ): Promise<void> {
 	const ctx = validateBranchDiffContext(branchName, deps);
 	if (!ctx) return;
 
 	try {
-		await openBranchFileDiff(ctx.cwd, branchName, ctx.parentName, filePath);
+		await openBranchFileDiff(ctx.cwd, branchName, ctx.parentName, filePath, status);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		void vscode.window.showErrorMessage(`Failed to open branch file diff: ${message}`);
 	}
 }
 
+/** Builds diff URIs for a branch file, handling added/deleted statuses. */
+function buildBranchFileDiffUris(
+	fileUri: vscode.Uri,
+	mergeBase: string,
+	branchName: string,
+	status?: string,
+): { left: vscode.Uri; right: vscode.Uri } {
+	if (status === 'A') {
+		return { left: buildGitUri(fileUri, EMPTY_TREE_SHA), right: buildGitUri(fileUri, branchName) };
+	}
+	if (status === 'D') {
+		return { left: buildGitUri(fileUri, mergeBase), right: buildGitUri(fileUri, EMPTY_TREE_SHA) };
+	}
+	return { left: buildGitUri(fileUri, mergeBase), right: buildGitUri(fileUri, branchName) };
+}
+
 /** Builds URIs and opens the diff editor for a branch file. */
-async function openBranchFileDiff(cwd: string, branchName: string, parentName: string, filePath: string): Promise<void> {
+async function openBranchFileDiff(
+	cwd: string,
+	branchName: string,
+	parentName: string,
+	filePath: string,
+	status?: string,
+): Promise<void> {
 	const path = await import('node:path');
 	const mergeBase = await fetchBranchMergeBase(cwd, branchName, parentName);
 	const fileUri = vscode.Uri.file(path.join(cwd, filePath));
 
-	const left = buildGitUri(fileUri, mergeBase);
-	const right = buildGitUri(fileUri, branchName);
+	const { left, right } = buildBranchFileDiffUris(fileUri, mergeBase, branchName, status);
 	const title = `${path.basename(filePath)} (${branchName} changes)`;
 
 	await vscode.commands.executeCommand('vscode.diff', left, right, title);

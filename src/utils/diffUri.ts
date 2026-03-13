@@ -61,22 +61,26 @@ export function buildCommitDiffUris(fileUri: vscode.Uri, sha: string, status: Fi
 
 /**
  * Builds diff URIs for working copy changes.
+ * Handles special cases for untracked, added, and deleted files.
  *
  * @param fileUri - The file URI
  * @param staged - Whether showing staged changes (index vs HEAD) or unstaged (working copy vs index)
+ * @param status - Optional file change status for handling new/deleted files
  */
-export function buildWorkingCopyDiffUris(fileUri: vscode.Uri, staged: boolean): DiffUriPair {
-	if (staged) {
-		// Staged: compare HEAD to index (~)
-		return {
-			left: buildGitUri(fileUri, 'HEAD'),
-			right: buildGitUri(fileUri, '~'),
-		};
+export function buildWorkingCopyDiffUris(fileUri: vscode.Uri, staged: boolean, status?: string): DiffUriPair {
+	if (!staged && status === 'U') {
+		return { left: buildGitUri(fileUri, EMPTY_TREE_SHA), right: fileUri };
+	}
+	if (staged && status === 'A') {
+		return { left: buildGitUri(fileUri, EMPTY_TREE_SHA), right: buildGitUri(fileUri, '~') };
+	}
+	if (staged && status === 'D') {
+		return { left: buildGitUri(fileUri, 'HEAD'), right: buildGitUri(fileUri, EMPTY_TREE_SHA) };
 	}
 
-	// Unstaged: compare index (~) to working copy (file itself)
-	return {
-		left: buildGitUri(fileUri, '~'),
-		right: fileUri,
-	};
+	if (staged) {
+		return { left: buildGitUri(fileUri, 'HEAD'), right: buildGitUri(fileUri, '~') };
+	}
+
+	return { left: buildGitUri(fileUri, '~'), right: fileUri };
 }

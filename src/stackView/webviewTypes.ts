@@ -32,11 +32,11 @@ type RepoWebviewMessage =
 	| { type: 'openFileDiff'; repoId?: string; sha: string; path: string }
 	| { type: 'openCurrentFile'; repoId?: string; path: string }
 	| { type: 'getBranchFiles'; repoId?: string; branchName: string }
-	| { type: 'openBranchFileDiff'; repoId?: string; branchName: string; path: string }
+	| { type: 'openBranchFileDiff'; repoId?: string; branchName: string; path: string; status?: string }
 	| { type: 'stageFile'; repoId?: string; path: string }
 	| { type: 'unstageFile'; repoId?: string; path: string }
 	| { type: 'discardFile'; repoId?: string; path: string }
-	| { type: 'openWorkingCopyDiff'; repoId?: string; path: string; staged: boolean }
+	| { type: 'openWorkingCopyDiff'; repoId?: string; path: string; staged: boolean; status?: string }
 	| { type: 'commitChanges'; repoId?: string; message: string }
 	| { type: 'createBranch'; repoId?: string; message: string }
 	| { type: 'branchTrack'; repoId?: string; branchName: string }

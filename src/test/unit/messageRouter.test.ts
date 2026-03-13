@@ -48,16 +48,16 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 		},
 		handleGetCommitFiles: async (_repoId, sha) => { calls.push(`handleGetCommitFiles:${sha}`); },
 		handleGetBranchFiles: async (_repoId, branchName) => { calls.push(`handleGetBranchFiles:${branchName}`); },
-		handleOpenBranchFileDiff: async (_repoId, branchName, path) => {
-			calls.push(`handleOpenBranchFileDiff:${branchName}:${path}`);
+		handleOpenBranchFileDiff: async (_repoId, branchName, path, status) => {
+			calls.push(`handleOpenBranchFileDiff:${branchName}:${path}${status ? ':' + status : ''}`);
 		},
 		handleOpenFileDiff: async (_repoId, sha, path) => { calls.push(`handleOpenFileDiff:${sha}:${path}`); },
 		handleOpenCurrentFile: async (_repoId, path) => { calls.push(`handleOpenCurrentFile:${path}`); },
 		handleStageFile: async (_repoId, path) => { calls.push(`handleStageFile:${path}`); },
 		handleUnstageFile: async (_repoId, path) => { calls.push(`handleUnstageFile:${path}`); },
 		handleDiscardFile: async (_repoId, path) => { calls.push(`handleDiscardFile:${path}`); },
-		handleOpenWorkingCopyDiff: async (_repoId, path, staged) => {
-			calls.push(`handleOpenWorkingCopyDiff:${path}:${staged}`);
+		handleOpenWorkingCopyDiff: async (_repoId, path, staged, status) => {
+			calls.push(`handleOpenWorkingCopyDiff:${path}:${staged}${status ? ':' + status : ''}`);
 		},
 		handleCommitChanges: async (_repoId, message) => { calls.push(`handleCommitChanges:${message}`); },
 		handleCreateBranch: async (_repoId, message) => { calls.push(`handleCreateBranch:${message}`); },
@@ -232,6 +232,13 @@ describe('messageRouter', () => {
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleOpenBranchFileDiff:feature-1:src/file.ts']);
 			});
+
+			it('should pass status through openBranchFileDiff message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'openBranchFileDiff', branchName: 'feature-1', path: 'src/file.ts', status: 'A' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleOpenBranchFileDiff:feature-1:src/file.ts:A']);
+			});
 		});
 
 		describe('working copy messages', () => {
@@ -268,6 +275,13 @@ describe('messageRouter', () => {
 				const result = routeMessage({ type: 'openWorkingCopyDiff', path: 'src/file.ts', staged: false }, ctx);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleOpenWorkingCopyDiff:src/file.ts:false']);
+			});
+
+			it('should pass status through openWorkingCopyDiff message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'openWorkingCopyDiff', path: 'src/file.ts', staged: false, status: 'U' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleOpenWorkingCopyDiff:src/file.ts:false:U']);
 			});
 
 			it('should route commitChanges message', () => {
