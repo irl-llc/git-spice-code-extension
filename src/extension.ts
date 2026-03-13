@@ -111,6 +111,9 @@ function registerBranchContextMenuCommands(context: vscode.ExtensionContext, pro
 /** Registers branch commands that require custom prompts. */
 function registerBranchPromptCommands(context: vscode.ExtensionContext, provider: StackViewProvider): void {
 	context.subscriptions.push(
+		vscode.commands.registerCommand('git-spice.copyBranchName', (ctx: BranchContext) => {
+			if (ctx?.branchName) void provider.handleCopyBranchName(undefined, ctx.branchName);
+		}),
 		vscode.commands.registerCommand('git-spice.branchRename', (ctx: BranchContext) => {
 			if (ctx?.branchName) void provider.handleBranchRenamePrompt(undefined, ctx.branchName);
 		}),

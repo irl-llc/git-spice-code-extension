@@ -59,6 +59,7 @@ export async function handleBranchContextMenu(branchName: string, deps: BranchHa
 function getBaseMenuItems(): BranchContextMenuItem[] {
 	return [
 		{ label: '$(git-branch) Checkout', action: 'checkout' },
+		{ label: '$(copy) Copy Branch Name', action: 'copyBranchName' },
 		{ label: '$(tag) Rename...', action: 'rename' },
 		{ label: '$(move) Move onto...', action: 'move' },
 		{ label: '$(type-hierarchy) Move with children onto...', action: 'upstackMove' },
@@ -103,9 +104,24 @@ const EXEC_ACTION_MAP: Record<string, typeof execBranchCheckout> = {
 	untrack: execBranchUntrack,
 };
 
+/** Copies a branch name to the clipboard. */
+export async function handleCopyBranchName(branchName: string): Promise<void> {
+	const trimmed = requireNonEmpty(branchName, 'branch name');
+	if (!trimmed) return;
+
+	try {
+		await vscode.env.clipboard.writeText(trimmed);
+		void vscode.window.showInformationMessage(`Copied branch name: ${trimmed}`);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		void vscode.window.showErrorMessage(`Failed to copy branch name: ${message}`);
+	}
+}
+
 /** Dispatches actions that require prompts or confirmations. */
 function dispatchPromptAction(action: string, branchName: string, deps: BranchHandlerDeps): void {
 	const actions: Record<string, () => void> = {
+		copyBranchName: () => void handleCopyBranchName(branchName),
 		rename: () => void handleBranchRenamePrompt(branchName, deps),
 		move: () => void handleBranchMovePrompt(branchName, deps),
 		upstackMove: () => void handleUpstackMovePrompt(branchName, deps),

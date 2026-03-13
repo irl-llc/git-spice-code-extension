@@ -29,6 +29,7 @@ const EXTENSION_COMMANDS = [
 	'git-spice.stackSubmit',
 	'git-spice.branchCreateFromCommitMessage',
 	'git-spice.toggleCommentProgress',
+	'git-spice.copyBranchName',
 	'git-spice.commitCopySha',
 	'git-spice.commitSplit',
 ];

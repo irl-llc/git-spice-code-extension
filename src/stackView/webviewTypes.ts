@@ -17,6 +17,7 @@ type RepoWebviewMessage =
 	| { type: 'branchFold'; repoId?: string; branchName: string }
 	| { type: 'branchSquash'; repoId?: string; branchName: string }
 	| { type: 'branchEdit'; repoId?: string; branchName: string }
+	| { type: 'copyBranchName'; repoId?: string; branchName: string }
 	| { type: 'branchRenamePrompt'; repoId?: string; branchName: string }
 	| { type: 'branchRename'; repoId?: string; branchName: string; newName: string }
 	| { type: 'branchRestack'; repoId?: string; branchName: string }

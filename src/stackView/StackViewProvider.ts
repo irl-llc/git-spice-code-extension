@@ -27,6 +27,7 @@ import {
 	handleBranchMove,
 	handleUpstackMovePrompt,
 	handleUpstackMove,
+	handleCopyBranchName,
 	type BranchHandlerDeps,
 } from './handlers/branchHandlers';
 import {
@@ -276,6 +277,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void> {
 		await handleBranchContextMenu(branchName, this.getBranchHandlerDeps(repoId));
+	}
+
+	async handleCopyBranchName(_repoId: string | undefined, branchName: string): Promise<void> {
+		await handleCopyBranchName(branchName);
 	}
 
 	async handleBranchTrack(repoId: string | undefined, branchName: string): Promise<void> {

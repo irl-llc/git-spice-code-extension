@@ -149,6 +149,11 @@
         "icon": "$(split-horizontal)"
       },
       {
+        "command": "git-spice.copyBranchName",
+        "title": "Copy Branch Name",
+        "icon": "$(copy)"
+      },
+      {
         "command": "git-spice.toggleCommentProgress",
         "title": "Show Comment Progress (Beta)",
         "toggled": "config.git-spice.showCommentProgress"
@@ -193,9 +198,14 @@
           "group": "1_branch@1"
         },
         {
-          "command": "git-spice.branchRename",
+          "command": "git-spice.copyBranchName",
           "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
           "group": "1_branch@2"
+        },
+        {
+          "command": "git-spice.branchRename",
+          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+          "group": "1_branch@3"
         },
         {
           "command": "git-spice.branchMove",
