@@ -10,10 +10,17 @@ export type GitSpiceCommit = Readonly<{
 	subject: string;
 }>;
 
+export type GitSpiceComments = Readonly<{
+	total: number;
+	resolved: number;
+	unresolved: number;
+}>;
+
 export type GitSpiceChange = Readonly<{
 	id: string;
 	url: string;
 	status?: GitSpiceChangeStatus;
+	comments?: GitSpiceComments;
 }>;
 
 export type GitSpicePush = Readonly<{
@@ -149,7 +156,32 @@ function readChange(value: unknown): GitSpiceChange | undefined {
 	}
 
 	const status = readChangeStatus(value.status);
-	return status ? { id, url, status } : { id, url };
+	const comments = readComments(value.comments);
+
+	return {
+		id,
+		url,
+		...(status && { status }),
+		...(comments && { comments }),
+	};
+}
+
+function readComments(value: unknown): GitSpiceComments | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+
+	const total = readNumber(value.total);
+	const resolved = readNumber(value.resolved);
+	const unresolved = readNumber(value.unresolved);
+
+	const isMissing = total === undefined || resolved === undefined || unresolved === undefined;
+	const isInconsistent = !isMissing && resolved + unresolved !== total;
+	if (isMissing || isInconsistent) {
+		return undefined;
+	}
+
+	return { total, resolved, unresolved };
 }
 
 function readChangeStatus(value: unknown): GitSpiceChangeStatus | undefined {
