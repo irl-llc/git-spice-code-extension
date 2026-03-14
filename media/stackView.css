@@ -257,7 +257,8 @@ button {
   text-decoration: underline;
 }
 
-.branch-submit-btn {
+.branch-submit-btn,
+.branch-action-btn {
   border: none;
   background: transparent;
   color: var(--vscode-icon-foreground);
@@ -271,7 +272,8 @@ button {
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 
-.branch-submit-btn:hover {
+.branch-submit-btn:hover,
+.branch-action-btn:hover {
   opacity: 1;
   color: var(--vscode-textLink-foreground);
 }

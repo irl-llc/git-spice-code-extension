@@ -366,6 +366,10 @@ function renderBranchTags(branch: BranchViewModel, postMessage: PostMessage): HT
 		tags.appendChild(renderCommentsIndicator(branch.change.comments));
 	}
 
+	if (branch.commits && branch.commits.length > 1) {
+		tags.appendChild(createSquashButton(branch, postMessage));
+	}
+
 	tags.appendChild(createSubmitButton(branch, postMessage));
 
 	if (branch.change) {
@@ -373,6 +377,20 @@ function renderBranchTags(branch: BranchViewModel, postMessage: PostMessage): HT
 	}
 
 	return tags;
+}
+
+/** Creates the squash button for a branch with multiple commits. */
+function createSquashButton(branch: BranchViewModel, postMessage: PostMessage): HTMLButtonElement {
+	const btn = document.createElement('button');
+	btn.type = 'button';
+	btn.className = 'branch-action-btn';
+	btn.title = 'Squash commits into one';
+	btn.innerHTML = '<i class="codicon codicon-fold-down"></i>';
+	btn.addEventListener('click', (event: Event) => {
+		event.stopPropagation();
+		postMessage({ type: 'branchSquash', branchName: branch.name });
+	});
+	return btn;
 }
 
 /** Creates the submit button for a branch. */
