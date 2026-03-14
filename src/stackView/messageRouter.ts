@@ -37,6 +37,7 @@ export interface MessageHandlerContext {
 	handleUpstackMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void>;
 	handleGetCommitFiles(repoId: string | undefined, sha: string): Promise<void>;
 	handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void>;
+	handleOpenBranchDiff(repoId: string | undefined, branchName: string): Promise<void>;
 	handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, path: string, status?: string): Promise<void>;
 	handleOpenFileDiff(repoId: string | undefined, sha: string, path: string): Promise<void>;
 	handleOpenCurrentFile(repoId: string | undefined, path: string): Promise<void>;
@@ -206,18 +207,34 @@ function routeCommitMessage(message: WebviewMessage, ctx: MessageHandlerContext)
 
 /** Routes file operation messages (diff, open, branch files). */
 function routeFileMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
+	return routeBranchDiffMessage(message, ctx) || routeFileDiffMessage(message, ctx);
+}
+
+/** Routes branch-level diff messages (multi-file view, single file diff). */
+function routeBranchDiffMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
+	switch (message.type) {
+		case 'getBranchFiles':
+			void ctx.handleGetBranchFiles(message.repoId, message.branchName);
+			return true;
+		case 'openBranchDiff':
+			void ctx.handleOpenBranchDiff(message.repoId, message.branchName);
+			return true;
+		case 'openBranchFileDiff':
+			void ctx.handleOpenBranchFileDiff(message.repoId, message.branchName, message.path, message.status);
+			return true;
+		default:
+			return false;
+	}
+}
+
+/** Routes individual file diff and open messages. */
+function routeFileDiffMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'openFileDiff':
 			void ctx.handleOpenFileDiff(message.repoId, message.sha, message.path);
 			return true;
 		case 'openCurrentFile':
 			void ctx.handleOpenCurrentFile(message.repoId, message.path);
-			return true;
-		case 'getBranchFiles':
-			void ctx.handleGetBranchFiles(message.repoId, message.branchName);
-			return true;
-		case 'openBranchFileDiff':
-			void ctx.handleOpenBranchFileDiff(message.repoId, message.branchName, message.path, message.status);
 			return true;
 		default:
 			return false;

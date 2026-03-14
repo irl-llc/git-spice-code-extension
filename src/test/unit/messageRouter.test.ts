@@ -49,6 +49,7 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 		},
 		handleGetCommitFiles: async (_repoId, sha) => { calls.push(`handleGetCommitFiles:${sha}`); },
 		handleGetBranchFiles: async (_repoId, branchName) => { calls.push(`handleGetBranchFiles:${branchName}`); },
+		handleOpenBranchDiff: async (_repoId, branchName) => { calls.push(`handleOpenBranchDiff:${branchName}`); },
 		handleOpenBranchFileDiff: async (_repoId, branchName, path, status) => {
 			calls.push(`handleOpenBranchFileDiff:${branchName}:${path}${status ? ':' + status : ''}`);
 		},
@@ -232,6 +233,13 @@ describe('messageRouter', () => {
 				const result = routeMessage({ type: 'getBranchFiles', branchName: 'feature-1' }, ctx);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleGetBranchFiles:feature-1']);
+			});
+
+			it('should route openBranchDiff message', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'openBranchDiff', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleOpenBranchDiff:feature-1']);
 			});
 
 			it('should route openBranchFileDiff message', () => {

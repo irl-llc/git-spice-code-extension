@@ -66,6 +66,49 @@ function validateBranchDiffContext(
 	return { cwd: deps.workspaceFolder.uri.fsPath, parentName };
 }
 
+/** Opens a multi-file changes view for all files in a branch. */
+export async function handleOpenBranchDiff(branchName: string, deps: BranchFileHandlerDeps): Promise<void> {
+	const ctx = validateBranchDiffContext(branchName, deps);
+	if (!ctx) return;
+
+	try {
+		await openBranchChangesView(ctx.cwd, branchName, ctx.parentName);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		void vscode.window.showErrorMessage(`Failed to open branch diff: ${message}`);
+	}
+}
+
+/** Fetches files, builds resource list, and opens multi-file changes view. */
+async function openBranchChangesView(cwd: string, branchName: string, parentName: string): Promise<void> {
+	const path = await import('node:path');
+	const files = await fetchBranchFiles(cwd, branchName, parentName);
+
+	if (files.length === 0) {
+		void vscode.window.showInformationMessage('No files changed in this branch.');
+		return;
+	}
+
+	const mergeBase = await fetchBranchMergeBase(cwd, branchName, parentName);
+	const resourceList = buildBranchResourceList(files, cwd, branchName, mergeBase, path);
+	await vscode.commands.executeCommand('vscode.changes', `Changes in ${branchName}`, resourceList);
+}
+
+/** Builds the resource list for the vscode.changes command. */
+function buildBranchResourceList(
+	files: CommitFileChange[],
+	cwd: string,
+	branchName: string,
+	mergeBase: string,
+	path: typeof import('node:path'),
+): [vscode.Uri, vscode.Uri, vscode.Uri][] {
+	return files.map((file) => {
+		const fileUri = vscode.Uri.file(path.join(cwd, file.path));
+		const { left, right } = buildBranchFileDiffUris(fileUri, mergeBase, branchName, file.status);
+		return [fileUri, left, right];
+	});
+}
+
 /** Opens a diff view for a file comparing merge-base to branch tip. */
 export async function handleOpenBranchFileDiff(
 	branchName: string,

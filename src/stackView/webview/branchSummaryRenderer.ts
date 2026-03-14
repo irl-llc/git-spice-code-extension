@@ -39,7 +39,7 @@ export function renderBranchSummary(
 	return container;
 }
 
-/** Renders the clickable summary header with chevron toggle and label. */
+/** Renders the summary header with chevron toggle and clickable label. */
 function renderSummaryHeader(
 	branchName: string,
 	container: HTMLElement,
@@ -50,12 +50,17 @@ function renderSummaryHeader(
 	header.className = 'branch-summary-header';
 
 	const isExpanded = state.expandedBranches.has(branchName);
-	header.appendChild(createToggleIcon(isExpanded));
+	const toggle = createToggleIcon(isExpanded);
+	toggle.addEventListener('click', (event: Event) => {
+		event.stopPropagation();
+		toggleSummaryExpand(branchName, container, state, postMessage);
+	});
+	header.appendChild(toggle);
 	header.appendChild(createSummaryLabel());
 
 	header.addEventListener('click', (event: Event) => {
 		event.stopPropagation();
-		toggleSummaryExpand(branchName, container, state, postMessage);
+		postMessage({ type: 'openBranchDiff', branchName });
 	});
 
 	return header;

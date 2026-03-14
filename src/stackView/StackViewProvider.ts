@@ -46,6 +46,7 @@ import {
 } from './handlers/diffHandlers';
 import {
 	handleGetBranchFiles,
+	handleOpenBranchDiff,
 	handleOpenBranchFileDiff,
 	type BranchFileHandlerDeps,
 } from './handlers/branchFileHandlers';
@@ -333,6 +334,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void> {
 		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps(repoId));
+	}
+
+	async handleOpenBranchDiff(repoId: string | undefined, branchName: string): Promise<void> {
+		await handleOpenBranchDiff(branchName, this.getBranchFileHandlerDeps(repoId));
 	}
 
 	async handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, filePath: string, status?: string): Promise<void> {

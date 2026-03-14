@@ -33,6 +33,7 @@ type RepoWebviewMessage =
 	| { type: 'openFileDiff'; repoId?: string; sha: string; path: string }
 	| { type: 'openCurrentFile'; repoId?: string; path: string }
 	| { type: 'getBranchFiles'; repoId?: string; branchName: string }
+	| { type: 'openBranchDiff'; repoId?: string; branchName: string }
 	| { type: 'openBranchFileDiff'; repoId?: string; branchName: string; path: string; status?: string }
 	| { type: 'stageFile'; repoId?: string; path: string }
 	| { type: 'unstageFile'; repoId?: string; path: string }
