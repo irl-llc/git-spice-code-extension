@@ -299,7 +299,8 @@
     "deploy": "vsce publish --no-dependencies",
     "deploy:patch": "vsce publish patch --no-dependencies",
     "deploy:minor": "vsce publish minor --no-dependencies",
-    "deploy:major": "vsce publish major --no-dependencies"
+    "deploy:major": "vsce publish major --no-dependencies",
+    "deploy:openvsx": "ovsx publish --no-dependencies"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
@@ -322,6 +323,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^28.1.0",
     "mocha": "^11.0.1",
+    "ovsx": "^0.10.11",
     "prettier": "3.6.2",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
