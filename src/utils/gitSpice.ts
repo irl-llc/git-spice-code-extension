@@ -8,7 +8,7 @@ import * as os from 'node:os';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 
 const execFileAsync = promisify(execFile);
-const GIT_SPICE_BINARY = 'gs';
+const GIT_SPICE_BINARY = 'git-spice';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const BRANCH_CREATE_TIMEOUT_MS = 10_000;
 
@@ -84,7 +84,7 @@ export async function execBranchUntrack(
 }
 
 /**
- * Deletes a branch using `gs branch delete`.
+ * Deletes a branch using `git-spice branch delete`.
  * This untracks the branch and deletes the local git branch.
  */
 export async function execBranchDelete(
@@ -232,7 +232,7 @@ export async function execBranchSplit(
 }
 
 /**
- * Moves a branch to a new parent using `gs branch onto`.
+ * Moves a branch to a new parent using `git-spice branch onto`.
  * This changes the base branch without rebasing commits.
  * Only moves the specified branch; children remain where they are.
  */
@@ -257,7 +257,7 @@ export async function execBranchMove(
 }
 
 /**
- * Moves a branch and all its descendants to a new parent using `gs upstack onto`.
+ * Moves a branch and all its descendants to a new parent using `git-spice upstack onto`.
  * This rebases the entire upstack (branch + children) onto the new parent.
  */
 export async function execUpstackMove(
@@ -305,7 +305,7 @@ export async function execStackSubmit(folder: vscode.WorkspaceFolder): Promise<B
 }
 
 /**
- * Executes `gs repo sync` with interactive prompts for branch deletion.
+ * Executes `git-spice repo sync` with interactive prompts for branch deletion.
  * When git-spice prompts to delete branches (due to closed PRs), shows VSCode prompts
  * to the user and handles their responses.
  *
@@ -405,7 +405,7 @@ export async function execRepoSync(
 		// Handle process errors
 		process.on('error', (error) => {
 			clearTimeout(timeout);
-			resolveOnce({ error: `Failed to execute gs repo sync: ${toErrorMessage(error)}` });
+			resolveOnce({ error: `Failed to execute git-spice repo sync: ${toErrorMessage(error)}` });
 		});
 	});
 }
