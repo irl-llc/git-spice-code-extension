@@ -7,3 +7,5 @@ node_modules
 NOTES.md
 /.claude/settings.local.json
 .gs/
+test-results/
+playwright-report/
