@@ -3,6 +3,7 @@
 'use strict';
 
 const path = require('path');
+const webpack = require('webpack');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -74,6 +75,13 @@ const webviewConfig = {
 		]
 	},
 	plugins: [
+		// React reads process.env.NODE_ENV at runtime to pick its dev/prod
+		// builds. The webview runs in a browser context with no `process`,
+		// so webpack must inline this value. (At mode: 'none' the default
+		// DefinePlugin would not fire.)
+		new webpack.DefinePlugin({
+			'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'development'),
+		}),
 		new CopyWebpackPlugin({
 			patterns: [
 				{
