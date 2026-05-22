@@ -42,8 +42,22 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Cache pinned gs binary
+        uses: actions/cache@v4
+        with:
+          path: .gs
+          key: gs-${{ runner.os }}-${{ hashFiles('.gs-version') }}
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Fetch and build pinned gs binary
+        run: npm run gs:fetch
 
       - name: Format check
         run: npm run format:check
@@ -86,6 +100,7 @@ jobs:
         run: xvfb-run -a npm run test:e2e
         env:
           DISPLAY: ':99.0'
+          GIT_SPICE_BIN: ${{ github.workspace }}/.gs/bin/gs
         continue-on-error: true
 
       - name: Package extension

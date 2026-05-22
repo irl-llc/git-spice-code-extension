@@ -7,8 +7,7 @@ import * as assert from 'assert';
 
 import { setupDom, teardownDom } from './domTestHelper';
 import { branchNeedsUpdate, serializeComments } from '../../../stackView/webview/branchRenderer';
-import { setBranchData } from '../../../stackView/domHelpers';
-import type { BranchElementData } from '../../../stackView/domHelpers';
+import { setBranchData, type BranchElementData } from '../../../stackView/domHelpers';
 import type {
 	BranchViewModel,
 	LaneSegment,

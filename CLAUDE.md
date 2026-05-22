@@ -279,6 +279,13 @@ For complete command reference: https://abhinav.github.io/git-spice/cli/referenc
    - E2E tests verify the extension loads and registers commands — they are the safety net for integration regressions that unit tests cannot catch
    - Helper utilities in `src/test/e2e/helpers/extensionHelper.ts` provide `activateExtension()`, `delay()`, `executeCommand()`, and `getCommandsWithPrefix()`
 
+4. **Pinned `gs` binary for tests** (`npm run gs:fetch`):
+   - The extension shells out to `gs` via `src/utils/gitSpice.ts`. The binary name is taken from the `GIT_SPICE_BIN` env var, falling back to `gs` on PATH.
+   - For deterministic tests against features not in upstream git-spice, we build a pinned binary from `ed-irl/git-spice` at the SHA in [.gs-version](.gs-version).
+   - `npm run gs:fetch` clones at that SHA into `.gs/src/` and builds to `.gs/bin/gs`. The script is idempotent — it skips rebuilds when `.gs/.built-sha` already matches `.gs-version`.
+   - CI sets `GIT_SPICE_BIN=${{ github.workspace }}/.gs/bin/gs` for the E2E job. Local dev: either install the same version on PATH, or `export GIT_SPICE_BIN=$(pwd)/.gs/bin/gs` after running `npm run gs:fetch`.
+   - To bump the pin: edit the SHA in `.gs-version` and re-run `npm run gs:fetch`.
+
 ### File Organization
 
 ```
@@ -296,8 +303,7 @@ src/
 │   └── diffUri.ts        # Git diff URI construction
 ├── test/
 │   ├── unit/             # Pure function tests (no VSCode mocking)
-│   ├── integration/      # Tests requiring VSCode APIs
-│   └── e2e/              # End-to-end extension tests
+│   └── e2e/              # End-to-end extension tests (Mocha + @vscode/test-cli)
 └── constants.ts          # Shared constants
 ```
 

@@ -11,7 +11,7 @@ import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
 
 const execFileAsync = promisify(execFile);
-const GIT_SPICE_BINARY = 'gs';
+const GIT_SPICE_BINARY = process.env.GIT_SPICE_BIN ?? 'gs';
 
 /**
  * Environment that suppresses optional index locks (e.g. stat-cache refresh).
