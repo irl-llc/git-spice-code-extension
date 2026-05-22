@@ -58,12 +58,12 @@ const webviewConfig = {
 		library: 'stackView'
 	},
 	resolve: {
-		extensions: ['.ts', '.js']
+		extensions: ['.tsx', '.ts', '.js']
 	},
 	module: {
 		rules: [
 			{
-				test: /\.ts$/,
+				test: /\.tsx?$/,
 				exclude: /node_modules/,
 				use: [
 					{
