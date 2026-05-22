@@ -91,7 +91,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 		webviewView.webview.html = await renderWebviewHtml(webviewView.webview, this.extensionUri);
 		webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
-		webviewView.onDidDispose(() => { this.view = undefined; });
+		webviewView.onDidDispose(() => {
+			this.view = undefined;
+		});
 
 		this.syncWatchers();
 		void this.refresh();
@@ -340,7 +342,12 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await handleOpenBranchDiff(branchName, this.getBranchFileHandlerDeps(repoId));
 	}
 
-	async handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, filePath: string, status?: string): Promise<void> {
+	async handleOpenBranchFileDiff(
+		repoId: string | undefined,
+		branchName: string,
+		filePath: string,
+		status?: string,
+	): Promise<void> {
 		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps(repoId), status);
 	}
 
@@ -364,7 +371,12 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await handleOpenCurrentFile(filePath, this.getDiffHandlerDeps(repoId));
 	}
 
-	async handleOpenWorkingCopyDiff(repoId: string | undefined, filePath: string, staged: boolean, status?: string): Promise<void> {
+	async handleOpenWorkingCopyDiff(
+		repoId: string | undefined,
+		filePath: string,
+		staged: boolean,
+		status?: string,
+	): Promise<void> {
 		await handleOpenWorkingCopyDiff(filePath, staged, this.getDiffHandlerDeps(repoId), status);
 	}
 
@@ -401,14 +413,24 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	async handleStackRestack(repoId: string | undefined): Promise<void> {
 		const folder = this.resolveWorkspaceFolder(repoId);
 		if (!folder) return;
-		await runWithProgress('Restacking stack...', () => execStackRestack(folder), 'Stack restacked successfully', () => this.refresh());
+		await runWithProgress(
+			'Restacking stack...',
+			() => execStackRestack(folder),
+			'Stack restacked successfully',
+			() => this.refresh(),
+		);
 	}
 
 	/** Submits the specified repo's stack. */
 	async handleStackSubmit(repoId: string | undefined): Promise<void> {
 		const folder = this.resolveWorkspaceFolder(repoId);
 		if (!folder) return;
-		await runWithProgress('Submitting stack...', () => execStackSubmit(folder), 'Stack submitted successfully', () => this.refresh());
+		await runWithProgress(
+			'Submitting stack...',
+			() => execStackSubmit(folder),
+			'Stack submitted successfully',
+			() => this.refresh(),
+		);
 	}
 
 	// --- Branch Command Infrastructure ---

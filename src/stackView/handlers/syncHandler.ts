@@ -58,6 +58,7 @@ function showSyncResult(result: RepoSyncResult): void {
 function formatSyncMessage(deleted: string[], synced: number): string {
 	let msg = 'Repository synced successfully.';
 	if (synced > 0) msg += ` ${synced} branch${synced === 1 ? '' : 'es'} updated.`;
-	if (deleted.length > 0) msg += ` Deleted ${deleted.length} branch${deleted.length === 1 ? '' : 'es'}: ${deleted.join(', ')}.`;
+	if (deleted.length > 0)
+		msg += ` Deleted ${deleted.length} branch${deleted.length === 1 ? '' : 'es'}: ${deleted.join(', ')}.`;
 	return msg;
 }

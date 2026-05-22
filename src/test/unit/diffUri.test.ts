@@ -17,9 +17,11 @@ function createMockUri(fsPath: string): ReturnType<typeof buildGitUri> {
 			fsPath,
 			scheme: changes.scheme ?? 'file',
 			query: changes.query ?? '',
-			with: () => { throw new Error('Nested with() not supported in mock'); },
+			with: () => {
+				throw new Error('Nested with() not supported in mock');
+			},
 		}),
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	} as any;
 }
 

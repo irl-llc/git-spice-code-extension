@@ -5,11 +5,7 @@
 
 import type { CommitFileChange } from '../types';
 import type { WebviewMessage } from '../webviewTypes';
-import {
-	createFileRow,
-	appendFileStatus,
-	createFileActionButton,
-} from './fileRowHelpers';
+import { createFileRow, appendFileStatus, createFileActionButton } from './fileRowHelpers';
 
 /** Callback for posting messages to the extension host. */
 export type PostMessage = (message: WebviewMessage) => void;
@@ -85,11 +81,7 @@ function createSummaryLabel(): HTMLElement {
 }
 
 /** Renders the file list container (hidden or populated based on state). */
-function renderSummaryFileList(
-	branchName: string,
-	state: BranchSummaryState,
-	postMessage: PostMessage,
-): HTMLElement {
+function renderSummaryFileList(branchName: string, state: BranchSummaryState, postMessage: PostMessage): HTMLElement {
 	const fileList = document.createElement('div');
 	fileList.className = 'branch-summary-files';
 
@@ -200,9 +192,11 @@ function renderBranchFileRow(file: CommitFileChange, branchName: string, postMes
 	const row = createFileRow(file.path);
 
 	if (file.status !== 'D') {
-		row.appendChild(createFileActionButton('codicon-go-to-file', 'Open current file', () => {
-			postMessage({ type: 'openCurrentFile', path: file.path });
-		}));
+		row.appendChild(
+			createFileActionButton('codicon-go-to-file', 'Open current file', () => {
+				postMessage({ type: 'openCurrentFile', path: file.path });
+			}),
+		);
 	}
 
 	appendFileStatus(row, file.status);

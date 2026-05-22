@@ -26,7 +26,12 @@ export interface MessageHandlerContext {
 	handleOpenCommitDiff(repoId: string | undefined, sha: string): Promise<void>;
 	handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void>;
 	handleCopyBranchName(repoId: string | undefined, branchName: string): Promise<void>;
-	handleBranchCommandInternal(repoId: string | undefined, commandName: string, branchName: string, execFunction: ExecFunction): Promise<void>;
+	handleBranchCommandInternal(
+		repoId: string | undefined,
+		commandName: string,
+		branchName: string,
+		execFunction: ExecFunction,
+	): Promise<void>;
 	handleBranchTrack(repoId: string | undefined, branchName: string): Promise<void>;
 	handleBranchDelete(repoId: string | undefined, branchName: string): Promise<void>;
 	handleBranchRenamePrompt(repoId: string | undefined, branchName: string): Promise<void>;
@@ -38,7 +43,12 @@ export interface MessageHandlerContext {
 	handleGetCommitFiles(repoId: string | undefined, sha: string): Promise<void>;
 	handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void>;
 	handleOpenBranchDiff(repoId: string | undefined, branchName: string): Promise<void>;
-	handleOpenBranchFileDiff(repoId: string | undefined, branchName: string, path: string, status?: string): Promise<void>;
+	handleOpenBranchFileDiff(
+		repoId: string | undefined,
+		branchName: string,
+		path: string,
+		status?: string,
+	): Promise<void>;
 	handleOpenFileDiff(repoId: string | undefined, sha: string, path: string): Promise<void>;
 	handleOpenCurrentFile(repoId: string | undefined, path: string): Promise<void>;
 	handleStageFile(repoId: string | undefined, path: string): Promise<void>;

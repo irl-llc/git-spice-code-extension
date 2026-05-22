@@ -93,14 +93,7 @@ function reconcileItems<T>(
 		const existingElement = existingElements.get(key);
 
 		if (existingElement) {
-			previousElement = updateExistingElement(
-				container,
-				existingElement,
-				item,
-				config,
-				previousElement,
-				treeColors,
-			);
+			previousElement = updateExistingElement(container, existingElement, item, config, previousElement, treeColors);
 		} else {
 			previousElement = insertNewElement(container, item, key, config, animations, previousElement, treeColors);
 		}
@@ -150,11 +143,7 @@ function updateTreeFragmentSvg(wrapper: HTMLElement, newChild: HTMLElement, tree
 }
 
 /** Reorders element if not in correct position. */
-function reorderIfNeeded(
-	container: HTMLElement,
-	element: HTMLElement,
-	previousElement: HTMLElement | null,
-): void {
+function reorderIfNeeded(container: HTMLElement, element: HTMLElement, previousElement: HTMLElement | null): void {
 	const expectedNext: ChildNode | null = previousElement ? previousElement.nextSibling : container.firstChild;
 	if (element !== expectedNext) {
 		container.insertBefore(element, expectedNext);

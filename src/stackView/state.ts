@@ -85,7 +85,12 @@ function computeLane(siblingIndex: number, parentLane: number, nextLane: { value
 }
 
 /** Creates the tree position for a branch node. */
-function createTreePosition(branch: GitSpiceBranch, ctx: TraversalContext, lane: number, isLastChild: boolean): TreePosition {
+function createTreePosition(
+	branch: GitSpiceBranch,
+	ctx: TraversalContext,
+	lane: number,
+	isLastChild: boolean,
+): TreePosition {
 	return {
 		depth: ctx.depth,
 		isLastChild,
@@ -111,16 +116,26 @@ function postOrderTraverse(branch: GitSpiceBranch, ctx: TraversalContext, state:
 }
 
 /** Recursively visits all children in post-order. */
-function visitChildren(children: GitSpiceBranch[], ctx: TraversalContext, lane: number, isLastChild: boolean, state: TraversalState): void {
+function visitChildren(
+	children: GitSpiceBranch[],
+	ctx: TraversalContext,
+	lane: number,
+	isLastChild: boolean,
+	state: TraversalState,
+): void {
 	for (let i = 0; i < children.length; i++) {
-		postOrderTraverse(children[i], {
-			depth: ctx.depth + 1,
-			ancestorIsLast: [...ctx.ancestorIsLast, isLastChild],
-			siblingIndex: i,
-			siblingCount: children.length,
-			nextLane: ctx.nextLane,
-			parentLane: lane,
-		}, state);
+		postOrderTraverse(
+			children[i],
+			{
+				depth: ctx.depth + 1,
+				ancestorIsLast: [...ctx.ancestorIsLast, isLastChild],
+				siblingIndex: i,
+				siblingCount: children.length,
+				nextLane: ctx.nextLane,
+				parentLane: lane,
+			},
+			state,
+		);
 	}
 }
 
@@ -143,14 +158,18 @@ function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, G
 
 	for (let i = 0; i < startingBranches.length; i++) {
 		const rootLane = laneCounter.value++;
-		postOrderTraverse(startingBranches[i], {
-			depth: 0,
-			ancestorIsLast: [],
-			siblingIndex: i,
-			siblingCount: startingBranches.length,
-			nextLane: laneCounter,
-			parentLane: rootLane,
-		}, state);
+		postOrderTraverse(
+			startingBranches[i],
+			{
+				depth: 0,
+				ancestorIsLast: [],
+				siblingIndex: i,
+				siblingCount: startingBranches.length,
+				nextLane: laneCounter,
+				parentLane: rootLane,
+			},
+			state,
+		);
 	}
 
 	return state.result;
@@ -244,7 +263,11 @@ function mapCommitsToViewModel(commits: GitSpiceBranch['commits']): BranchViewMo
 }
 
 /** Creates a branch view model from branch data and tree information. */
-function createBranchViewModel(branch: GitSpiceBranch, tree: TreePosition, treeFragment: TreeFragmentData): BranchViewModel {
+function createBranchViewModel(
+	branch: GitSpiceBranch,
+	tree: TreePosition,
+	treeFragment: TreeFragmentData,
+): BranchViewModel {
 	return {
 		name: branch.name,
 		current: branch.current === true,

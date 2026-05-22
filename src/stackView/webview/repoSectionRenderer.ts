@@ -33,7 +33,12 @@ export function renderRepoSection(repoId: string, repoName: string, postMessage:
 }
 
 /** Creates the clickable repo header with icon, name, toolbar, and toggle chevron. */
-function createRepoHeader(repoId: string, repoName: string, section: HTMLElement, postMessage: PostMessage): HTMLElement {
+function createRepoHeader(
+	repoId: string,
+	repoName: string,
+	section: HTMLElement,
+	postMessage: PostMessage,
+): HTMLElement {
 	const header = document.createElement('div');
 	header.className = 'repo-header';
 	header.appendChild(createIcon('codicon-repo'));

@@ -15,17 +15,8 @@ import type { TreeColors } from './tree/treeFragment';
 
 import { animations } from './webview/animationHelpers';
 import { diffList } from './webview/diffEngine';
-import {
-	renderBranch,
-	updateBranch,
-	branchNeedsUpdate,
-	type PostMessage,
-} from './webview/branchRenderer';
-import {
-	renderCommitsContainer,
-	handleCommitFilesResponse,
-	type CommitRendererState,
-} from './webview/commitRenderer';
+import { renderBranch, updateBranch, branchNeedsUpdate, type PostMessage } from './webview/branchRenderer';
+import { renderCommitsContainer, handleCommitFilesResponse, type CommitRendererState } from './webview/commitRenderer';
 import {
 	renderBranchSummary,
 	handleBranchFilesResponse,
@@ -36,12 +27,7 @@ import {
 	renderTreelessUncommittedCard,
 	type WorkingCopyState,
 } from './webview/workingCopyRenderer';
-import {
-	renderRepoSection,
-	getBranchList,
-	getErrorElement,
-	getEmptyElement,
-} from './webview/repoSectionRenderer';
+import { renderRepoSection, getBranchList, getErrorElement, getEmptyElement } from './webview/repoSectionRenderer';
 import { renderUntrackedCard } from './webview/untrackedCardRenderer';
 
 /** Per-repository view state. */
@@ -222,9 +208,12 @@ class StackView {
 			animations.animateOut(item as HTMLElement, () => {});
 		});
 
-		setTimeout(() => {
-			branchList.innerHTML = '';
-		}, items.length * ANIMATION_STAGGER_MS + ANIMATION_DURATION_MS);
+		setTimeout(
+			() => {
+				branchList.innerHTML = '';
+			},
+			items.length * ANIMATION_STAGGER_MS + ANIMATION_DURATION_MS,
+		);
 	}
 
 	// --- Branch Reconciliation ---
@@ -235,14 +224,21 @@ class StackView {
 		newBranches: BranchViewModel[],
 		view: RepoViewState,
 	): void {
-		diffList(branchList, oldBranches, newBranches, {
-			getKey: (branch) => branch.name,
-			render: (branch) => this.renderBranchCard(branch, view),
-			update: (card, branch) => this.updateBranchCard(card, branch, view),
-			needsUpdate: (card, branch) => branchNeedsUpdate(card, branch),
-			itemSelector: '.stack-item',
-			itemClass: 'stack-item',
-		}, animations, this.getTreeColors());
+		diffList(
+			branchList,
+			oldBranches,
+			newBranches,
+			{
+				getKey: (branch) => branch.name,
+				render: (branch) => this.renderBranchCard(branch, view),
+				update: (card, branch) => this.updateBranchCard(card, branch, view),
+				needsUpdate: (card, branch) => branchNeedsUpdate(card, branch),
+				itemSelector: '.stack-item',
+				itemClass: 'stack-item',
+			},
+			animations,
+			this.getTreeColors(),
+		);
 	}
 
 	private renderBranchCard(branch: BranchViewModel, view: RepoViewState): HTMLElement {
@@ -267,7 +263,13 @@ class StackView {
 	}
 
 	private createCommitsContainer(branch: BranchViewModel, _card: HTMLElement, view: RepoViewState): HTMLElement {
-		return renderCommitsContainer(branch, view.commitState, this.getPostMessage(view.currentState?.id), animations, this.getTreeColors());
+		return renderCommitsContainer(
+			branch,
+			view.commitState,
+			this.getPostMessage(view.currentState?.id),
+			animations,
+			this.getTreeColors(),
+		);
 	}
 
 	private createSummaryContainer(branchName: string, view: RepoViewState): HTMLElement {
@@ -317,7 +319,11 @@ class StackView {
 		insertionPoint: HTMLElement | null,
 	): void {
 		const newCard = renderUncommittedCard(
-			repo.uncommitted!, repo.uncommittedTreeFragment!, this.getTreeColors(), view.workingCopyState, this.getPostMessage(view.currentState?.id),
+			repo.uncommitted!,
+			repo.uncommittedTreeFragment!,
+			this.getTreeColors(),
+			view.workingCopyState,
+			this.getPostMessage(view.currentState?.id),
 		);
 		this.insertBeforeOrAppend(branchList, newCard, insertionPoint);
 	}
@@ -329,7 +335,11 @@ class StackView {
 		view: RepoViewState,
 		insertionPoint: HTMLElement | null,
 	): void {
-		const card = renderTreelessUncommittedCard(uncommitted, view.workingCopyState, this.getPostMessage(view.currentState?.id));
+		const card = renderTreelessUncommittedCard(
+			uncommitted,
+			view.workingCopyState,
+			this.getPostMessage(view.currentState?.id),
+		);
 		this.insertBeforeOrAppend(branchList, card, insertionPoint);
 	}
 

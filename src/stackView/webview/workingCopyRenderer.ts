@@ -6,11 +6,7 @@
 import type { TreeFragmentData, UncommittedState, WorkingCopyChange } from '../types';
 import type { WebviewMessage } from '../webviewTypes';
 import { type TreeColors, createTreeFragmentSvg } from '../tree/treeFragment';
-import {
-	createFileRow,
-	appendFileStatus,
-	createFileActionButton,
-} from './fileRowHelpers';
+import { createFileRow, appendFileStatus, createFileActionButton } from './fileRowHelpers';
 
 /** Callback for posting messages to the extension host. */
 export type PostMessage = (message: WebviewMessage) => void;
@@ -168,12 +164,7 @@ function renderSectionHeader(
 }
 
 /** Toggles a changes section expanded/collapsed. */
-function toggleSection(
-	toggle: HTMLElement,
-	fileList: HTMLElement,
-	isStaged: boolean,
-	state: WorkingCopyState,
-): void {
+function toggleSection(toggle: HTMLElement, fileList: HTMLElement, isStaged: boolean, state: WorkingCopyState): void {
 	const isExpanded = toggle.classList.contains('codicon-chevron-down');
 	toggle.classList.toggle('codicon-chevron-down', !isExpanded);
 	toggle.classList.toggle('codicon-chevron-right', isExpanded);
@@ -203,11 +194,7 @@ function renderFileList(
 }
 
 /** Renders a file row for working copy changes with actions. */
-function renderWorkingCopyFileRow(
-	file: WorkingCopyChange,
-	isStaged: boolean,
-	postMessage: PostMessage,
-): HTMLElement {
+function renderWorkingCopyFileRow(file: WorkingCopyChange, isStaged: boolean, postMessage: PostMessage): HTMLElement {
 	const row = createFileRow(file.path);
 	appendWorkingCopyActions(row, file, isStaged, postMessage);
 	appendFileStatus(row, file.status);
@@ -223,22 +210,30 @@ function appendWorkingCopyActions(
 	postMessage: PostMessage,
 ): void {
 	if (isStaged) {
-		row.appendChild(createFileActionButton('codicon-remove', 'Unstage', () => {
-			postMessage({ type: 'unstageFile', path: file.path });
-		}));
+		row.appendChild(
+			createFileActionButton('codicon-remove', 'Unstage', () => {
+				postMessage({ type: 'unstageFile', path: file.path });
+			}),
+		);
 	} else {
-		row.appendChild(createFileActionButton('codicon-discard', 'Discard Changes', () => {
-			postMessage({ type: 'discardFile', path: file.path });
-		}));
-		row.appendChild(createFileActionButton('codicon-add', 'Stage', () => {
-			postMessage({ type: 'stageFile', path: file.path });
-		}));
+		row.appendChild(
+			createFileActionButton('codicon-discard', 'Discard Changes', () => {
+				postMessage({ type: 'discardFile', path: file.path });
+			}),
+		);
+		row.appendChild(
+			createFileActionButton('codicon-add', 'Stage', () => {
+				postMessage({ type: 'stageFile', path: file.path });
+			}),
+		);
 	}
 
 	if (file.status !== 'D') {
-		row.appendChild(createFileActionButton('codicon-go-to-file', 'Open File', () => {
-			postMessage({ type: 'openCurrentFile', path: file.path });
-		}));
+		row.appendChild(
+			createFileActionButton('codicon-go-to-file', 'Open File', () => {
+				postMessage({ type: 'openCurrentFile', path: file.path });
+			}),
+		);
 	}
 }
 

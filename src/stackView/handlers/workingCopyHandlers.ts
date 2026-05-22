@@ -6,13 +6,7 @@
 import * as vscode from 'vscode';
 
 import type { UncommittedState } from '../types';
-import {
-	stageFile,
-	unstageFile,
-	discardFile,
-	stageAllFiles,
-	commitChanges,
-} from '../workingCopy';
+import { stageFile, unstageFile, discardFile, stageAllFiles, commitChanges } from '../workingCopy';
 import { execBranchCreate } from '../../utils/gitSpice';
 
 /** Dependencies needed by working copy handlers. */

@@ -79,7 +79,12 @@ async function openFileDiffView(cwd: string, sha: string, filePath: string): Pro
 	const status = files.find((f) => f.path === filePath)?.status ?? 'M';
 	const { left, right } = buildCommitDiffUris(fileUri, sha, status);
 
-	await vscode.commands.executeCommand('vscode.diff', left, right, `${path.basename(filePath)} (${sha.substring(0, 7)})`);
+	await vscode.commands.executeCommand(
+		'vscode.diff',
+		left,
+		right,
+		`${path.basename(filePath)} (${sha.substring(0, 7)})`,
+	);
 }
 
 /** Opens a diff view for a single file in a commit. */
@@ -126,7 +131,12 @@ async function openWorkingCopyDiffView(cwd: string, filePath: string, staged: bo
 }
 
 /** Opens a diff for a working copy file (staged or unstaged). */
-export async function handleOpenWorkingCopyDiff(filePath: string, staged: boolean, deps: DiffHandlerDeps, status?: string): Promise<void> {
+export async function handleOpenWorkingCopyDiff(
+	filePath: string,
+	staged: boolean,
+	deps: DiffHandlerDeps,
+	status?: string,
+): Promise<void> {
 	const cwd = requireWorkspaceFolder(deps);
 	if (!cwd) return;
 

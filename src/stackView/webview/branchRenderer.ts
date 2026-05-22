@@ -322,12 +322,7 @@ function renderBranchHeader(branch: BranchViewModel, card: HTMLElement, postMess
 }
 
 /** Appends toggle or spacer to header based on whether branch has commits. */
-function appendHeaderToggle(
-	header: HTMLElement,
-	card: HTMLElement,
-	hasCommits: boolean,
-	isCurrent: boolean,
-): void {
+function appendHeaderToggle(header: HTMLElement, card: HTMLElement, hasCommits: boolean, isCurrent: boolean): void {
 	if (hasCommits) {
 		const toggle = document.createElement('i');
 		toggle.className = 'branch-toggle codicon codicon-chevron-right';

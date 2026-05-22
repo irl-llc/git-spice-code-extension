@@ -88,10 +88,13 @@ export async function execBranchTrack(
 	baseBranch: string,
 ): Promise<BranchCommandResult> {
 	const context = 'Branch track';
-	const validated = validateInputs([
-		[branchName, 'Branch name'],
-		[baseBranch, 'Base branch'],
-	], context);
+	const validated = validateInputs(
+		[
+			[branchName, 'Branch name'],
+			[baseBranch, 'Base branch'],
+		],
+		context,
+	);
 	if ('error' in validated) {
 		return { error: formatError(context, validated.error) };
 	}
@@ -242,12 +245,20 @@ function validateInputs(inputs: [string, string][], context: string): { values: 
 }
 
 /** Executes branch split with validated inputs. */
-export async function execBranchSplit(folder: vscode.WorkspaceFolder, branchName: string, sha: string, newBranchName: string): Promise<BranchCommandResult> {
-	const validated = validateInputs([
-		[branchName, 'Branch name'],
-		[sha, 'Commit SHA'],
-		[newBranchName, 'New branch name'],
-	], 'Branch split');
+export async function execBranchSplit(
+	folder: vscode.WorkspaceFolder,
+	branchName: string,
+	sha: string,
+	newBranchName: string,
+): Promise<BranchCommandResult> {
+	const validated = validateInputs(
+		[
+			[branchName, 'Branch name'],
+			[sha, 'Commit SHA'],
+			[newBranchName, 'New branch name'],
+		],
+		'Branch split',
+	);
 	if ('error' in validated) return validated;
 
 	const [branch, commitSha, newBranch] = validated.values;
@@ -375,7 +386,9 @@ function createSyncProcessHandlers(
 	process.on('close', (code) => {
 		clearTimeout(timeout);
 		if (code === 0) {
-			resolveOnce({ value: { deletedBranches: state.deletedBranches, syncedBranches: parseSyncedBranchCount(state.outputBuffer) } });
+			resolveOnce({
+				value: { deletedBranches: state.deletedBranches, syncedBranches: parseSyncedBranchCount(state.outputBuffer) },
+			});
 		} else {
 			const errorMessage = state.errorBuffer.trim() || state.outputBuffer.trim() || `Process exited with code ${code}`;
 			resolveOnce({ error: `Repository sync failed: ${errorMessage}` });
@@ -407,7 +420,10 @@ function handleBranchDeletePrompt(
 }
 
 /** Executes `gs repo sync` with interactive prompts for branch deletion. */
-export async function execRepoSync(folder: vscode.WorkspaceFolder, promptCallback: (branchName: string) => Promise<boolean>): Promise<RepoSyncResult> {
+export async function execRepoSync(
+	folder: vscode.WorkspaceFolder,
+	promptCallback: (branchName: string) => Promise<boolean>,
+): Promise<RepoSyncResult> {
 	const cwd = getWorkspaceFolderPath(folder);
 	if (!cwd) return { error: 'Invalid workspace folder provided' };
 
@@ -420,7 +436,11 @@ export async function execRepoSync(folder: vscode.WorkspaceFolder, promptCallbac
 			}
 		};
 
-		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: NO_OPTIONAL_LOCKS_ENV });
+		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], {
+			cwd,
+			stdio: ['pipe', 'pipe', 'pipe'],
+			env: NO_OPTIONAL_LOCKS_ENV,
+		});
 		const timeout = setTimeout(() => {
 			process.kill();
 			resolveOnce({ error: 'Repository sync timed out after 30 seconds' });

@@ -30,8 +30,10 @@ export async function renderWebviewHtml(webview: vscode.Webview, extensionUri: v
 		`font-src ${webview.cspSource}`,
 	].join('; ');
 
-	const mediaUri = (name: string): string => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', name)).toString();
-	const distUri = (name: string): string => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', name)).toString();
+	const mediaUri = (name: string): string =>
+		webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', name)).toString();
+	const distUri = (name: string): string =>
+		webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', name)).toString();
 	const codiconStyleUri = distUri('codicons/codicon.css');
 	const template = await readMediaFile(extensionUri, 'stackView.html');
 

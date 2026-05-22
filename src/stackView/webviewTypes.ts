@@ -1,9 +1,7 @@
 import type { CommitFileChange, DisplayState } from './types';
 
 /** Global messages not scoped to a specific repository. */
-type GlobalWebviewMessage =
-	| { type: 'ready' }
-	| { type: 'refresh' };
+type GlobalWebviewMessage = { type: 'ready' } | { type: 'refresh' };
 
 /** Repo-scoped messages sent from webview to extension. */
 type RepoWebviewMessage =

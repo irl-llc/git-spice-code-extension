@@ -48,10 +48,7 @@ interface BranchDiffContext {
 }
 
 /** Validates workspace and parent branch, returning cwd and parent name. */
-function validateBranchDiffContext(
-	branchName: string,
-	deps: BranchFileHandlerDeps,
-): BranchDiffContext | undefined {
+function validateBranchDiffContext(branchName: string, deps: BranchFileHandlerDeps): BranchDiffContext | undefined {
 	if (!deps.workspaceFolder) {
 		void vscode.window.showErrorMessage('No workspace folder available.');
 		return undefined;

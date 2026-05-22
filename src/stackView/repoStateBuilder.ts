@@ -68,8 +68,24 @@ function buildRepoState(
 	currentBranch?: string,
 ): RepoState {
 	if ('error' in result) {
-		return { rootPath: rootUri.fsPath, name, rootUri, branches: [], uncommitted, error: result.error, untrackedBranch: currentBranch };
+		return {
+			rootPath: rootUri.fsPath,
+			name,
+			rootUri,
+			branches: [],
+			uncommitted,
+			error: result.error,
+			untrackedBranch: currentBranch,
+		};
 	}
 	const untracked = currentBranch && !hasCurrentBranch(result.value) ? currentBranch : undefined;
-	return { rootPath: rootUri.fsPath, name, rootUri, branches: result.value, uncommitted, error: undefined, untrackedBranch: untracked };
+	return {
+		rootPath: rootUri.fsPath,
+		name,
+		rootUri,
+		branches: result.value,
+		uncommitted,
+		error: undefined,
+		untrackedBranch: untracked,
+	};
 }

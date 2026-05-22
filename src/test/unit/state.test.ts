@@ -10,7 +10,11 @@ function createBranch(name: string, options: Partial<GitSpiceBranch> = {}): GitS
 }
 
 /** Creates a RepoDisplayInput for testing with sensible defaults. */
-function repoInput(branches: GitSpiceBranch[], error?: string, uncommitted?: RepoDisplayInput['uncommitted']): RepoDisplayInput {
+function repoInput(
+	branches: GitSpiceBranch[],
+	error?: string,
+	uncommitted?: RepoDisplayInput['uncommitted'],
+): RepoDisplayInput {
 	return { repoId: 'test-repo', repoName: 'test', branches, error, uncommitted };
 }
 

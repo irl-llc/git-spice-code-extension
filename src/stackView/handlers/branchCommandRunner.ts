@@ -41,7 +41,11 @@ export function getExecFunctions(): ExecFunctionMap {
 }
 
 /** Dispatches a named branch command. */
-export async function executeBranchCommand(commandName: string, branchName: string, deps: BranchCommandRunnerDeps): Promise<void> {
+export async function executeBranchCommand(
+	commandName: string,
+	branchName: string,
+	deps: BranchCommandRunnerDeps,
+): Promise<void> {
 	const execFunction = COMMAND_MAP[commandName];
 	if (!execFunction) {
 		void vscode.window.showErrorMessage(`Unknown command: ${commandName}`);
@@ -82,16 +86,19 @@ export async function runWithProgress(
 	refresh: () => Promise<void>,
 ): Promise<boolean> {
 	let success = false;
-	await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, async () => {
-		try {
-			const result = await operation();
-			success = showResult(result, successMessage);
-			await refresh();
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
-		}
-	});
+	await vscode.window.withProgress(
+		{ location: vscode.ProgressLocation.Notification, title, cancellable: false },
+		async () => {
+			try {
+				const result = await operation();
+				success = showResult(result, successMessage);
+				await refresh();
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
+			}
+		},
+	);
 	return success;
 }
 

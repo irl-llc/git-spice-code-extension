@@ -88,7 +88,8 @@ function buildContextMenuItems(branch: GitSpiceBranch): BranchContextMenuItem[] 
 	const items = getBaseMenuItems();
 
 	if (branch.current === true) items.push({ label: '$(edit) Edit', action: 'edit' });
-	if (branchNeedsRestack(branch)) items.push({ label: '$(refresh) Restack', action: 'restack', description: 'Needs restack' });
+	if (branchNeedsRestack(branch))
+		items.push({ label: '$(refresh) Restack', action: 'restack', description: 'Needs restack' });
 
 	return [...items, ...getTrailingMenuItems(Boolean(branch.change))];
 }
@@ -191,11 +192,7 @@ export async function handleBranchRenamePrompt(branchName: string, deps: BranchH
 }
 
 /** Executes branch rename with new name. */
-export async function handleBranchRename(
-	branchName: string,
-	newName: string,
-	deps: BranchHandlerDeps,
-): Promise<void> {
+export async function handleBranchRename(branchName: string, newName: string, deps: BranchHandlerDeps): Promise<void> {
 	const validated = requireAllNonEmpty([
 		[branchName, 'branch name for rename'],
 		[newName, 'new name for rename'],
@@ -234,11 +231,7 @@ export async function handleBranchMovePrompt(branchName: string, deps: BranchHan
 }
 
 /** Moves a branch to a new parent. */
-export async function handleBranchMove(
-	branchName: string,
-	newParent: string,
-	deps: BranchHandlerDeps,
-): Promise<void> {
+export async function handleBranchMove(branchName: string, newParent: string, deps: BranchHandlerDeps): Promise<void> {
 	const validated = requireAllNonEmpty([
 		[branchName, 'branch name for move'],
 		[newParent, 'parent name for move'],
@@ -277,11 +270,7 @@ export async function handleUpstackMovePrompt(branchName: string, deps: BranchHa
 }
 
 /** Moves a branch and all its descendants to a new parent. */
-export async function handleUpstackMove(
-	branchName: string,
-	newParent: string,
-	deps: BranchHandlerDeps,
-): Promise<void> {
+export async function handleUpstackMove(branchName: string, newParent: string, deps: BranchHandlerDeps): Promise<void> {
 	const validated = requireAllNonEmpty([
 		[branchName, 'branch name for upstack move'],
 		[newParent, 'parent name for upstack move'],

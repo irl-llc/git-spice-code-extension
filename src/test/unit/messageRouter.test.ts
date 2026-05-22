@@ -23,54 +23,108 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 
 	return {
 		calls,
-		pushState: () => { calls.push('pushState'); },
-		refresh: async () => { calls.push('refresh'); },
-		handleOpenExternal: (_repoId, url) => { calls.push(`handleOpenExternal:${url}`); },
-		handleOpenCommit: (_repoId, sha) => { calls.push(`handleOpenCommit:${sha}`); },
-		handleOpenCommitDiff: async (_repoId, sha) => { calls.push(`handleOpenCommitDiff:${sha}`); },
-		handleBranchContextMenu: async (_repoId, branchName) => { calls.push(`handleBranchContextMenu:${branchName}`); },
-		handleCopyBranchName: async (_repoId, branchName) => { calls.push(`handleCopyBranchName:${branchName}`); },
-		handleBranchTrack: async (_repoId, branchName) => { calls.push(`handleBranchTrack:${branchName}`); },
+		pushState: () => {
+			calls.push('pushState');
+		},
+		refresh: async () => {
+			calls.push('refresh');
+		},
+		handleOpenExternal: (_repoId, url) => {
+			calls.push(`handleOpenExternal:${url}`);
+		},
+		handleOpenCommit: (_repoId, sha) => {
+			calls.push(`handleOpenCommit:${sha}`);
+		},
+		handleOpenCommitDiff: async (_repoId, sha) => {
+			calls.push(`handleOpenCommitDiff:${sha}`);
+		},
+		handleBranchContextMenu: async (_repoId, branchName) => {
+			calls.push(`handleBranchContextMenu:${branchName}`);
+		},
+		handleCopyBranchName: async (_repoId, branchName) => {
+			calls.push(`handleCopyBranchName:${branchName}`);
+		},
+		handleBranchTrack: async (_repoId, branchName) => {
+			calls.push(`handleBranchTrack:${branchName}`);
+		},
 		handleBranchCommandInternal: async (_repoId, commandName, branchName) => {
 			calls.push(`handleBranchCommandInternal:${commandName}:${branchName}`);
 		},
-		handleBranchDelete: async (_repoId, branchName) => { calls.push(`handleBranchDelete:${branchName}`); },
-		handleBranchRenamePrompt: async (_repoId, branchName) => { calls.push(`handleBranchRenamePrompt:${branchName}`); },
+		handleBranchDelete: async (_repoId, branchName) => {
+			calls.push(`handleBranchDelete:${branchName}`);
+		},
+		handleBranchRenamePrompt: async (_repoId, branchName) => {
+			calls.push(`handleBranchRenamePrompt:${branchName}`);
+		},
 		handleBranchRename: async (_repoId, branchName, newName) => {
 			calls.push(`handleBranchRename:${branchName}:${newName}`);
 		},
-		handleBranchMovePrompt: async (_repoId, branchName) => { calls.push(`handleBranchMovePrompt:${branchName}`); },
+		handleBranchMovePrompt: async (_repoId, branchName) => {
+			calls.push(`handleBranchMovePrompt:${branchName}`);
+		},
 		handleBranchMove: async (_repoId, branchName, newParent) => {
 			calls.push(`handleBranchMove:${branchName}:${newParent}`);
 		},
-		handleUpstackMovePrompt: async (_repoId, branchName) => { calls.push(`handleUpstackMovePrompt:${branchName}`); },
+		handleUpstackMovePrompt: async (_repoId, branchName) => {
+			calls.push(`handleUpstackMovePrompt:${branchName}`);
+		},
 		handleUpstackMove: async (_repoId, branchName, newParent) => {
 			calls.push(`handleUpstackMove:${branchName}:${newParent}`);
 		},
-		handleGetCommitFiles: async (_repoId, sha) => { calls.push(`handleGetCommitFiles:${sha}`); },
-		handleGetBranchFiles: async (_repoId, branchName) => { calls.push(`handleGetBranchFiles:${branchName}`); },
-		handleOpenBranchDiff: async (_repoId, branchName) => { calls.push(`handleOpenBranchDiff:${branchName}`); },
+		handleGetCommitFiles: async (_repoId, sha) => {
+			calls.push(`handleGetCommitFiles:${sha}`);
+		},
+		handleGetBranchFiles: async (_repoId, branchName) => {
+			calls.push(`handleGetBranchFiles:${branchName}`);
+		},
+		handleOpenBranchDiff: async (_repoId, branchName) => {
+			calls.push(`handleOpenBranchDiff:${branchName}`);
+		},
 		handleOpenBranchFileDiff: async (_repoId, branchName, path, status) => {
 			calls.push(`handleOpenBranchFileDiff:${branchName}:${path}${status ? ':' + status : ''}`);
 		},
-		handleOpenFileDiff: async (_repoId, sha, path) => { calls.push(`handleOpenFileDiff:${sha}:${path}`); },
-		handleOpenCurrentFile: async (_repoId, path) => { calls.push(`handleOpenCurrentFile:${path}`); },
-		handleStageFile: async (_repoId, path) => { calls.push(`handleStageFile:${path}`); },
-		handleUnstageFile: async (_repoId, path) => { calls.push(`handleUnstageFile:${path}`); },
-		handleDiscardFile: async (_repoId, path) => { calls.push(`handleDiscardFile:${path}`); },
+		handleOpenFileDiff: async (_repoId, sha, path) => {
+			calls.push(`handleOpenFileDiff:${sha}:${path}`);
+		},
+		handleOpenCurrentFile: async (_repoId, path) => {
+			calls.push(`handleOpenCurrentFile:${path}`);
+		},
+		handleStageFile: async (_repoId, path) => {
+			calls.push(`handleStageFile:${path}`);
+		},
+		handleUnstageFile: async (_repoId, path) => {
+			calls.push(`handleUnstageFile:${path}`);
+		},
+		handleDiscardFile: async (_repoId, path) => {
+			calls.push(`handleDiscardFile:${path}`);
+		},
 		handleOpenWorkingCopyDiff: async (_repoId, path, staged, status) => {
 			calls.push(`handleOpenWorkingCopyDiff:${path}:${staged}${status ? ':' + status : ''}`);
 		},
-		handleCommitChanges: async (_repoId, message) => { calls.push(`handleCommitChanges:${message}`); },
-		handleCreateBranch: async (_repoId, message) => { calls.push(`handleCreateBranch:${message}`); },
-		handleCommitCopySha: async (_repoId, sha) => { calls.push(`handleCommitCopySha:${sha}`); },
-		handleCommitFixup: async (_repoId, sha) => { calls.push(`handleCommitFixup:${sha}`); },
+		handleCommitChanges: async (_repoId, message) => {
+			calls.push(`handleCommitChanges:${message}`);
+		},
+		handleCreateBranch: async (_repoId, message) => {
+			calls.push(`handleCreateBranch:${message}`);
+		},
+		handleCommitCopySha: async (_repoId, sha) => {
+			calls.push(`handleCommitCopySha:${sha}`);
+		},
+		handleCommitFixup: async (_repoId, sha) => {
+			calls.push(`handleCommitFixup:${sha}`);
+		},
 		handleCommitSplit: async (_repoId, sha, branchName) => {
 			calls.push(`handleCommitSplit:${sha}:${branchName}`);
 		},
-		handleRepoSync: async (_repoId) => { calls.push('handleRepoSync'); },
-		handleStackRestack: async (_repoId) => { calls.push('handleStackRestack'); },
-		handleStackSubmit: async (_repoId) => { calls.push('handleStackSubmit'); },
+		handleRepoSync: async (_repoId) => {
+			calls.push('handleRepoSync');
+		},
+		handleStackRestack: async (_repoId) => {
+			calls.push('handleStackRestack');
+		},
+		handleStackSubmit: async (_repoId) => {
+			calls.push('handleStackSubmit');
+		},
 		getExecFunctions: () => mockExecFunctions,
 	};
 }
@@ -251,7 +305,10 @@ describe('messageRouter', () => {
 
 			it('should pass status through openBranchFileDiff message', () => {
 				const ctx = createMockContext();
-				const result = routeMessage({ type: 'openBranchFileDiff', branchName: 'feature-1', path: 'src/file.ts', status: 'A' }, ctx);
+				const result = routeMessage(
+					{ type: 'openBranchFileDiff', branchName: 'feature-1', path: 'src/file.ts', status: 'A' },
+					ctx,
+				);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleOpenBranchFileDiff:feature-1:src/file.ts:A']);
 			});
@@ -295,7 +352,10 @@ describe('messageRouter', () => {
 
 			it('should pass status through openWorkingCopyDiff message', () => {
 				const ctx = createMockContext();
-				const result = routeMessage({ type: 'openWorkingCopyDiff', path: 'src/file.ts', staged: false, status: 'U' }, ctx);
+				const result = routeMessage(
+					{ type: 'openWorkingCopyDiff', path: 'src/file.ts', staged: false, status: 'U' },
+					ctx,
+				);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleOpenWorkingCopyDiff:src/file.ts:false:U']);
 			});

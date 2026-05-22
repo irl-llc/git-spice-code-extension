@@ -9,11 +9,7 @@ import { COMMIT_RENDER_CHUNK_SIZE } from '../../constants';
 import { buildCommitContext } from '../contextBuilder';
 import { animateUpdate } from './animationHelpers';
 import { diffList, type DiffAnimations, type DiffListConfig } from './diffEngine';
-import {
-	createFileRow,
-	appendFileStatus,
-	createFileActionButton,
-} from './fileRowHelpers';
+import { createFileRow, appendFileStatus, createFileActionButton } from './fileRowHelpers';
 import type { TreeColors } from '../tree/treeFragment';
 
 /** Callback for posting messages to the extension host. */
@@ -38,7 +34,16 @@ export function renderCommitsContainer(
 	container.dataset.commitsContainer = 'true';
 
 	const initialCount = Math.min(branch.commits!.length, COMMIT_RENDER_CHUNK_SIZE);
-	renderCommitsIntoContainer(container, branch.commits!, initialCount, branch.name, state, postMessage, animations, treeColors);
+	renderCommitsIntoContainer(
+		container,
+		branch.commits!,
+		initialCount,
+		branch.name,
+		state,
+		postMessage,
+		animations,
+		treeColors,
+	);
 
 	return container;
 }
@@ -166,9 +171,7 @@ function renderShowMoreButton(
 	const more = document.createElement('button');
 	more.type = 'button';
 	more.className = 'branch-more';
-	more.textContent = remaining > COMMIT_RENDER_CHUNK_SIZE
-		? `Show more (${remaining})`
-		: `Show remaining ${remaining}`;
+	more.textContent = remaining > COMMIT_RENDER_CHUNK_SIZE ? `Show more (${remaining})` : `Show remaining ${remaining}`;
 
 	more.addEventListener('click', (event: Event) => {
 		event.stopPropagation();
@@ -385,9 +388,11 @@ function renderFileChangeRow(file: CommitFileChange, sha: string, postMessage: P
 	const row = createFileRow(file.path);
 
 	if (file.status !== 'D') {
-		row.appendChild(createFileActionButton('codicon-go-to-file', 'Open current file', () => {
-			postMessage({ type: 'openCurrentFile', path: file.path });
-		}));
+		row.appendChild(
+			createFileActionButton('codicon-go-to-file', 'Open current file', () => {
+				postMessage({ type: 'openCurrentFile', path: file.path });
+			}),
+		);
 	}
 
 	appendFileStatus(row, file.status);

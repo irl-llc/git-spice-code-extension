@@ -58,7 +58,11 @@ interface NavigationCommandConfig {
 }
 
 /** Registers a simple navigation command with result handling. */
-function registerNavigationCommand(context: vscode.ExtensionContext, config: NavigationCommandConfig, provider: StackViewProvider): void {
+function registerNavigationCommand(
+	context: vscode.ExtensionContext,
+	config: NavigationCommandConfig,
+	provider: StackViewProvider,
+): void {
 	const { commandId, execFn, successMessage, errorPrefix } = config;
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commandId, async () => {
@@ -74,9 +78,24 @@ function registerNavigationCommand(context: vscode.ExtensionContext, config: Nav
 /** Registers navigation commands (up, down, trunk). */
 function registerNavigationCommands(context: vscode.ExtensionContext, provider: StackViewProvider): void {
 	const commands: NavigationCommandConfig[] = [
-		{ commandId: 'git-spice.up', execFn: execUp, successMessage: 'Navigated up the stack', errorPrefix: 'Failed to navigate up' },
-		{ commandId: 'git-spice.down', execFn: execDown, successMessage: 'Navigated down the stack', errorPrefix: 'Failed to navigate down' },
-		{ commandId: 'git-spice.trunk', execFn: execTrunk, successMessage: 'Navigated to trunk', errorPrefix: 'Failed to navigate to trunk' },
+		{
+			commandId: 'git-spice.up',
+			execFn: execUp,
+			successMessage: 'Navigated up the stack',
+			errorPrefix: 'Failed to navigate up',
+		},
+		{
+			commandId: 'git-spice.down',
+			execFn: execDown,
+			successMessage: 'Navigated down the stack',
+			errorPrefix: 'Failed to navigate down',
+		},
+		{
+			commandId: 'git-spice.trunk',
+			execFn: execTrunk,
+			successMessage: 'Navigated to trunk',
+			errorPrefix: 'Failed to navigate to trunk',
+		},
 	];
 	commands.forEach((config) => registerNavigationCommand(context, config, provider));
 }
@@ -155,17 +174,30 @@ async function executeStackCommand(config: StackCommandConfig, provider: StackVi
 	if (!folder) return;
 
 	const { execFn, title, successMessage, errorPrefix } = config;
-	await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, async () => {
-		const result = await execFn(folder);
-		showCommandResult(result, successMessage, errorPrefix);
-		await provider.refresh();
-	});
+	await vscode.window.withProgress(
+		{ location: vscode.ProgressLocation.Notification, title, cancellable: false },
+		async () => {
+			const result = await execFn(folder);
+			showCommandResult(result, successMessage, errorPrefix);
+			await provider.refresh();
+		},
+	);
 }
 
 /** Registers stack commands (restack, submit). */
 function registerStackCommands(context: vscode.ExtensionContext, provider: StackViewProvider): void {
-	const restackConfig: StackCommandConfig = { execFn: execStackRestack, title: 'Restacking current stack...', successMessage: 'Stack restacked successfully', errorPrefix: 'Failed to restack stack' };
-	const submitConfig: StackCommandConfig = { execFn: execStackSubmit, title: 'Submitting current stack...', successMessage: 'Stack submitted successfully', errorPrefix: 'Failed to submit stack' };
+	const restackConfig: StackCommandConfig = {
+		execFn: execStackRestack,
+		title: 'Restacking current stack...',
+		successMessage: 'Stack restacked successfully',
+		errorPrefix: 'Failed to restack stack',
+	};
+	const submitConfig: StackCommandConfig = {
+		execFn: execStackSubmit,
+		title: 'Submitting current stack...',
+		successMessage: 'Stack submitted successfully',
+		errorPrefix: 'Failed to submit stack',
+	};
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('git-spice.stackRestack', () => executeStackCommand(restackConfig, provider)),
@@ -242,7 +274,9 @@ async function executeBranchCreateFromCommitMessage(provider: StackViewProvider)
 /** Registers the branch create from commit message command. */
 function registerBranchCreateCommand(context: vscode.ExtensionContext, provider: StackViewProvider): void {
 	context.subscriptions.push(
-		vscode.commands.registerCommand('git-spice.branchCreateFromCommitMessage', () => executeBranchCreateFromCommitMessage(provider)),
+		vscode.commands.registerCommand('git-spice.branchCreateFromCommitMessage', () =>
+			executeBranchCreateFromCommitMessage(provider),
+		),
 	);
 }
 

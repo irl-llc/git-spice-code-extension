@@ -65,10 +65,6 @@ export async function fetchBranchFiles(
  * @param parentBranchName - The parent branch name
  * @returns The merge-base SHA string
  */
-export async function fetchBranchMergeBase(
-	cwd: string,
-	branchName: string,
-	parentBranchName: string,
-): Promise<string> {
+export async function fetchBranchMergeBase(cwd: string, branchName: string, parentBranchName: string): Promise<string> {
 	return fetchMergeBase(cwd, branchName, parentBranchName);
 }

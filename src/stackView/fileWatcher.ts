@@ -62,7 +62,10 @@ export class FileWatcherManager implements vscode.Disposable {
 		return {
 			git,
 			workspace,
-			dispose: () => { git.dispose(); workspace.dispose(); },
+			dispose: () => {
+				git.dispose();
+				workspace.dispose();
+			},
 		};
 	}
 

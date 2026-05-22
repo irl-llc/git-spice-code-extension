@@ -8,12 +8,7 @@ import * as assert from 'assert';
 import { setupDom, teardownDom } from './domTestHelper';
 import { branchNeedsUpdate, serializeComments } from '../../../stackView/webview/branchRenderer';
 import { setBranchData, type BranchElementData } from '../../../stackView/domHelpers';
-import type {
-	BranchViewModel,
-	LaneSegment,
-	TreeFragmentData,
-	TreePosition,
-} from '../../../stackView/types';
+import type { BranchViewModel, LaneSegment, TreeFragmentData, TreePosition } from '../../../stackView/types';
 
 /** Creates a default LaneSegment with optional overrides. */
 function makeLane(overrides?: Partial<LaneSegment>): LaneSegment {
