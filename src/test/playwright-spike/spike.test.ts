@@ -186,7 +186,10 @@ test.describe('Playwright spike: webview iframe reachability via CDP', () => {
 		let foundUrl = '';
 		for (const page of allPages) {
 			for (const frame of page.frames()) {
-				const count = await frame.locator('#repoContainer').count().catch(() => 0);
+				const count = await frame
+					.locator('#repoContainer')
+					.count()
+					.catch(() => 0);
 				if (count > 0) {
 					foundUrl = frame.url();
 					found = true;
