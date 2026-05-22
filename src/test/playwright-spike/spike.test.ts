@@ -104,7 +104,7 @@ test.describe('Playwright spike: webview iframe reachability via CDP', () => {
 		// ELECTRON_RUN_AS_NODE=1 in our shell makes the Electron binary act as Node,
 		// which rejects all VS Code flags. @vscode/test-cli's runner clears it for the
 		// same reason — see node_modules/@vscode/test-cli/out/cli/platform/desktop.mjs.
-		const childEnv = { ...process.env, GIT_SPICE_BIN: GS_BIN };
+		const childEnv: NodeJS.ProcessEnv = { ...process.env, GIT_SPICE_BIN: GS_BIN };
 		delete childEnv.ELECTRON_RUN_AS_NODE;
 
 		// Use isolated extensions-dir too; --disable-extensions alone doesn't fully
