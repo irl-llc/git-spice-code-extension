@@ -307,6 +307,52 @@ src/
 └── constants.ts          # Shared constants
 ```
 
+### Webview component tree
+
+The webview is a single React root mounted on `#repoContainer`. All UI
+state lives in the `StackView` reducer; everything below renders from
+props. The tree-fragment SVG (left-side stacking visualization) is the
+only non-React DOM, wrapped by `<TreeFragmentSvg>` which mounts the
+generated SVG via `useEffect`.
+
+```mermaid
+graph TD
+  bootstrap["stackView.ts<br/>bootstrap (45 lines)<br/>acquireVsCodeApi · createRoot · subscribe"]
+  StackView["&lt;StackView&gt;<br/>useReducer · message subscribe"]
+  RepoView["&lt;RepoView&gt;<br/>per repo"]
+  RepoSection["&lt;RepoSection&gt;<br/>header · toolbar (restack/sync/submit)"]
+  BSI["&lt;BranchStackItem&gt;<br/>per branch"]
+  TFS1["&lt;TreeFragmentSvg&gt;"]
+  BranchCard["&lt;BranchCard&gt;<br/>header · tags · meta"]
+  BranchSummary["&lt;BranchSummary&gt;<br/>Summarized Changes"]
+  CommitList["&lt;CommitList&gt;<br/>paginated commits"]
+  UncommittedItem["&lt;UncommittedItem&gt;<br/>uncommitted changes"]
+  TFS2["&lt;TreeFragmentSvg&gt;"]
+  UncommittedCard["&lt;UncommittedCard&gt;<br/>staged · unstaged · commit form"]
+  UntrackedItem["&lt;UntrackedItem&gt;"]
+  UntrackedCard["&lt;UntrackedCard&gt;<br/>Track Branch button"]
+
+  bootstrap --> StackView
+  StackView -->|per repo| RepoView
+  RepoView --> RepoSection
+  RepoView -->|per branch| BSI
+  RepoView --> UncommittedItem
+  RepoView --> UntrackedItem
+  BSI --> TFS1
+  BSI --> BranchCard
+  BranchCard -->|summary prop| BranchSummary
+  BranchCard -->|commits prop| CommitList
+  UncommittedItem --> TFS2
+  UncommittedItem --> UncommittedCard
+  UntrackedItem --> UntrackedCard
+```
+
+When adding a new webview component:
+- Put `<MyComponent>` in `src/stackView/webview/components/`
+- Write a Layer-1 test in `src/test/unit/webview/components/MyComponent.test.tsx` using `@testing-library/react`
+- Compose it inside `StackView.tsx` where appropriate
+- Add a Layer-2 BDD test in `src/test/e2e/playwright/` only when the user-journey contract differs from existing coverage
+
 ## Code Quality Standards
 
 ### File and Function Limits
