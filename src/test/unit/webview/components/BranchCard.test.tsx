@@ -90,9 +90,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ name: 'feat-a' })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.ok(screen.getByText('feat-a'), 'branch name visible');
@@ -104,9 +102,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ current: false })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			const toggle = screen.getByRole('button', { name: /expand feat-a/i });
@@ -122,9 +118,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ current: true })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			const toggle = screen.getByRole('button', { name: /collapse feat-a/i });
@@ -137,9 +131,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ current: false })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			// Initial effect fires with expanded=false.
@@ -157,9 +149,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ commits: [] })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.strictEqual(screen.queryByRole('button', { name: /expand/i }), null);
@@ -174,9 +164,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ restack: true })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.ok(screen.getByText('Restack'));
@@ -188,9 +176,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ restack: false })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.strictEqual(screen.queryByText('Restack'), null);
@@ -204,9 +190,7 @@ describe('BranchCard', () => {
 						commits: [{ sha: 'a', shortSha: 'a', subject: 'first' }],
 					})}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.strictEqual(screen.queryByRole('button', { name: /squash/i }), null);
@@ -219,9 +203,7 @@ describe('BranchCard', () => {
 						],
 					})}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.ok(screen.getByRole('button', { name: /squash commits on feat-a/i }));
@@ -238,9 +220,7 @@ describe('BranchCard', () => {
 						],
 					})}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			fireEvent.click(screen.getByRole('button', { name: /squash commits on feat-a/i }));
@@ -252,15 +232,7 @@ describe('BranchCard', () => {
 
 		it('clicking submit posts branchSubmit', () => {
 			const h = harness();
-			render(
-				<BranchCard
-					branch={makeBranch()}
-					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
-					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
-				/>,
-			);
+			render(<BranchCard branch={makeBranch()} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />);
 			fireEvent.click(screen.getByRole('button', { name: /create pr for feat-a/i }));
 			assert.deepStrictEqual(h.messages, [{ type: 'branchSubmit', branchName: 'feat-a' }]);
 		});
@@ -271,9 +243,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ change: { id: '#42' } })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.ok(screen.getByRole('button', { name: /submit feat-a and ancestors/i }));
@@ -285,9 +255,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ change: { id: '#42', url: 'https://github.com/x/y/pull/42' } })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			fireEvent.click(screen.getByRole('button', { name: /open pr #42 for feat-a/i }));
@@ -300,9 +268,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ change: { id: '#42' } })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			const prLink = screen.getByRole('button', { name: /pr #42 \(no url\)/i });
@@ -317,9 +283,7 @@ describe('BranchCard', () => {
 						change: { id: '#42', comments: { total: 3, resolved: 3, unresolved: 0 } },
 					})}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.ok(screen.getByText('3/3'));
@@ -333,9 +297,7 @@ describe('BranchCard', () => {
 						change: { id: '#42', comments: { total: 5, resolved: 2, unresolved: 3 } },
 					})}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			const indicator = container.querySelector('.comments-indicator');
@@ -350,9 +312,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ current: false })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			const header = container.querySelector('.branch-header') as HTMLElement;
@@ -366,9 +326,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ current: false })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			fireEvent.click(screen.getByRole('button', { name: /create pr for feat-a/i }));
@@ -384,9 +342,7 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ change: { id: '#1', status: 'open' } })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.ok(container.querySelector('.branch-meta'));
@@ -399,59 +355,31 @@ describe('BranchCard', () => {
 				<BranchCard
 					branch={makeBranch({ change: { id: '#1' } })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
 				/>,
 			);
 			assert.strictEqual(container.querySelector('.branch-meta'), null);
 		});
 
-		it('invokes the commits delegate with the branch and article element', () => {
+		it('renders the `commits` child prop when provided', () => {
 			const h = harness();
-			let receivedBranch: string | undefined;
-			let receivedArticle: HTMLElement | null = null;
-			const fakeArticle = document.createElement('article');
-			render(
+			const { container } = render(
 				<BranchCard
 					branch={makeBranch({ name: 'feat-z' })}
 					postMessage={h.postMessage}
-					renderCommitsContainer={(b, article) => {
-						receivedBranch = b.name;
-						receivedArticle = article;
-						const div = document.createElement('div');
-						div.className = 'branch-commits';
-						return div;
-					}}
 					setArticleClass={h.setArticleClass}
-					getArticle={() => fakeArticle}
+					commits={<div className="branch-commits sentinel-commits" />}
 				/>,
 			);
-			assert.strictEqual(receivedBranch, 'feat-z');
-			assert.strictEqual(receivedArticle, fakeArticle);
+			assert.ok(
+				container.querySelector('.branch-content .sentinel-commits'),
+				'commits child rendered inside branch-content',
+			);
 		});
 
-		it('invokes the summary delegate only when the branch has multiple commits', () => {
+		it('renders the `summary` child prop when provided', () => {
 			const h = harness();
-			let invocations = 0;
-			const summary = () => {
-				invocations += 1;
-				const div = document.createElement('div');
-				div.className = 'branch-summary';
-				return div;
-			};
-			const { rerender } = render(
-				<BranchCard
-					branch={makeBranch({ commits: [{ sha: 'a', shortSha: 'a', subject: '1' }] })}
-					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
-					renderSummary={summary}
-					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
-				/>,
-			);
-			assert.strictEqual(invocations, 0, 'summary not called for 1-commit branch');
-			rerender(
+			const { container } = render(
 				<BranchCard
 					branch={makeBranch({
 						commits: [
@@ -460,13 +388,23 @@ describe('BranchCard', () => {
 						],
 					})}
 					postMessage={h.postMessage}
-					renderCommitsContainer={() => document.createElement('div')}
-					renderSummary={summary}
 					setArticleClass={h.setArticleClass}
-					getArticle={h.getArticle}
+					summary={<div className="branch-summary sentinel-summary" />}
 				/>,
 			);
-			assert.ok(invocations >= 1, 'summary called once branch has 2 commits');
+			assert.ok(
+				container.querySelector('.branch-content .sentinel-summary'),
+				'summary child rendered inside branch-content',
+			);
+		});
+
+		it('does not render slots when neither `summary` nor `commits` is provided', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard branch={makeBranch()} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />,
+			);
+			assert.strictEqual(container.querySelector('.branch-summary'), null);
+			assert.strictEqual(container.querySelector('.branch-commits'), null);
 		});
 	});
 });

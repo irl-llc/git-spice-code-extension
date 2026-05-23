@@ -10,7 +10,7 @@
  * (BranchSummary and the commits container).
  */
 
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
 
 import type { GitSpiceComments } from '../../../gitSpiceSchema';
 import type { BranchViewModel } from '../../types';
@@ -19,30 +19,20 @@ import type { WebviewMessage } from '../../webviewTypes';
 /** Callback for posting messages to the extension host. */
 export type PostMessage = (message: WebviewMessage) => void;
 
-/** Delegate for rendering the commits container subtree. */
-export type CommitsContainerRenderer = (branch: BranchViewModel, card: HTMLElement) => HTMLElement;
-
-/** Delegate for rendering the BranchSummary subtree. */
-export type SummaryRenderer = (branchName: string, card: HTMLElement) => HTMLElement;
-
 export interface BranchCardProps {
 	branch: BranchViewModel;
 	postMessage: PostMessage;
-	renderCommitsContainer: CommitsContainerRenderer;
-	renderSummary?: SummaryRenderer;
-	/** Toggles a class on the parent article. The wrapper sets initial
-	 * `is-current` / `needs-restack` / `expanded`; this callback lets the
-	 * component update `expanded` as local state changes. */
+	/** Toggles a class on the parent article. */
 	setArticleClass: (className: string, on: boolean) => void;
-	/** Provides the parent article element so slot renderers can use it
-	 * for querySelector-based lookups. */
-	getArticle: () => HTMLElement | null;
+	/** Optional Summarized Changes subtree to render between header and commits. */
+	summary?: ReactNode;
+	/** Optional commits container subtree to render at the bottom. */
+	commits?: ReactNode;
 }
 
 export function BranchCard(props: BranchCardProps): JSX.Element {
-	const { branch, postMessage, renderCommitsContainer, renderSummary, setArticleClass, getArticle } = props;
+	const { branch, postMessage, setArticleClass, summary, commits } = props;
 	const hasCommits = Boolean(branch.commits && branch.commits.length > 0);
-	const showSummary = Boolean(renderSummary && hasCommits && branch.commits!.length > 1);
 
 	const [expanded, setExpanded] = useState(branch.current === true);
 	useEffect(() => {
@@ -70,8 +60,8 @@ export function BranchCard(props: BranchCardProps): JSX.Element {
 				onHeaderClick={handleHeaderClick}
 			/>
 			{branch.change?.status ? <BranchMeta status={branch.change.status} /> : null}
-			{showSummary ? <SummarySlot branchName={branch.name} render={renderSummary!} getArticle={getArticle} /> : null}
-			{hasCommits ? <CommitsSlot branch={branch} render={renderCommitsContainer} getArticle={getArticle} /> : null}
+			{summary ?? null}
+			{commits ?? null}
 		</div>
 	);
 }
@@ -206,56 +196,7 @@ function CommentsIndicator({ comments }: { comments: GitSpiceComments }): JSX.El
 	);
 }
 
-interface SlotProps<T> {
-	getArticle: () => HTMLElement | null;
-	render: (item: T, card: HTMLElement) => HTMLElement;
-}
-
-/** Mount slot for the BranchSummary subtree (currently still mounted by the legacy renderer). */
-function SummarySlot({
-	branchName,
-	render,
-	getArticle,
-}: {
-	branchName: string;
-	render: SummaryRenderer;
-	getArticle: () => HTMLElement | null;
-}): JSX.Element {
-	const ref = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		const article = getArticle();
-		const host = ref.current;
-		if (!host || !article) return;
-		const subtree = render(branchName, article);
-		host.replaceChildren(subtree);
-	}, [branchName, render, getArticle]);
-	return <div ref={ref} className="branch-summary-slot" />;
-}
-
-/** Mount slot for the commits container subtree. */
-function CommitsSlot({
-	branch,
-	render,
-	getArticle,
-}: {
-	branch: BranchViewModel;
-	render: CommitsContainerRenderer;
-	getArticle: () => HTMLElement | null;
-}): JSX.Element {
-	const ref = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		const article = getArticle();
-		const host = ref.current;
-		if (!host || !article) return;
-		const subtree = render(branch, article);
-		host.replaceChildren(subtree);
-		// CSS uses descendant selectors (.branch-content .branch-commits, etc.)
-		// so the wrapping slot div is fine.
-	}, [branch, render, getArticle]);
-	return <div ref={ref} className="branch-commits-slot" />;
-}
-
-/** Serializes comments for change detection comparison (used by branchRenderer wrapper). */
+/** Serializes comments for change detection comparison. */
 export function serializeComments(comments: GitSpiceComments | undefined): string | undefined {
 	if (!comments) return undefined;
 	return `${comments.resolved}/${comments.total}`;
