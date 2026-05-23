@@ -15,7 +15,7 @@ import type { TreeColors } from './tree/treeFragment';
 
 import { animations } from './webview/animationHelpers';
 import { diffList } from './webview/diffEngine';
-import { renderBranch, updateBranch, branchNeedsUpdate, type PostMessage } from './webview/branchRenderer';
+import { renderBranch, branchNeedsUpdate, type PostMessage } from './webview/branchRenderer';
 import { renderCommitsContainer, handleCommitFilesResponse, type CommitRendererState } from './webview/commitRenderer';
 import {
 	renderBranchSummary,
@@ -230,8 +230,12 @@ class StackView {
 			newBranches,
 			{
 				getKey: (branch) => branch.name,
+				// diffEngine.updateExistingElement uses render() to produce a
+				// replacement when needsUpdate fires; update() is checked but
+				// never invoked. Pass a no-op so the framework's `if
+				// (needsUpdate && update)` guard still passes.
 				render: (branch) => this.renderBranchCard(branch, view),
-				update: (card, branch) => this.updateBranchCard(card, branch, view),
+				update: () => undefined,
 				needsUpdate: (card, branch) => branchNeedsUpdate(card, branch),
 				itemSelector: '.stack-item',
 				itemClass: 'stack-item',
@@ -247,17 +251,6 @@ class StackView {
 			branch,
 			postMessage,
 			(b, card) => this.createCommitsContainer(b, card, view),
-			(name) => this.createSummaryContainer(name, view),
-		);
-	}
-
-	private updateBranchCard(card: HTMLElement, branch: BranchViewModel, view: RepoViewState): void {
-		const postMessage = this.getPostMessage(view.currentState?.id);
-		updateBranch(
-			card,
-			branch,
-			postMessage,
-			(b, c) => this.createCommitsContainer(b, c, view),
 			(name) => this.createSummaryContainer(name, view),
 		);
 	}
