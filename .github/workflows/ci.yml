@@ -35,6 +35,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Snapshot PNGs in src/test/e2e/playwright/*.spec.ts-snapshots/
+          # are git-lfs-tracked.
+          lfs: true
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -45,7 +49,9 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          # Aligned with Dockerfile GO_VERSION; gs source's go.mod requires
+          # Go 1.23+ to parse its `go 1.26.x` directive.
+          go-version: '1.25'
 
       - name: Cache pinned gs binary
         uses: actions/cache@v4
@@ -103,12 +109,33 @@ jobs:
           GIT_SPICE_BIN: ${{ github.workspace }}/.gs/bin/gs
         continue-on-error: true
 
-      - name: Run Playwright BDD tests
+      - name: Cache Docker test image layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.docker-buildx-cache
+          key: docker-buildx-${{ runner.os }}-${{ hashFiles('Dockerfile') }}
+          restore-keys: |
+            docker-buildx-${{ runner.os }}-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Playwright Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: git-spice-playwright:v1.60.0-jammy
+          cache-from: type=local,src=/tmp/.docker-buildx-cache
+          cache-to: type=local,dest=/tmp/.docker-buildx-cache-new,mode=max
+
+      - name: Move Docker cache (per actions/cache best practice)
+        run: rm -rf /tmp/.docker-buildx-cache && mv /tmp/.docker-buildx-cache-new /tmp/.docker-buildx-cache
+
+      - name: Run Playwright BDD + snapshot tests (Linux container)
         id: playwright-tests
-        run: xvfb-run -a npm run test:e2e:playwright
-        env:
-          DISPLAY: ':99.0'
-          GIT_SPICE_BIN: ${{ github.workspace }}/.gs/bin/gs
+        run: npm run test:e2e:playwright:docker
         continue-on-error: true
 
       - name: Upload Playwright artifacts on failure

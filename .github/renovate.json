@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["microsoft/vscode"],
+      "groupName": "vscode-version",
+      "commitMessageTopic": "VS Code pin",
+      "prBodyNotes": [
+        ":warning: This bump may invalidate the Playwright snapshot images in `src/test/e2e/playwright/*.spec.ts-snapshots/`. After merging, run `npm run test:e2e:playwright:docker:update` and commit the regenerated PNGs in a follow-up."
+      ]
+    },
+    {
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["ed-irl/git-spice"],
+      "groupName": "gs-version",
+      "commitMessageTopic": "gs pin"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Bump VS Code version pinned for E2E tests",
+      "fileMatch": ["^\\.vscode-version$"],
+      "matchStrings": ["^(?<currentValue>[0-9.]+)\\s*$"],
+      "depNameTemplate": "microsoft/vscode",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Bump pinned gs binary commit",
+      "fileMatch": ["^\\.gs-version$"],
+      "matchStrings": ["^(?<currentDigest>[0-9a-f]{40})\\s*$"],
+      "depNameTemplate": "ed-irl/git-spice",
+      "packageNameTemplate": "https://github.com/ed-irl/git-spice",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "integration"
+    }
+  ]
+}

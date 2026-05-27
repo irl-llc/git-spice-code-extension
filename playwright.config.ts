@@ -1,19 +1,36 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * Playwright config for the BDD E2E suite. Launches VS Code via
- * @vscode/test-electron, attaches via CDP, drives real user journeys
- * against a real `gs` binary and a real workspace fixture.
+ * Playwright config for the BDD + visual-snapshot E2E suite. Launches
+ * VS Code (pinned via .vscode-version) through @vscode/test-electron,
+ * attaches via CDP, drives real user journeys against a real `gs`
+ * binary and a real workspace fixture.
  *
- * The earlier C.1 spike (src/test/playwright-spike/) is documented as a
- * reference but excluded from this run; it lives on its own gs branch
- * and will be deleted after these patterns settle.
+ * Visual snapshots run inside the Linux Docker image
+ * (mcr.microsoft.com/playwright:v1.60.0-jammy) on both CI and local
+ * dev — see docker-compose.test.yml and `npm run
+ * test:e2e:playwright:docker`. Running snapshot tests natively on
+ * macOS will produce a one-time diff that doesn't match the LFS
+ * baseline; that's expected. Use the Docker entrypoint to update
+ * snapshots.
  */
 export default defineConfig({
 	testDir: './src/test/e2e/playwright',
 	timeout: 180_000,
 	workers: 1,
 	reporter: [['list']],
+	outputDir: 'test-results',
+	expect: {
+		toHaveScreenshot: {
+			// VS Code's workbench has subtle font/rendering noise even with
+			// animations disabled; 0.5% of pixels and the default per-pixel
+			// threshold catch real visual regressions without flaking on
+			// JIT-rendered text antialiasing.
+			maxDiffPixelRatio: 0.005,
+			threshold: 0.2,
+			animations: 'disabled',
+		},
+	},
 	use: {
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure',

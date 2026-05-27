@@ -284,7 +284,14 @@ For complete command reference: https://abhinav.github.io/git-spice/cli/referenc
    - For deterministic tests against features not in upstream git-spice, we build a pinned binary from `ed-irl/git-spice` at the SHA in [.gs-version](.gs-version).
    - `npm run gs:fetch` clones at that SHA into `.gs/src/` and builds to `.gs/bin/gs`. The script is idempotent — it skips rebuilds when `.gs/.built-sha` already matches `.gs-version`.
    - CI sets `GIT_SPICE_BIN=${{ github.workspace }}/.gs/bin/gs` for the E2E job. Local dev: either install the same version on PATH, or `export GIT_SPICE_BIN=$(pwd)/.gs/bin/gs` after running `npm run gs:fetch`.
-   - To bump the pin: edit the SHA in `.gs-version` and re-run `npm run gs:fetch`.
+   - To bump the pin: edit the SHA in `.gs-version` and re-run `npm run gs:fetch`. Renovate ([.github/renovate.json](.github/renovate.json)) opens weekly PRs proposing new SHAs from the `ed-irl/git-spice` `integration` branch.
+
+5. **Visual snapshot tests** (`npm run test:e2e:playwright:docker`):
+   - Playwright tests in [src/test/e2e/playwright/](src/test/e2e/playwright/) ending in `.spec.ts` that call `toHaveScreenshot` produce PNG baselines stored next to the spec at `<spec>.snapshots/`. PNGs are git-lfs-tracked via the existing `*.png filter=lfs` rule in `.gitattributes`.
+   - **All snapshots are Linux-rendered** so dev (macOS) and CI (ubuntu-latest) compare against the same byte-for-byte baseline. Achieved by running Playwright inside the [Dockerfile](Dockerfile) image (`mcr.microsoft.com/playwright:v1.60.0-jammy` + Go + git-lfs) via [docker-compose.test.yml](docker-compose.test.yml). The native `npm run test:e2e:playwright` script remains for fast iteration on non-snapshot tests; expect it to fail with diff against snapshot baselines on macOS.
+   - **Regenerating snapshots**: `npm run test:e2e:playwright:docker:update`. Inspect each generated PNG (`open src/test/e2e/playwright/*.spec.ts-snapshots/*.png`) before committing. Diffs from a failing snapshot run land in `test-results/` for review.
+   - **VS Code is pinned** in [.vscode-version](.vscode-version) so workbench chrome changes don't appear as snapshot regressions on every VS Code release. Renovate proposes bumps weekly; the bump PR also flags that snapshots need regenerating.
+   - **Adding a new snapshot test**: copy [src/test/e2e/playwright/treeFragment.spec.ts](src/test/e2e/playwright/treeFragment.spec.ts) — seed the gs repo to the visual scenario you want, `openGitSpiceView`, locate the element, assert `toHaveScreenshot('descriptive-name.png')`. Stability helpers (animations off, fonts ready) are applied inside `openGitSpiceView`.
 
 ### File Organization
 

@@ -94,12 +94,4 @@ describe('RepoSection', () => {
 		fireEvent.click(container.querySelector('.repo-header') as HTMLElement);
 		assert.ok(chevron.classList.contains('codicon-chevron-right'));
 	});
-
-	it('renders the slot elements (branch list, error, empty) with the expected roles/classes', () => {
-		const h = harness();
-		const { container } = render(<RepoSection {...h.props} />);
-		assert.ok(container.querySelector('.repo-branch-list.stack-list'), 'branch list slot');
-		assert.ok(container.querySelector('[data-role="repo-error"]'), 'error slot');
-		assert.ok(container.querySelector('[data-role="repo-empty"]'), 'empty slot');
-	});
 });

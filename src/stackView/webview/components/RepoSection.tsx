@@ -1,12 +1,11 @@
 /**
- * Repo section component: per-repository wrapper with collapsible
- * header, toolbar (restack/sync/submit), and slots for the
- * StackView-managed branch list and error/empty states.
+ * Repo section component: per-repository header with collapsible
+ * toggle and toolbar (restack/sync/submit).
  *
- * Renders the INTERIOR of the section element. The wrapper
- * (repoSectionRenderer.tsx) creates the section, sets data-repo-id,
- * and exposes getBranchList / getErrorElement / getEmptyElement so
- * StackView can still query and mutate those slots imperatively.
+ * The branch list and error/empty states are rendered as siblings by
+ * the parent (StackView's RepoView), not inside this component.</br>
+ * Earlier this component also rendered placeholder slot elements for
+ * those — those have been removed since the single-root refactor.
  */
 
 import { useCallback, useEffect, useState, type JSX } from 'react';
@@ -77,9 +76,6 @@ export function RepoSection({ repoId, repoName, postMessage, setSectionClass }: 
 					aria-label={expanded ? 'Collapse section' : 'Expand section'}
 				/>
 			</div>
-			<ul className="repo-branch-list stack-list" />
-			<section className="error hidden" data-role="repo-error" />
-			<section className="empty hidden" data-role="repo-empty" />
 		</>
 	);
 }

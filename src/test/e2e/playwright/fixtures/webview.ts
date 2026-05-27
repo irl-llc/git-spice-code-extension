@@ -15,13 +15,18 @@
 
 import type { Frame, Page } from '@playwright/test';
 
+import { waitForFontsReady } from './stability';
+
 /** Root element our webview always renders (see media/stackView.html). */
 const WEBVIEW_ROOT_SELECTOR = '#repoContainer';
 
 /**
  * Focuses the Git Spice view in the SCM container and returns a Frame
  * scoped to the webview's content DOM (our stackView.html, not VS Code's
- * outer wrapper).
+ * outer wrapper). Waits for web fonts before returning so snapshots are
+ * not racing the font swap. Animations are disabled at the config level
+ * via `toHaveScreenshot.animations: 'disabled'` (the webview's CSP blocks
+ * inline-style injection, so we can't kill animations via addStyleTag).
  */
 export async function openGitSpiceView(workbench: Page): Promise<Frame> {
 	await workbench.keyboard.press('F1');
@@ -30,7 +35,9 @@ export async function openGitSpiceView(workbench: Page): Promise<Frame> {
 	// Let the palette filter settle before pressing Enter.
 	await workbench.waitForTimeout(500);
 	await workbench.keyboard.press('Enter');
-	return waitForGitSpiceFrame(workbench, 30_000);
+	const frame = await waitForGitSpiceFrame(workbench, 30_000);
+	await waitForFontsReady(frame);
+	return frame;
 }
 
 /**

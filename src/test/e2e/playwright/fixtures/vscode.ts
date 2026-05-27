@@ -17,12 +17,22 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const REPO_ROOT = resolve(__dirname, '../../../../..');
 const GS_BIN = process.env.GIT_SPICE_BIN ?? resolve(REPO_ROOT, '.gs/bin/gs');
+
+/** Reads the pinned VS Code version from .vscode-version at repo root. */
+function readPinnedVSCodeVersion(): string {
+	const path = resolve(REPO_ROOT, '.vscode-version');
+	const raw = readFileSync(path, 'utf8').trim();
+	if (!/^\d+\.\d+\.\d+$/.test(raw)) {
+		throw new Error(`Invalid .vscode-version: "${raw}" — expected semver like 1.121.0`);
+	}
+	return raw;
+}
 
 /** A live VS Code instance under Playwright's control. */
 export interface VSCodeInstance {
@@ -34,7 +44,7 @@ export interface VSCodeInstance {
 
 /** Launches VS Code with the extension loaded and the given workspace open. */
 export async function launchVSCode(workspacePath: string): Promise<VSCodeInstance> {
-	const vscodePath = await downloadAndUnzipVSCode('stable');
+	const vscodePath = await downloadAndUnzipVSCode(readPinnedVSCodeVersion());
 	const userDataDir = mkdtempSync(join(tmpdir(), 'gs-e2e-userdata-'));
 	const extensionsDir = mkdtempSync(join(tmpdir(), 'gs-e2e-extensions-'));
 	const debugPort = pickPort();
