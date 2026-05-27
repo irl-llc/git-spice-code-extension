@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useReducer, useRef, type JSX } from 'react';
 
 import { LANE_WIDTH, NODE_RADIUS_CURRENT, NODE_STROKE } from '../../tree/treeConstants';
-import type { TreeColors } from '../../tree/treeFragment';
+import { TreeFragmentSvg, type TreeColors } from '../../tree/treeFragment';
 import type { BranchViewModel, CommitFileChange, DisplayState, RepositoryViewModel } from '../../types';
 import type { ExtensionMessage, WebviewMessage } from '../../webviewTypes';
 import { buildBranchContext } from '../../contextBuilder';
@@ -28,7 +28,6 @@ import { BranchCard } from './BranchCard';
 import { BranchSummary } from './BranchSummary';
 import { CommitList } from './CommitList';
 import { RepoSection } from './RepoSection';
-import { TreeFragmentSvg } from './TreeFragmentSvg';
 import { UncommittedCard } from './UncommittedCard';
 import { UntrackedCard } from './UntrackedCard';
 
