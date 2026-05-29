@@ -39,6 +39,11 @@
     "configuration": {
       "title": "Git Spice",
       "properties": {
+        "git-spice.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the git-spice executable. Leave empty to use `git-spice` from your `PATH` (or the `GIT_SPICE_BIN` environment variable, when set). Set this if your binary is named `gs` or lives at a custom location."
+        },
         "git-spice.showCommentProgress": {
           "type": "boolean",
           "default": false,
