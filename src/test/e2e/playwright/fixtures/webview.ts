@@ -13,7 +13,7 @@
  * this is reliable.
  */
 
-import type { Frame, Page } from '@playwright/test';
+import type { Frame, Locator, Page } from '@playwright/test';
 
 import { waitForFontsReady } from './stability';
 
@@ -75,40 +75,45 @@ export async function setSidebarWidth(workbench: Page, widthPx: number): Promise
 	const sidebar = workbench.locator('.monaco-workbench .part.sidebar').first();
 	const sbBox = await sidebar.boundingBox();
 	if (!sbBox) throw new Error('Primary sidebar has no bounding box');
-	const rightEdge = sbBox.x + sbBox.width;
-	// Pick the vertical sash whose horizontal center is closest to the
-	// sidebar's right edge. Each sash is ~4px wide and centered on the
-	// boundary it controls.
-	const sashHandle = await workbench
-		.locator('.monaco-sash.vertical')
-		.evaluateAll((els, target) => {
-			let bestIndex = -1;
-			let bestDelta = Infinity;
-			els.forEach((el, i) => {
-				const r = el.getBoundingClientRect();
-				const center = r.x + r.width / 2;
-				const delta = Math.abs(center - target);
-				if (delta < bestDelta) {
-					bestDelta = delta;
-					bestIndex = i;
-				}
-			});
-			return { index: bestIndex, delta: bestDelta };
-		}, rightEdge);
-	if (sashHandle.index < 0 || sashHandle.delta > 8) {
-		throw new Error(`No vertical sash found near sidebar right edge (x=${rightEdge}); best delta ${sashHandle.delta}`);
+	const index = await findNearestVerticalSashIndex(workbench, sbBox.x + sbBox.width);
+	const sash = workbench.locator('.monaco-sash.vertical').nth(index);
+	await dragSashTo(workbench, sash, sbBox.x + widthPx);
+}
+
+/**
+ * Index of the vertical sash whose horizontal center is closest to `targetX`.
+ * Each sash is ~4px wide and centered on the boundary it controls; throws if
+ * the nearest one is more than 8px away (i.e. no sash sits on that boundary).
+ */
+async function findNearestVerticalSashIndex(workbench: Page, targetX: number): Promise<number> {
+	const nearest = await workbench.locator('.monaco-sash.vertical').evaluateAll((els, target) => {
+		let bestIndex = -1;
+		let bestDelta = Infinity;
+		els.forEach((el, i) => {
+			const r = el.getBoundingClientRect();
+			const delta = Math.abs(r.x + r.width / 2 - target);
+			if (delta < bestDelta) {
+				bestDelta = delta;
+				bestIndex = i;
+			}
+		});
+		return { index: bestIndex, delta: bestDelta };
+	}, targetX);
+	if (nearest.index < 0 || nearest.delta > 8) {
+		throw new Error(`No vertical sash found near sidebar right edge (x=${targetX}); best delta ${nearest.delta}`);
 	}
-	const sash = workbench.locator('.monaco-sash.vertical').nth(sashHandle.index);
+	return nearest.index;
+}
+
+/** Drags `sash` horizontally to `targetX`, then lets the resize settle. */
+async function dragSashTo(workbench: Page, sash: Locator, targetX: number): Promise<void> {
 	const box = await sash.boundingBox();
 	if (!box) throw new Error('Resolved sash has no bounding box');
-	const startX = box.x + box.width / 2;
 	const startY = box.y + box.height / 2;
-	const targetX = sbBox.x + widthPx;
-	await workbench.mouse.move(startX, startY);
+	await workbench.mouse.move(box.x + box.width / 2, startY);
 	await workbench.mouse.down();
 	await workbench.mouse.move(targetX, startY, { steps: 10 });
 	await workbench.mouse.up();
-	// Let the resize settle before downstream layout reads.
 	await workbench.waitForTimeout(150);
 }
 
