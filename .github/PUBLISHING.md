@@ -86,7 +86,7 @@ Both methods run the same tests and publish to both registries automatically.
 - The publish steps only run when:
   - All tests pass
   - The trigger is a tag (release)
-  - Running on Node.js 20.x (single publish, no duplicates)
+  - Running on Node.js 22.x (single publish, no duplicates)
 
 ### Manual Publishing (Alternative)
 
@@ -216,7 +216,7 @@ Before creating a release, ensure:
 - Extension appears at: `https://marketplace.visualstudio.com/items?itemName=IRLAILLC.git-spice`
 - Users can install: `ext install IRLAILLC.git-spice`
 - Extension appears at: `https://open-vsx.org/extension/IRLAILLC/git-spice`
-- Open VSX users can install: `code --install-extension IRLAILLC.git-spice`
+- Open VSX users can install via their editor (e.g. VSCodium, Cursor): `codium --install-extension IRLAILLC.git-spice`, or search "git-spice" in the in-app Extensions view
 - Monitor the marketplace page for reviews and ratings
 
 ## Version Numbering
@@ -262,7 +262,7 @@ Both approaches create git commits and tags automatically. The vsce method also 
 - Check the Actions log to see which condition failed:
   - `success()` - Did all tests pass?
   - `startsWith(github.ref, 'refs/tags/')` - Is this a tag push?
-  - `matrix.node-version == '20.x'` - Running on correct Node version?
+  - `matrix.node-version == '22.x'` - Running on correct Node version?
 
 **Version conflict error:**
 
