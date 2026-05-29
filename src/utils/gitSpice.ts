@@ -9,9 +9,18 @@ import * as vscode from 'vscode';
 import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
+import { resolveGitSpiceBinary } from './gitSpiceBinary';
 
 const execFileAsync = promisify(execFile);
-const GIT_SPICE_BINARY = process.env.GIT_SPICE_BIN ?? 'gs';
+
+/**
+ * Resolves the git-spice executable at call time so changes to the
+ * `git-spice.path` setting take effect without reloading the window.
+ */
+function getGitSpiceBinary(): string {
+	const configured = vscode.workspace.getConfiguration('git-spice').get<string>('path');
+	return resolveGitSpiceBinary(configured, process.env.GIT_SPICE_BIN);
+}
 
 /**
  * Environment that suppresses optional index locks (e.g. stat-cache refresh).
@@ -57,7 +66,7 @@ async function runGitSpiceCommand(
 		return { error: formatError(context, 'Workspace folder path is unavailable') };
 	}
 	try {
-		await execFileAsync(GIT_SPICE_BINARY, args, { cwd, timeout, env: NO_OPTIONAL_LOCKS_ENV });
+		await execFileAsync(getGitSpiceBinary(), args, { cwd, timeout, env: NO_OPTIONAL_LOCKS_ENV });
 		return { value: undefined };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };
@@ -75,7 +84,7 @@ export async function execGitSpice(folder: FolderUri): Promise<BranchLoadResult>
 		const showComments = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
 		const args = showComments ? ['ll', '-a', '-c', '--json'] : ['ll', '-a', '--json'];
 
-		const { stdout } = await execFileAsync(GIT_SPICE_BINARY, args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
+		const { stdout } = await execFileAsync(getGitSpiceBinary(), args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
 		return { value: parseGitSpiceBranches(stdout) };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };
@@ -436,7 +445,7 @@ export async function execRepoSync(
 			}
 		};
 
-		const process = spawn(GIT_SPICE_BINARY, ['repo', 'sync'], {
+		const process = spawn(getGitSpiceBinary(), ['repo', 'sync'], {
 			cwd,
 			stdio: ['pipe', 'pipe', 'pipe'],
 			env: NO_OPTIONAL_LOCKS_ENV,
