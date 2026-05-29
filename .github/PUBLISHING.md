@@ -1,13 +1,13 @@
-# Publishing to VS Code Marketplace
+# Publishing to VS Code Marketplace and Open VSX
 
 ## Automated Publishing with GitHub Actions
 
-This repository is configured for **automatic publishing** to the VS Code Marketplace when you create a GitHub release.
+This repository is configured for **automatic publishing** to both the VS Code Marketplace and Open VSX when you create a GitHub release.
 
 ### How It Works
 
 1. **CI runs on every push/PR** - Validates code quality, runs tests
-2. **Publishing happens automatically on release** - When you create a GitHub release with a tag, the extension is published
+2. **Publishing happens automatically on release** - When you create a GitHub release with a tag, the extension is published to both registries
 
 ### Publishing a New Version
 
@@ -18,31 +18,35 @@ There are **two ways** to publish:
 **Best for:** Stable releases with detailed release notes
 
 **Step 1:** Update version locally
+
 ```bash
 npm version patch -m "Release v%s"  # or minor/major
 # This creates a commit and git tag (e.g., v0.0.2)
 ```
 
 **Step 2:** Push changes and tag
+
 ```bash
 git push origin main
 git push origin v0.0.2  # Push the tag
 ```
 
 **Step 3:** Create GitHub Release
+
 1. Go to your repository on GitHub
 2. Click "Releases" → "Create a new release"
 3. Select the tag you just pushed (e.g., `v0.0.2`)
 4. Add release notes describing changes
 5. Click "Publish release"
 
-**Result:** GitHub Actions automatically runs tests and publishes to marketplace
+**Result:** GitHub Actions automatically runs tests and publishes to both registries
 
 #### Option 2: Auto-Increment via Workflow Dispatch (Quick Publishing)
 
 **Best for:** Quick patches, automated version bumping
 
 **Step 1:** Push your changes to main
+
 ```bash
 git add .
 git commit -m "Fix: description of changes"
@@ -50,6 +54,7 @@ git push origin main
 ```
 
 **Step 2:** Trigger workflow manually
+
 1. Go to Actions tab in GitHub
 2. Select "CI" workflow
 3. Click "Run workflow"
@@ -57,35 +62,38 @@ git push origin main
 5. Click "Run workflow"
 
 **Result:** The workflow will:
+
 - ✅ Run all tests
 - ✅ Auto-increment version in package.json (using `vsce publish patch/minor/major`)
 - ✅ Create version commit and git tag automatically
 - ✅ Publish to VS Code Marketplace
+- ✅ Publish to Open VSX
 
 **Comparison:**
 
-| Feature | GitHub Release | Auto-Increment |
-|---------|---------------|----------------|
-| Version control | Manual (you choose) | Automatic (semver) |
-| Release notes | Required/recommended | Optional |
-| Git tag | You create | vsce creates |
-| Best for | Stable releases | Quick patches |
+| Feature         | GitHub Release       | Auto-Increment     |
+| --------------- | -------------------- | ------------------ |
+| Version control | Manual (you choose)  | Automatic (semver) |
+| Release notes   | Required/recommended | Optional           |
+| Git tag         | You create           | vsce creates       |
+| Best for        | Stable releases      | Quick patches      |
 
-Both methods run the same tests and publish to the marketplace automatically.
+Both methods run the same tests and publish to both registries automatically.
 
 ### Monitoring the Deployment
 
 - Watch the "Actions" tab in GitHub to see the CI workflow progress
-- The publish step only runs when:
+- The publish steps only run when:
   - All tests pass
   - The trigger is a tag (release)
-  - Running on Node.js 20.x (single publish, no duplicates)
+  - Running on Node.js 22.x (single publish, no duplicates)
 
 ### Manual Publishing (Alternative)
 
 If you need to publish manually without GitHub Actions:
 
 **Option A: Publish current version** (no version change)
+
 ```bash
 # Run all checks
 npm run lint
@@ -94,11 +102,15 @@ npm run compile
 npm run test:unit
 npm run package
 
-# Publish current version
+# Publish current version to VS Code Marketplace
 VSCE_PAT=<your-token> npm run deploy
+
+# Publish current version to Open VSX
+OVSX_PAT=<your-token> npm run deploy:openvsx
 ```
 
 **Option B: Auto-increment and publish** (vsce handles version bump)
+
 ```bash
 # Run all checks
 npm run lint
@@ -114,6 +126,7 @@ VSCE_PAT=<your-token> npm run deploy:major  # 0.0.1 → 1.0.0
 ```
 
 The auto-increment commands will:
+
 1. Update version in package.json
 2. Create a git commit with the version change
 3. Create a git tag (e.g., `v0.0.2`)
@@ -123,14 +136,22 @@ Reference: https://code.visualstudio.com/api/working-with-extensions/publishing-
 
 ## Prerequisites (One-time Setup)
 
-### 1. Publisher Account
+### 1. VS Code Marketplace Publisher Account
+
 - Go to https://marketplace.visualstudio.com/manage
 - Sign in with Microsoft account
 - Create a publisher (already done: `IRLAILLC`)
 
-### 2. Personal Access Token (PAT)
+### 2. Open VSX Namespace
+
+- Go to https://open-vsx.org
+- Sign in and create (or confirm) a namespace for your publisher
+- Ensure the extension namespace/name maps correctly (`IRLAILLC.git-spice`)
+
+### 3. VS Code Marketplace Personal Access Token (PAT)
 
 **Initial Setup** (already done ✅):
+
 - Go to https://dev.azure.com
 - Select your organization
 - Click your profile → "Personal access tokens"
@@ -142,6 +163,12 @@ Reference: https://code.visualstudio.com/api/working-with-extensions/publishing-
   - **Scopes**: "Custom defined" → "Show all scopes" → **Marketplace: Manage**
 - Click "Create" and copy the token
 - Add it as a GitHub secret named `VSCE_PAT`
+
+### 4. Open VSX Personal Access Token
+
+- Go to https://open-vsx.org/user-settings/tokens
+- Create a token with publish permissions for your namespace
+- Add it as a GitHub secret named `OVSX_PAT`
 
 **PAT Rotation** (recommended every 90 days):
 
@@ -165,6 +192,7 @@ When your PAT expires or you want to rotate it for security:
    - Click "Revoke" to invalidate it
 
 **Setting Expiration Reminders**:
+
 - Add a calendar reminder 1 week before PAT expiration
 - Azure DevOps will also email you before expiration
 - The CI workflow will fail with authentication error if PAT expires
@@ -187,16 +215,20 @@ Before creating a release, ensure:
 
 - Extension appears at: `https://marketplace.visualstudio.com/items?itemName=IRLAILLC.git-spice`
 - Users can install: `ext install IRLAILLC.git-spice`
+- Extension appears at: `https://open-vsx.org/extension/IRLAILLC/git-spice`
+- Open VSX users can install via their editor (e.g. VSCodium, Cursor): `codium --install-extension IRLAILLC.git-spice`, or search "git-spice" in the in-app Extensions view
 - Monitor the marketplace page for reviews and ratings
 
 ## Version Numbering
 
 Follow semantic versioning (semver):
+
 - **Patch** (0.0.x): Bug fixes, small tweaks
 - **Minor** (0.x.0): New features, backward compatible
 - **Major** (x.0.0): Breaking changes
 
 **Manual versioning** (npm):
+
 ```bash
 npm version patch  # 0.0.1 → 0.0.2 (creates commit + tag)
 npm version minor  # 0.0.2 → 0.1.0
@@ -204,6 +236,7 @@ npm version major  # 0.1.0 → 1.0.0
 ```
 
 **Auto-increment** (vsce):
+
 ```bash
 npm run deploy:patch  # Auto-increments patch version and publishes
 npm run deploy:minor  # Auto-increments minor version and publishes
@@ -215,6 +248,7 @@ Both approaches create git commits and tags automatically. The vsce method also 
 ## Troubleshooting
 
 **Publishing fails with authentication error:**
+
 - **PAT Expired**: Check https://dev.azure.com for token expiration date
   - If expired, create a new PAT and update the `VSCE_PAT` GitHub secret
 - **Wrong Organization Scope**: PAT must use "All accessible organizations" (not a specific org)
@@ -222,19 +256,22 @@ Both approaches create git commits and tags automatically. The vsce method also 
 - **Secret Not Set**: Ensure `VSCE_PAT` secret exists in GitHub Settings → Secrets
 
 **CI passes but publish step is skipped:**
+
 - Ensure you created a **GitHub release** (not just pushed code)
 - Verify the tag starts with `v` (e.g., `v0.0.2`)
 - Check the Actions log to see which condition failed:
   - `success()` - Did all tests pass?
   - `startsWith(github.ref, 'refs/tags/')` - Is this a tag push?
-  - `matrix.node-version == '20.x'` - Running on correct Node version?
+  - `matrix.node-version == '22.x'` - Running on correct Node version?
 
 **Version conflict error:**
+
 - The version in package.json must be **higher** than the currently published version
 - Check marketplace: https://marketplace.visualstudio.com/items?itemName=IRLAILLC.git-spice
 - Run `npm version patch` (or `minor`/`major`) to increment
 
 **PAT will expire soon:**
+
 - Rotate the PAT before it expires (see "PAT Rotation" section above)
 - Azure DevOps sends reminder emails before expiration
 - Set a calendar reminder 1 week before expiration date
@@ -244,4 +281,5 @@ Both approaches create git commits and tags automatically. The vsce method also 
 - [Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
 - [Continuous Integration](https://code.visualstudio.com/api/working-with-extensions/continuous-integration)
 - [Marketplace Publisher Management](https://marketplace.visualstudio.com/manage)
+- [Open VSX](https://open-vsx.org/)
 - [vsce CLI Documentation](https://github.com/microsoft/vscode-vsce)
