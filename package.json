@@ -155,8 +155,13 @@
       },
       {
         "command": "git-spice.toggleCommentProgress",
-        "title": "Show Comment Progress (Beta)",
-        "toggled": "config.git-spice.showCommentProgress"
+        "title": "Show Comment Progress (Beta)"
+      },
+      {
+        "command": "git-spice.openInEditor",
+        "title": "Open in Editor",
+        "category": "Git Spice",
+        "icon": "$(open-preview)"
       }
     ],
     "keybindings": [
@@ -186,9 +191,15 @@
           "group": "navigation@1"
         },
         {
+          "command": "git-spice.openInEditor",
+          "when": "view == gitSpice.branches",
+          "group": "navigation@2"
+        },
+        {
           "command": "git-spice.toggleCommentProgress",
           "when": "view == gitSpice.branches",
-          "group": "2_options@1"
+          "group": "2_options@1",
+          "toggled": "config.git-spice.showCommentProgress"
         }
       ],
       "webview/context": [

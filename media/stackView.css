@@ -292,15 +292,6 @@ button {
   line-height: 1;
 }
 
-.branch-toggle.codicon {
-  transition: transform 0.1s ease;
-  transform-origin: 50% 50%;
-}
-
-.branch-toggle.codicon.expanded {
-  transform: rotate(90deg);
-}
-
 .branch-toggle:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;
@@ -602,6 +593,9 @@ button {
   flex-shrink: 0;
   width: 1rem;
   height: 1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -613,6 +607,11 @@ button {
 
 .commit-toggle:hover {
   opacity: 1;
+}
+
+.commit-toggle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
 }
 
 /* File list container */
@@ -767,6 +766,10 @@ button {
   flex-shrink: 0;
   width: 1rem;
   height: 1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -777,6 +780,26 @@ button {
 
 .branch-summary-toggle:hover {
   opacity: 1;
+}
+
+.branch-summary-toggle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.branch-summary-label-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.branch-summary-label-button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
 }
 
 .branch-summary-label {
@@ -901,16 +924,27 @@ button {
 }
 
 .changes-section-header .section-toggle {
-  width: 0.8rem;
-  height: 0.8rem;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--vscode-icon-foreground);
+  opacity: 0.7;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
-.changes-section-header .section-toggle.collapsed {
-  transform: rotate(-90deg);
+.changes-section-header .section-toggle:hover {
+  opacity: 1;
+}
+
+.changes-section-header .section-toggle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
 }
 
 .changes-section-content {

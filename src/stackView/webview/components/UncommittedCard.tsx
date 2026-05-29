@@ -108,7 +108,7 @@ function ChangesSection(props: ChangesSectionProps): JSX.Element {
 			<div className="changes-section-header">
 				<button
 					type="button"
-					className={`codicon codicon-chevron-${props.expanded ? 'down' : 'right'}`}
+					className={`section-toggle codicon codicon-chevron-${props.expanded ? 'down' : 'right'}`}
 					aria-label={sectionLabel}
 					aria-expanded={props.expanded}
 					onClick={(e) => {

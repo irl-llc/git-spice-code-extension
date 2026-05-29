@@ -29,15 +29,112 @@ const WEBVIEW_ROOT_SELECTOR = '#repoContainer';
  * inline-style injection, so we can't kill animations via addStyleTag).
  */
 export async function openGitSpiceView(workbench: Page): Promise<Frame> {
-	await workbench.keyboard.press('F1');
-	await workbench.locator('.quick-input-widget').waitFor({ state: 'visible', timeout: 10_000 });
-	await workbench.keyboard.type('Focus on Git Spice View');
-	// Let the palette filter settle before pressing Enter.
-	await workbench.waitForTimeout(500);
-	await workbench.keyboard.press('Enter');
+	await runCommand(workbench, 'Focus on Git Spice View');
 	const frame = await waitForGitSpiceFrame(workbench, 30_000);
 	await waitForFontsReady(frame);
 	return frame;
+}
+
+/**
+ * Opens the Git Spice view as a full editor pane (via the
+ * `git-spice.openInEditor` command). Gives snapshot tests a wide canvas
+ * and clean visual context (no sidebar siblings, no scrollbars, no
+ * narrow-column clipping).
+ *
+ * The caller should NOT call `openGitSpiceView` in the same test —
+ * otherwise both the sidebar webview and the editor webview will match
+ * `#repoContainer` and the frame selector becomes ambiguous.
+ */
+export async function openGitSpiceEditor(workbench: Page): Promise<Frame> {
+	await runCommand(workbench, 'Git Spice: Open in Editor');
+	// 60s gives ample headroom for the WebviewPanel handshake on slow
+	// Docker runs; the local fast path is still ~2s.
+	const frame = await waitForGitSpiceFrame(workbench, 60_000);
+	await waitForFontsReady(frame);
+	return frame;
+}
+
+async function runCommand(workbench: Page, command: string): Promise<void> {
+	await workbench.keyboard.press('F1');
+	await workbench.locator('.quick-input-widget').waitFor({ state: 'visible', timeout: 10_000 });
+	await workbench.keyboard.type(command);
+	// Let the palette filter settle before pressing Enter.
+	await workbench.waitForTimeout(500);
+	await workbench.keyboard.press('Enter');
+}
+
+/**
+ * Drags the sash between the primary sidebar and the editor area so the
+ * sidebar is `widthPx` wide. Default is ~300px which clips branch cards
+ * horizontally; widening to ~500 gives the cards room to lay out
+ * naturally. Sashes live in `.sash-container` divs at the workbench
+ * root, not inside the sidebar — we find the one whose center sits at
+ * the sidebar's right edge.
+ */
+export async function setSidebarWidth(workbench: Page, widthPx: number): Promise<void> {
+	const sidebar = workbench.locator('.monaco-workbench .part.sidebar').first();
+	const sbBox = await sidebar.boundingBox();
+	if (!sbBox) throw new Error('Primary sidebar has no bounding box');
+	const rightEdge = sbBox.x + sbBox.width;
+	// Pick the vertical sash whose horizontal center is closest to the
+	// sidebar's right edge. Each sash is ~4px wide and centered on the
+	// boundary it controls.
+	const sashHandle = await workbench
+		.locator('.monaco-sash.vertical')
+		.evaluateAll((els, target) => {
+			let bestIndex = -1;
+			let bestDelta = Infinity;
+			els.forEach((el, i) => {
+				const r = el.getBoundingClientRect();
+				const center = r.x + r.width / 2;
+				const delta = Math.abs(center - target);
+				if (delta < bestDelta) {
+					bestDelta = delta;
+					bestIndex = i;
+				}
+			});
+			return { index: bestIndex, delta: bestDelta };
+		}, rightEdge);
+	if (sashHandle.index < 0 || sashHandle.delta > 8) {
+		throw new Error(`No vertical sash found near sidebar right edge (x=${rightEdge}); best delta ${sashHandle.delta}`);
+	}
+	const sash = workbench.locator('.monaco-sash.vertical').nth(sashHandle.index);
+	const box = await sash.boundingBox();
+	if (!box) throw new Error('Resolved sash has no bounding box');
+	const startX = box.x + box.width / 2;
+	const startY = box.y + box.height / 2;
+	const targetX = sbBox.x + widthPx;
+	await workbench.mouse.move(startX, startY);
+	await workbench.mouse.down();
+	await workbench.mouse.move(targetX, startY, { steps: 10 });
+	await workbench.mouse.up();
+	// Let the resize settle before downstream layout reads.
+	await workbench.waitForTimeout(150);
+}
+
+/**
+ * Collapses every pane in the primary sidebar EXCEPT the one whose
+ * aria-label contains `keepLabel` (case-insensitive). Used to free
+ * vertical space for the Git Spice section so multi-branch stacks fit
+ * in a single screenshot. Scoped to `.part.sidebar` so it doesn't touch
+ * the auxiliary bar (Chat).
+ */
+export async function collapseSidebarSiblings(workbench: Page, keepLabel: string): Promise<void> {
+	const headers = workbench.locator('.monaco-workbench .part.sidebar .pane-header');
+	const count = await headers.count();
+	if (count === 0) throw new Error('No pane-headers found in primary sidebar');
+	const keep = keepLabel.toLowerCase();
+	for (let i = 0; i < count; i++) {
+		const header = headers.nth(i);
+		const label = (await header.getAttribute('aria-label')) ?? '';
+		if (label.toLowerCase().includes(keep)) continue;
+		const expanded = await header.getAttribute('aria-expanded');
+		if (expanded === 'true') {
+			await header.click({ timeout: 2_000 });
+		}
+	}
+	// Let the collapse animations finish before downstream layout reads.
+	await workbench.waitForTimeout(200);
 }
 
 /**

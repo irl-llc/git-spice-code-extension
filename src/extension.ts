@@ -309,6 +309,7 @@ function registerCoreProvider(context: vscode.ExtensionContext, provider: StackV
 		}),
 		vscode.commands.registerCommand('git-spice.refresh', () => provider.refresh(true)),
 		vscode.commands.registerCommand('git-spice.syncRepo', () => provider.sync()),
+		vscode.commands.registerCommand('git-spice.openInEditor', () => provider.openInEditor()),
 	);
 }
 

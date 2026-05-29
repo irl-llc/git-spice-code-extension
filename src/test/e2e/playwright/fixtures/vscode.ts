@@ -17,12 +17,38 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const REPO_ROOT = resolve(__dirname, '../../../../..');
 const GS_BIN = process.env.GIT_SPICE_BIN ?? resolve(REPO_ROOT, '.gs/bin/gs');
+
+/**
+ * Writes a user-settings.json into the temp `--user-data-dir` to keep
+ * snapshot captures clean: hides Copilot/chat chrome that ships built-in
+ * in modern VS Code, disables minimap, prevents the welcome page, etc.
+ */
+function writeUserSettings(userDataDir: string): void {
+	const settingsDir = join(userDataDir, 'User');
+	mkdirSync(settingsDir, { recursive: true });
+	const settings = {
+		'workbench.startupEditor': 'none',
+		'window.commandCenter': false,
+		'chat.commandCenter.enabled': false,
+		'chat.experimental.offerSetup': false,
+		'workbench.activityBar.location': 'side',
+		// Hide the status bar so the gs/git overlay doesn't bleed into
+		// `.repo-branch-list` snapshots that extend below the viewport.
+		'workbench.statusBar.visible': false,
+		'editor.minimap.enabled': false,
+		'telemetry.telemetryLevel': 'off',
+		'update.mode': 'none',
+		'extensions.autoUpdate': false,
+		'security.workspace.trust.enabled': false,
+	};
+	writeFileSync(join(settingsDir, 'settings.json'), JSON.stringify(settings, null, 2));
+}
 
 /** Reads the pinned VS Code version from .vscode-version at repo root. */
 function readPinnedVSCodeVersion(): string {
@@ -47,6 +73,7 @@ export async function launchVSCode(workspacePath: string): Promise<VSCodeInstanc
 	const vscodePath = await downloadAndUnzipVSCode(readPinnedVSCodeVersion());
 	const userDataDir = mkdtempSync(join(tmpdir(), 'gs-e2e-userdata-'));
 	const extensionsDir = mkdtempSync(join(tmpdir(), 'gs-e2e-extensions-'));
+	writeUserSettings(userDataDir);
 	const debugPort = pickPort();
 
 	const childEnv: NodeJS.ProcessEnv = { ...process.env, GIT_SPICE_BIN: GS_BIN };

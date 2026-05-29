@@ -68,7 +68,7 @@ import {
 } from './handlers/workingCopyHandlers';
 
 export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext {
-	private view: vscode.WebviewView | undefined;
+	private readonly hosts = new Set<vscode.Webview>();
 	private readonly repoStates = new Map<string, RepoState>();
 	private readonly fileWatcher: FileWatcherManager;
 	private readonly refreshCoalescer = new AsyncCoalescer();
@@ -86,28 +86,53 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
-		this.view = webviewView;
-		this.configureWebviewOptions(webviewView);
+		await this.attachWebview(webviewView.webview, (cb) => webviewView.onDidDispose(cb));
+	}
 
-		webviewView.webview.html = await renderWebviewHtml(webviewView.webview, this.extensionUri);
-		webviewView.webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
-		webviewView.onDidDispose(() => {
-			this.view = undefined;
-		});
+	/** Creates a full-editor-pane instance of the Git Spice view. */
+	async openInEditor(): Promise<vscode.WebviewPanel> {
+		const panel = vscode.window.createWebviewPanel(
+			'gitSpice.editor',
+			'Git Spice',
+			{ viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: this.getLocalResourceRoots(),
+			},
+		);
+		panel.iconPath = vscode.Uri.joinPath(this.extensionUri, 'icon.png');
+		await this.attachWebview(panel.webview, (cb) => panel.onDidDispose(cb));
+		return panel;
+	}
 
+	/** Common mount path for sidebar view and editor panel webviews. */
+	private async attachWebview(webview: vscode.Webview, onDispose: (cb: () => void) => void): Promise<void> {
+		webview.options = {
+			enableScripts: true,
+			localResourceRoots: this.getLocalResourceRoots(),
+		};
+		webview.html = await renderWebviewHtml(webview, this.extensionUri);
+		webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
+		this.hosts.add(webview);
+		onDispose(() => this.hosts.delete(webview));
 		this.syncWatchers();
 		void this.refresh();
 	}
 
-	private configureWebviewOptions(webviewView: vscode.WebviewView): void {
-		webviewView.webview.options = {
-			enableScripts: true,
-			localResourceRoots: [
-				vscode.Uri.joinPath(this.extensionUri, 'media'),
-				vscode.Uri.joinPath(this.extensionUri, 'dist'),
-				vscode.Uri.joinPath(this.extensionUri, 'dist', 'codicons'),
-			],
-		};
+	private getLocalResourceRoots(): vscode.Uri[] {
+		return [
+			vscode.Uri.joinPath(this.extensionUri, 'media'),
+			vscode.Uri.joinPath(this.extensionUri, 'dist'),
+			vscode.Uri.joinPath(this.extensionUri, 'dist', 'codicons'),
+		];
+	}
+
+	/** Broadcasts a message to every attached webview. */
+	private broadcast(message: unknown): void {
+		for (const webview of this.hosts) {
+			void webview.postMessage(message);
+		}
 	}
 
 	/** Called when repo discovery fires a change event. */
@@ -173,9 +198,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	pushState(force = false): void {
-		if (!this.view) return;
+		if (this.hosts.size === 0) return;
 		const state = this.buildDisplayState();
-		void this.view.webview.postMessage({ type: 'state', payload: state, force });
+		this.broadcast({ type: 'state', payload: state, force });
 	}
 
 	/** Builds the full DisplayState from all repo states. */
@@ -240,7 +265,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			branches: state?.branches ?? [],
 			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
 			handleBranchCommandInternal: (cmd, branch, fn) => this.handleBranchCommandInternal(repoId, cmd, branch, fn),
-			postMessageToWebview: (message) => this.view?.webview.postMessage(message),
+			postMessageToWebview: (message) => {
+				this.broadcast(message);
+			},
 		};
 	}
 
@@ -249,8 +276,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			workspaceFolder: this.resolveWorkspaceFolder(repoId),
 			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
 			refresh: () => this.refresh(),
-			postCommitFilesToWebview: (sha, files) =>
-				this.view?.webview.postMessage({ type: 'commitFiles', repoId, sha, files }),
+			postCommitFilesToWebview: (sha, files) => this.broadcast({ type: 'commitFiles', repoId, sha, files }),
 		};
 	}
 
@@ -272,7 +298,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			workspaceFolder: this.resolveWorkspaceFolder(repoId),
 			branches: state?.branches ?? [],
 			postBranchFilesToWebview: (branchName, files) =>
-				this.view?.webview.postMessage({ type: 'branchFiles', repoId, branchName, files }),
+				this.broadcast({ type: 'branchFiles', repoId, branchName, files }),
 		};
 	}
 
