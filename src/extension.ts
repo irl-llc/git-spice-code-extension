@@ -280,20 +280,50 @@ function registerBranchCreateCommand(context: vscode.ExtensionContext, provider:
 	);
 }
 
+/**
+ * Mirrors the `git-spice.showCommentProgress` setting into the
+ * `gitSpice.showCommentProgress` context key, which the view/title menu's
+ * `when` clauses use to swap between the "Show…" (enable) and "Hide…"
+ * (disable) commands. VS Code's package.json `menus` schema has no
+ * `toggled`/checkmark support, and `$(icon)` codicons are stripped from
+ * overflow-menu titles — so the on/off state is conveyed by swapping the
+ * command's verb label, gated by this context key.
+ */
+function syncCommentProgressContext(): void {
+	const enabled = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
+	void vscode.commands.executeCommand('setContext', 'gitSpice.showCommentProgress', enabled);
+}
+
+/** Persists the comment-progress setting (Global scope). */
+async function setCommentProgress(enabled: boolean): Promise<void> {
+	try {
+		await vscode.workspace
+			.getConfiguration('git-spice')
+			.update('showCommentProgress', enabled, vscode.ConfigurationTarget.Global);
+	} catch (err) {
+		void vscode.window.showErrorMessage(
+			`Failed to update comment progress setting: ${err instanceof Error ? err.message : String(err)}`,
+		);
+	}
+}
+
 /** Registers workspace and configuration change listeners. */
 function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: StackViewProvider): void {
+	syncCommentProgressContext();
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {
 			provider.setWorkspaceFolder(vscode.workspace.workspaceFolders?.[0]);
 			void provider.refresh();
 		}),
-		vscode.commands.registerCommand('git-spice.toggleCommentProgress', async () => {
-			const config = vscode.workspace.getConfiguration('git-spice');
-			const current = config.get<boolean>('showCommentProgress', false);
-			await config.update('showCommentProgress', !current, vscode.ConfigurationTarget.Global);
-		}),
+		// Two commands rather than one toggle: package.json `menus` has no
+		// `toggled`/checkmark support, so we swap which command (Show… vs
+		// Hide…) appears via `when` on the gitSpice.showCommentProgress
+		// context key.
+		vscode.commands.registerCommand('git-spice.enableCommentProgress', () => setCommentProgress(true)),
+		vscode.commands.registerCommand('git-spice.disableCommentProgress', () => setCommentProgress(false)),
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
+				syncCommentProgressContext();
 				void provider.refresh();
 			}
 		}),
