@@ -9,6 +9,7 @@ import { AsyncCoalescer } from '../utils/asyncCoalescer';
 import { execStackRestack, execStackSubmit } from '../utils/gitSpice';
 import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type { DiscoveredRepo, RepoDiscovery } from '../repoDiscovery';
+import { collectComments, mergeCachedComments, type CommentCache } from './commentCache';
 import { buildRepoDisplayState, type RepoDisplayInput } from './state';
 import { fetchRepoState, fetchFolderState, type RepoState } from './repoStateBuilder';
 import type { DisplayState, RepositoryViewModel, UncommittedState } from './types';
@@ -73,6 +74,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	private readonly fileWatcher: FileWatcherManager;
 	private readonly refreshCoalescer = new AsyncCoalescer();
 	private readonly disposables: vscode.Disposable[] = [];
+	/** PR comment counts cached by Change Request id (see commentCache.ts). */
+	private readonly commentCache: CommentCache = new Map();
+	/** When true, the next refresh re-fetches comment counts from the forge. */
+	private commentsDirty = true;
 
 	constructor(
 		private readonly discovery: RepoDiscovery | undefined,
@@ -166,35 +171,73 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		void this.refresh();
 	}
 
+	/**
+	 * Refreshes the view. `force` re-renders even if state looks unchanged AND
+	 * marks comment counts dirty so they are re-fetched from the forge — route
+	 * explicit/remote-affecting refreshes (toolbar, sync, submit, toggle-on)
+	 * through `refresh(true)`; file-watch refreshes use `refresh()` and reuse
+	 * cached counts.
+	 */
 	async refresh(force = false): Promise<void> {
+		if (force) this.commentsDirty = true;
 		await this.refreshCoalescer.run(() => this.doRefresh(force));
+	}
+
+	/** Whether this refresh should re-fetch comment counts (network) from the forge. */
+	private shouldFetchComments(): boolean {
+		const enabled = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
+		return enabled && this.commentsDirty;
 	}
 
 	/** Fetches latest state from all repos and pushes to webview. */
 	private async doRefresh(force: boolean): Promise<void> {
+		const withComments = this.shouldFetchComments();
 		const repos = this.getDiscoveredRepos();
 		if (repos.length > 0) {
-			await this.refreshRepos(repos);
+			await this.refreshRepos(repos, withComments);
 		} else if (this.fallbackFolder) {
-			await this.refreshFallback();
+			await this.refreshFallback(withComments);
 		} else {
 			this.repoStates.clear();
+		}
+		if (withComments) {
+			this.updateCommentCache();
+			this.commentsDirty = false;
 		}
 		this.pushState(force);
 	}
 
 	/** Refreshes all discovered repos in parallel. */
-	private async refreshRepos(repos: ReadonlyArray<DiscoveredRepo>): Promise<void> {
-		const results = await Promise.all(repos.map((repo) => fetchRepoState(repo)));
+	private async refreshRepos(repos: ReadonlyArray<DiscoveredRepo>, withComments: boolean): Promise<void> {
+		const results = await Promise.all(repos.map((repo) => fetchRepoState(repo, withComments)));
 		this.repoStates.clear();
 		for (const state of results) this.repoStates.set(state.rootPath, state);
 	}
 
 	/** Fallback: single-folder mode (no discovery). */
-	private async refreshFallback(): Promise<void> {
-		const state = await fetchFolderState(this.fallbackFolder!);
+	private async refreshFallback(withComments: boolean): Promise<void> {
+		const state = await fetchFolderState(this.fallbackFolder!, withComments);
 		this.repoStates.clear();
 		this.repoStates.set(state.rootPath, state);
+	}
+
+	/**
+	 * Populates the comment cache from freshly-fetched (`-c`) branch data and
+	 * prunes entries for CRs that no longer exist (deleted/merged/renamed), so
+	 * the cache can't grow unbounded over the extension-host lifetime. Safe
+	 * because this runs only when we have fresh counts for all active branches.
+	 */
+	private updateCommentCache(): void {
+		const activeIds = new Set<string>();
+		for (const state of this.repoStates.values()) {
+			for (const [id, comments] of collectComments(state.branches)) {
+				this.commentCache.set(id, comments);
+				activeIds.add(id);
+			}
+		}
+		for (const id of this.commentCache.keys()) {
+			if (!activeIds.has(id)) this.commentCache.delete(id);
+		}
 	}
 
 	pushState(force = false): void {
@@ -210,7 +253,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			const input: RepoDisplayInput = {
 				repoId: state.rootPath,
 				repoName: state.name,
-				branches: state.branches,
+				branches: mergeCachedComments(state.branches, this.commentCache),
 				error: state.error,
 				uncommitted: state.uncommitted,
 				untrackedBranch: state.untrackedBranch,
@@ -226,7 +269,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			void vscode.window.showErrorMessage('No workspace folder available.');
 			return;
 		}
-		await handleSync({ folder, refresh: () => this.refresh() });
+		await handleSync({ folder, refresh: () => this.refresh(true) });
 	}
 
 	// --- Repo Resolution ---
@@ -432,7 +475,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	async handleRepoSync(repoId: string | undefined): Promise<void> {
 		const folder = this.resolveWorkspaceFolder(repoId);
 		if (!folder) return;
-		await handleSync({ folder, refresh: () => this.refresh() });
+		await handleSync({ folder, refresh: () => this.refresh(true) });
 	}
 
 	/** Restacks all branches in the specified repo's stack. */
@@ -455,7 +498,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			'Submitting stack...',
 			() => execStackSubmit(folder),
 			'Stack submitted successfully',
-			() => this.refresh(),
+			() => this.refresh(true),
 		);
 	}
 
