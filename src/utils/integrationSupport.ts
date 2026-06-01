@@ -30,7 +30,7 @@ const INTEGRATION_COMMAND_PATTERN = /\bintegration\s+\(int\)/;
  * otherwise inject escape codes between the `integration` and `(int)` tokens
  * and defeat {@link INTEGRATION_COMMAND_PATTERN}.
  */
-const ANSI_ESCAPE_PATTERN = /\[[0-9;]*[A-Za-z]/g;
+const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*[A-Za-z]/g;
 
 /**
  * Returns true when `gs --help` output advertises the integration-branch

@@ -6,11 +6,7 @@ import { promisify } from 'node:util';
 
 import * as vscode from 'vscode';
 
-import {
-	BRANCH_CREATE_TIMEOUT_MS,
-	GIT_SPICE_PROBE_TIMEOUT_MS,
-	GIT_SPICE_TIMEOUT_MS,
-} from '../constants';
+import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_PROBE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
 import { resolveGitSpiceBinary } from './gitSpiceBinary';

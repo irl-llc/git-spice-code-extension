@@ -10,7 +10,7 @@ import * as assert from 'assert';
 import { parseIntegrationSupport } from '../../utils/integrationSupport';
 
 /** ASCII escape (0x1b) that introduces ANSI SGR/CSI sequences. */
-const ESC = '';
+const ESC = '\x1b';
 
 // Abridged `gs --help` from a build WITH the integration feature
 // (ed-irl/git-spice). The `integration (int)` group entries are the signal.
