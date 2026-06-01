@@ -141,6 +141,37 @@ describe('state', () => {
 			assert.strictEqual(firstSibling?.tree.isLastChild, false);
 		});
 
+		it('should render sibling stacks when trunk ups is incomplete (issue #28)', () => {
+			// Regression: some git-spice outputs list only a subset of the
+			// trunk's children in `ups`. Traversal must instead derive
+			// children from the authoritative `down` links so every stack
+			// sharing the trunk is rendered, not just the current one.
+			const branches: GitSpiceBranch[] = [
+				createBranch('main', { ups: [{ name: 'feature-b' }] }),
+				createBranch('feature-a', { down: { name: 'main' } }),
+				createBranch('feature-b', { down: { name: 'main' }, current: true }),
+				createBranch('feature-c', { down: { name: 'main' } }),
+			];
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
+
+			const names = result.branches.map((b) => b.name).sort();
+			assert.deepStrictEqual(names, ['feature-a', 'feature-b', 'feature-c', 'main']);
+		});
+
+		it('should render a sibling stack rooted on an absent trunk (issue #28)', () => {
+			// When the trunk itself is not part of the listing, siblings
+			// still share a `down` base and must all appear as roots.
+			const branches: GitSpiceBranch[] = [
+				createBranch('feature-a', { down: { name: 'main' } }),
+				createBranch('feature-b', { down: { name: 'main' }, current: true }),
+				createBranch('feature-c', { down: { name: 'main' } }),
+			];
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
+
+			const names = result.branches.map((b) => b.name).sort();
+			assert.deepStrictEqual(names, ['feature-a', 'feature-b', 'feature-c']);
+		});
+
 		it('should assign lanes for multi-lane visualization', () => {
 			const branches: GitSpiceBranch[] = [
 				createBranch('main', { ups: [{ name: 'feature-1' }, { name: 'feature-2' }] }),

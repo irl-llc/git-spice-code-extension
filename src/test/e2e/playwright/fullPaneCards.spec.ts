@@ -57,6 +57,30 @@ const SCENARIOS: Scenario[] = [
 		},
 	},
 	{
+		name: 'multiple sibling stacks sharing the trunk (issue #28)',
+		snapshot: 'sibling-stacks.png',
+		seed: (repo) => {
+			// Three independent stacks all based on the trunk. All must
+			// render, not only the current branch's stack.
+			repo.createBranch({
+				name: 'feat-a',
+				base: TRUNK,
+				commits: [{ message: 'add a', files: { 'a.txt': 'a\n' } }],
+			});
+			repo.createBranch({
+				name: 'feat-b',
+				base: TRUNK,
+				commits: [{ message: 'add b', files: { 'b.txt': 'b\n' } }],
+			});
+			repo.createBranch({
+				name: 'feat-c',
+				base: TRUNK,
+				commits: [{ message: 'add c', files: { 'c.txt': 'c\n' } }],
+			});
+			repo.gs('branch', 'checkout', 'feat-b');
+		},
+	},
+	{
 		name: 'branch with summarized changes expanded',
 		snapshot: 'summarized-changes-expanded.png',
 		seed: (repo) => {

@@ -75,8 +75,8 @@ type TraversalContext = {
 type TraversalState = {
 	result: BranchWithTree[];
 	visited: Set<string>;
-	branchMap: Map<string, GitSpiceBranch>;
-	branches: GitSpiceBranch[];
+	/** Precomputed parent-name → sorted children, built once per render. */
+	childrenMap: Map<string, GitSpiceBranch[]>;
 };
 
 /** Computes the lane for a node using lane compaction rules. */
@@ -107,7 +107,7 @@ function postOrderTraverse(branch: GitSpiceBranch, ctx: TraversalContext, state:
 	if (state.visited.has(branch.name)) return;
 	state.visited.add(branch.name);
 
-	const children = getChildren(branch, state.branchMap, state.branches);
+	const children = getChildren(branch, state.childrenMap);
 	const isLastChild = ctx.siblingIndex === ctx.siblingCount - 1;
 	const lane = computeLane(ctx.siblingIndex, ctx.parentLane, ctx.nextLane);
 
@@ -148,11 +148,31 @@ function findRootBranches(branches: GitSpiceBranch[], branchMap: Map<string, Git
 }
 
 /**
+ * Groups branches by their base (`down`) branch name, sorting each
+ * sibling list once. Built a single time per render so the post-order
+ * traversal can look up children in O(1) instead of re-filtering and
+ * re-sorting the whole branch set at every node (issue #28 review).
+ */
+function buildChildrenMap(branches: GitSpiceBranch[]): Map<string, GitSpiceBranch[]> {
+	const childrenMap = new Map<string, GitSpiceBranch[]>();
+	for (const branch of branches) {
+		if (!branch.down) continue;
+		const list = childrenMap.get(branch.down.name) ?? [];
+		list.push(branch);
+		childrenMap.set(branch.down.name, list);
+	}
+	for (const list of childrenMap.values()) {
+		list.sort((a, b) => a.name.localeCompare(b.name));
+	}
+	return childrenMap;
+}
+
+/**
  * Orders branches using post-order traversal to match `gs ll -a` output.
  * Children appear before (above) their parents, with first sibling's subtree before second's.
  */
 function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, GitSpiceBranch>): BranchWithTree[] {
-	const state: TraversalState = { result: [], visited: new Set(), branchMap, branches };
+	const state: TraversalState = { result: [], visited: new Set(), childrenMap: buildChildrenMap(branches) };
 	const laneCounter = { value: 0 };
 	const startingBranches = findRootBranches(branches, branchMap);
 
@@ -175,16 +195,17 @@ function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, G
 	return state.result;
 }
 
-/** Gets sorted children of a branch that are in the current branch set */
-function getChildren(
-	branch: GitSpiceBranch,
-	branchMap: Map<string, GitSpiceBranch>,
-	branches: GitSpiceBranch[],
-): GitSpiceBranch[] {
-	return (branch.ups ?? [])
-		.map((link) => branchMap.get(link.name))
-		.filter((child): child is GitSpiceBranch => child !== undefined && branches.includes(child))
-		.sort((a, b) => a.name.localeCompare(b.name));
+/**
+ * Gets the sorted children of a branch via O(1) lookup in the precomputed
+ * `childrenMap`.
+ *
+ * Children are derived from the authoritative `down` (base) links rather
+ * than the parent's `ups` list: every non-trunk branch always records its
+ * base, whereas a branch's `ups` array can be incomplete, which would drop
+ * sibling stacks from the rendered tree (issue #28).
+ */
+function getChildren(branch: GitSpiceBranch, childrenMap: Map<string, GitSpiceBranch[]>): GitSpiceBranch[] {
+	return childrenMap.get(branch.name) ?? [];
 }
 
 /**
