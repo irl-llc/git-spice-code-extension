@@ -482,7 +482,7 @@ button {
 
   /* Layout */
   --tree-connector-width: 1.5px;
-  --tree-graph-padding: 8px;
+  --tree-graph-padding: 2px;
   --tree-graph-width: 30px; /* Default fallback; dynamically set based on lane count */
 }
 
