@@ -14,80 +14,20 @@
  * Linux-rendered snapshots — regenerate via the Docker compose harness.
  */
 
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-
 import { expect, test, type Page } from '@playwright/test';
 
 import { launchVSCode, type VSCodeInstance } from './fixtures/vscode';
-import { startShamhub, type ShamhubServer } from './fixtures/shamhub';
+import { seedShamhubStack, type ShamhubStack } from './fixtures/shamhub';
 import { openGitSpiceEditor } from './fixtures/webview';
 
-// This spec lives in playwright/ (one level above fixtures/), so four `..`
-// reach the repo root.
-const REPO_ROOT = resolve(__dirname, '../../../..');
-const GS_BIN = process.env.GIT_SPICE_BIN ?? resolve(REPO_ROOT, '.gs/bin/gs');
-const TRUNK = 'main';
-
-interface Scenario {
-	shamhub: ShamhubServer;
-	repoPath: string;
-	env: Record<string, string>;
-	cleanup(): void;
-}
-
-/** Runs the full init -> submit -> seed flow against shamhub. */
-async function seedShamhubStack(): Promise<Scenario> {
-	const shamhub = await startShamhub();
-	const repoPath = mkdtempSync(join(tmpdir(), 'gs-shamhub-'));
-	const home = mkdtempSync(join(tmpdir(), 'gs-shamhub-home-'));
-	const env: Record<string, string> = {
-		...shamhub.env,
-		HOME: home,
-		XDG_CONFIG_HOME: join(home, '.config'),
-		GIT_SPICE_BIN: GS_BIN,
-	};
-	const execEnv = { ...process.env, ...env };
-	const git = (...a: string[]): void => void execFileSync('git', ['-C', repoPath, ...a], { env: execEnv });
-	const gs = (...a: string[]): void => void execFileSync(GS_BIN, a, { cwd: repoPath, env: execEnv });
-	const write = (rel: string, content: string): void => {
-		const abs = join(repoPath, rel);
-		mkdirSync(join(abs, '..'), { recursive: true });
-		writeFileSync(abs, content);
-	};
-
-	git('init', '-q', '-b', TRUNK);
-	git('config', 'user.email', 'e2e@example.com');
-	git('config', 'user.name', 'E2E Bot');
-	git('commit', '-q', '--allow-empty', '-m', 'Initial commit');
-	gs('repo', 'init', '--trunk', TRUNK);
-	git('remote', 'add', 'origin', shamhub.repoUrl);
-	git('push', '-q', 'origin', TRUNK);
-	gs('auth', 'login');
-
-	for (const name of ['feat1', 'feat2', 'feat3']) {
-		write(`${name}.txt`, `${name}\n`);
-		git('add', '.');
-		gs('branch', 'create', '-m', name, '--no-prompt', '--no-verify', name);
-	}
-	gs('stack', 'submit', '--fill');
-
+/** Seeds a feat1/feat2/feat3 stack, then posts comments via shamhub. */
+async function seedCommentScenario(): Promise<ShamhubStack> {
+	const stack = await seedShamhubStack({ branches: ['feat1', 'feat2', 'feat3'] });
 	// feat1 (#1): one unresolved + one resolved -> 1/2; feat2 (#2): resolved -> 1/1.
-	await shamhub.seedComment(1, false, 'feat1 unresolved');
-	await shamhub.seedComment(1, true, 'feat1 resolved');
-	await shamhub.seedComment(2, true, 'feat2 resolved');
-
-	return {
-		shamhub,
-		repoPath,
-		env,
-		cleanup: () => {
-			rmSync(repoPath, { recursive: true, force: true });
-			rmSync(home, { recursive: true, force: true });
-		},
-	};
+	await stack.shamhub.seedComment(1, false, 'feat1 unresolved');
+	await stack.shamhub.seedComment(1, true, 'feat1 resolved');
+	await stack.shamhub.seedComment(2, true, 'feat2 resolved');
+	return stack;
 }
 
 /** Enables comment progress via the command palette (default is off). */
@@ -101,11 +41,11 @@ async function enableCommentProgress(workbench: Page): Promise<void> {
 }
 
 test.describe('comment counts (shamhub)', () => {
-	let scenario: Scenario;
+	let scenario: ShamhubStack;
 	let vscode: VSCodeInstance;
 
 	test.beforeAll(async () => {
-		scenario = await seedShamhubStack();
+		scenario = await seedCommentScenario();
 		vscode = await launchVSCode(scenario.repoPath, scenario.env);
 	});
 
