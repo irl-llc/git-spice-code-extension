@@ -10,7 +10,8 @@ user-facing behavior adds a small "change fragment" file under
 
 ### Adding a fragment
 
-Install Changie (`go install github.com/miniscruff/changie@latest`, or see the
+Install Changie (e.g. `brew install changie` on macOS/Linux,
+`go install github.com/miniscruff/changie@latest`, or see the
 [install docs](https://changie.dev/guide/installation/)) and run:
 
 ```bash
