@@ -1,7 +1,9 @@
 import type { GitSpiceBranch } from '../gitSpiceSchema';
+import type { IntegrationState } from '../utils/integrationState';
 import type {
 	BranchChangeViewModel,
 	BranchViewModel,
+	IntegrationViewModel,
 	RepositoryViewModel,
 	TreeFragmentData,
 	TreePosition,
@@ -27,6 +29,8 @@ export type RepoDisplayInput = {
 	uncommitted?: UncommittedState;
 	/** Name of the current branch when not tracked by git-spice. */
 	untrackedBranch?: string;
+	/** Parsed integration-branch state, when configured and the binary supports it. */
+	integration?: IntegrationState | null;
 };
 
 /**
@@ -37,16 +41,68 @@ export function buildRepoDisplayState(input: RepoDisplayInput): RepositoryViewMo
 	const ordered = orderStackWithTree(input.branches, new Map(input.branches.map((b) => [b.name, b])));
 	const uncommitted = filterEmptyUncommitted(input.uncommitted);
 	const treeFragments = buildTreeFragments(ordered, uncommitted);
+	const integration = toIntegrationViewModel(input.integration, ordered);
 
 	return {
 		id: input.repoId,
 		name: input.repoName,
-		branches: mapToBranchViewModels(ordered, treeFragments),
+		branches: mapToBranchViewModels(ordered, treeFragments, integration),
 		uncommitted,
 		uncommittedTreeFragment: uncommitted ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
 		error: input.error,
 		untrackedBranch: input.untrackedBranch,
+		integration,
 	};
+}
+
+/**
+ * Maps a parsed {@link IntegrationState} to the view model, or undefined when
+ * no integration branch is configured/supported. Carries the "rebuild"
+ * staleness, the tip-branch names (used to mark out-of-integration branches),
+ * and the tree fragment for the integration node row.
+ */
+export function toIntegrationViewModel(
+	state: IntegrationState | null | undefined,
+	ordered: BranchWithTree[],
+): IntegrationViewModel | undefined {
+	if (!state) return undefined;
+	return {
+		name: state.name,
+		needsRebuild: state.needsRebuild,
+		tipNames: state.tips.map((tip) => tip.name),
+		treeFragment: buildIntegrationFragment(ordered, state.needsRebuild),
+	};
+}
+
+/**
+ * Builds the tree fragment for the integration node: a node at lane 0 whose
+ * fork connectors fan down to every top-of-stack lane, so all swimlanes
+ * converge up into the integration build.
+ */
+function buildIntegrationFragment(ordered: BranchWithTree[], needsRebuild: boolean): TreeFragmentData {
+	const maxLane = ordered.reduce((max, item) => Math.max(max, item.tree.lane), 0);
+	const topLanes = collectTopRowLanes(ordered);
+	const lanes: TreeFragmentData['lanes'] = [];
+	for (let lane = 0; lane <= maxLane; lane++) {
+		const continuesBelow = topLanes.has(lane);
+		lanes.push({ continuesFromAbove: false, continuesBelow, hasNode: lane === 0, needsRestack: false });
+	}
+	const childForkLanes = [...topLanes]
+		.filter((lane) => lane !== 0)
+		.sort((a, b) => a - b)
+		.map((lane) => ({ lane, needsRestack: false, isUncommitted: false }));
+	return { lanes, maxLane, nodeLane: 0, childForkLanes, nodeStyle: 'integration', nodeNeedsRestack: needsRebuild };
+}
+
+/** Collects the lanes occupied by branches whose parent is not in the stack (stack tops). */
+function collectTopRowLanes(ordered: BranchWithTree[]): Set<number> {
+	const names = new Set(ordered.map((item) => item.branch.name));
+	const lanes = new Set<number>();
+	for (const item of ordered) {
+		const parent = item.tree.parentName;
+		if (!parent || !names.has(parent)) lanes.add(item.tree.lane);
+	}
+	return lanes;
 }
 
 /** Returns uncommitted state only if it contains changes, otherwise undefined. */
@@ -57,8 +113,22 @@ function filterEmptyUncommitted(uncommitted?: UncommittedState): UncommittedStat
 }
 
 /** Maps ordered branches to view models using precomputed tree fragments. */
-function mapToBranchViewModels(ordered: BranchWithTree[], fragments: Map<string, TreeFragmentData>): BranchViewModel[] {
-	return ordered.map((item) => createBranchViewModel(item.branch, item.tree, fragments.get(item.branch.name)!));
+function mapToBranchViewModels(
+	ordered: BranchWithTree[],
+	fragments: Map<string, TreeFragmentData>,
+	integration?: IntegrationViewModel,
+): BranchViewModel[] {
+	const tipSet = integration ? new Set(integration.tipNames) : undefined;
+	return ordered.map((item) => createBranchViewModel(item.branch, item.tree, fragments.get(item.branch.name)!, tipSet));
+}
+
+/**
+ * Determines whether a branch should show the out-of-integration "X" marker:
+ * only when an integration branch is configured and this branch is not a tip.
+ */
+function computeOutOfIntegration(branchName: string, tipSet?: Set<string>): boolean | undefined {
+	if (!tipSet) return undefined;
+	return !tipSet.has(branchName);
 }
 
 /** Context passed during tree traversal */
@@ -295,6 +365,7 @@ function createBranchViewModel(
 	branch: GitSpiceBranch,
 	tree: TreePosition,
 	treeFragment: TreeFragmentData,
+	tipSet?: Set<string>,
 ): BranchViewModel {
 	return {
 		name: branch.name,
@@ -304,6 +375,7 @@ function createBranchViewModel(
 		treeFragment,
 		change: branch.change ? toChangeViewModel(branch.change) : undefined,
 		commits: mapCommitsToViewModel(branch.commits),
+		outOfIntegration: computeOutOfIntegration(branch.name, tipSet),
 	};
 }
 

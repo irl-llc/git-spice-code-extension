@@ -168,6 +168,30 @@ button {
   border-color: var(--vscode-problemsWarningIcon-foreground);
 }
 
+/* Integration-branch card: rendered atop the stack. */
+.branch-card.integration-card {
+  border-color: var(--vscode-textLink-foreground);
+}
+
+.branch-card.integration-card.needs-rebuild {
+  border-color: var(--vscode-problemsWarningIcon-foreground);
+}
+
+.integration-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.integration-icon {
+  font-size: 0.85rem;
+  color: var(--vscode-textLink-foreground);
+}
+
+.branch-card.integration-card.needs-rebuild .integration-icon {
+  color: var(--vscode-problemsWarningIcon-foreground);
+}
+
 .branch-card.dragging {
   opacity: 0.6;
 }

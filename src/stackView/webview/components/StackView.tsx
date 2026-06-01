@@ -23,12 +23,19 @@ import { useEffect, useMemo, useReducer, useRef, type JSX } from 'react';
 
 import { LANE_WIDTH, NODE_RADIUS_CURRENT, NODE_STROKE } from '../../tree/treeConstants';
 import { TreeFragmentSvg, type TreeColors } from '../../tree/treeFragment';
-import type { BranchViewModel, CommitFileChange, DisplayState, RepositoryViewModel } from '../../types';
+import type {
+	BranchViewModel,
+	CommitFileChange,
+	DisplayState,
+	IntegrationViewModel,
+	RepositoryViewModel,
+} from '../../types';
 import type { ExtensionMessage, WebviewMessage } from '../../webviewTypes';
 import { buildBranchContext } from '../../contextBuilder';
 import { BranchCard } from './BranchCard';
 import { BranchSummary } from './BranchSummary';
 import { CommitList } from './CommitList';
+import { IntegrationCard } from './IntegrationCard';
 import { RepoSection } from './RepoSection';
 import { UncommittedCard } from './UncommittedCard';
 import { UntrackedCard } from './UntrackedCard';
@@ -329,6 +336,7 @@ function RepoStack({ repo, ui, treeColors, postMessage, dispatch }: RepoStackPro
 
 	return (
 		<>
+			{repo.integration ? <IntegrationItem integration={repo.integration} treeColors={treeColors} /> : null}
 			{showUncommitted && insertUncommittedAtTop ? (
 				<UncommittedItem repo={repo} ui={ui} postMessage={postMessage} dispatch={dispatch} treeless />
 			) : null}
@@ -381,7 +389,11 @@ function BranchStackItem({
 		<>
 			{uncommittedSlot}
 			<li className="stack-item" data-key={branch.name} data-branch={branch.name}>
-				<TreeFragmentSvg fragment={branch.treeFragment} colors={treeColors} />
+				<TreeFragmentSvg
+					fragment={branch.treeFragment}
+					colors={treeColors}
+					outOfIntegration={branch.outOfIntegration}
+				/>
 				<article
 					ref={articleRef}
 					className={`branch-card${branch.current ? ' is-current' : ''}${branch.restack ? ' needs-restack' : ''}`}
@@ -521,6 +533,20 @@ function UncommittedItem({ repo, ui, postMessage, dispatch, treeless }: Uncommit
 					dispatch({ type: 'clearCommitMessage', repoId: repo.id });
 				}}
 			/>
+		</li>
+	);
+}
+
+interface IntegrationItemProps {
+	integration: IntegrationViewModel;
+	treeColors: TreeColors;
+}
+
+function IntegrationItem({ integration, treeColors }: IntegrationItemProps): JSX.Element {
+	return (
+		<li className="stack-item integration-item" data-branch="__integration__">
+			<TreeFragmentSvg fragment={integration.treeFragment} colors={treeColors} />
+			<IntegrationCard integration={integration} />
 		</li>
 	);
 }

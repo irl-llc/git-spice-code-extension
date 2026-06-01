@@ -36,16 +36,55 @@ export type TreeColors = {
 export interface TreeFragmentSvgProps {
 	fragment: TreeFragmentData;
 	colors: TreeColors;
+	/** When true, draws an "X" over this row's node (branch excluded from the integration build). */
+	outOfIntegration?: boolean;
 }
 
-export function TreeFragmentSvg({ fragment, colors }: TreeFragmentSvgProps): JSX.Element {
+export function TreeFragmentSvg({ fragment, colors, outOfIntegration }: TreeFragmentSvgProps): JSX.Element {
 	const width = calculateFragmentWidth(fragment.maxLane);
 	return (
 		<svg className="tree-fragment-svg" width={width} style={{ width: `${width}px` }}>
 			{renderLaneSegments(fragment, colors)}
 			{renderChildForkConnectors(fragment, colors)}
 			{renderNode(fragment, colors)}
+			{outOfIntegration ? renderOutOfIntegrationMark(fragment, colors) : null}
 		</svg>
+	);
+}
+
+/**
+ * Draws an "X" centered on the node to mark a branch excluded from the
+ * integration build. Renders a bg-colored halo under a line-colored cross so
+ * it stays legible on both filled (normal) and hollow (current) node circles.
+ */
+function renderOutOfIntegrationMark(data: TreeFragmentData, colors: TreeColors): JSX.Element {
+	const x = getLaneX(data.nodeLane);
+	const d = NODE_RADIUS_CURRENT - 0.5;
+	const cross = (stroke: string, w: number, keyPrefix: string): JSX.Element[] => [
+		<line
+			key={`${keyPrefix}-a`}
+			x1={x - d}
+			y1={NODE_Y - d}
+			x2={x + d}
+			y2={NODE_Y + d}
+			stroke={stroke}
+			strokeWidth={w}
+		/>,
+		<line
+			key={`${keyPrefix}-b`}
+			x1={x - d}
+			y1={NODE_Y + d}
+			x2={x + d}
+			y2={NODE_Y - d}
+			stroke={stroke}
+			strokeWidth={w}
+		/>,
+	];
+	return (
+		<g className="out-of-integration-mark" strokeLinecap="round">
+			{...cross(colors.bg, 2.5, 'halo')}
+			{...cross(colors.line, 1.25, 'mark')}
+		</g>
 	);
 }
 
@@ -205,6 +244,19 @@ function renderNode(data: TreeFragmentData, colors: TreeColors): JSX.Element {
 				stroke={colors.nodeCurrent}
 				strokeWidth={NODE_STROKE}
 				strokeDasharray="3 2"
+			/>
+		);
+	}
+	if (data.nodeStyle === 'integration') {
+		// Hollow ring; warning (marigold) when the integration build needs a rebuild.
+		return (
+			<circle
+				cx={x}
+				cy={NODE_Y}
+				r={NODE_RADIUS_CURRENT}
+				fill={colors.bg}
+				stroke={data.nodeNeedsRestack ? colors.restack : colors.node}
+				strokeWidth={NODE_STROKE}
 			/>
 		);
 	}
