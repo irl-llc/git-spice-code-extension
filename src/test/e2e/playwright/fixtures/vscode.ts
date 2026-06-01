@@ -68,15 +68,25 @@ export interface VSCodeInstance {
 	close(): Promise<void>;
 }
 
-/** Launches VS Code with the extension loaded and the given workspace open. */
-export async function launchVSCode(workspacePath: string): Promise<VSCodeInstance> {
+/**
+ * Launches VS Code with the extension loaded and the given workspace open.
+ *
+ * `extraEnv` is merged into the child environment after `GIT_SPICE_BIN`, so the
+ * extension's `gs` subprocesses inherit it — used to point them at a shamhub
+ * fake forge (SHAMHUB_URL/_API_URL, SHAMHUB_USERNAME, GIT_SPICE_SECRET_BACKEND,
+ * and a shared HOME/XDG_CONFIG_HOME so the seeded auth token is found).
+ */
+export async function launchVSCode(
+	workspacePath: string,
+	extraEnv: Record<string, string> = {},
+): Promise<VSCodeInstance> {
 	const vscodePath = await downloadAndUnzipVSCode(readPinnedVSCodeVersion());
 	const userDataDir = mkdtempSync(join(tmpdir(), 'gs-e2e-userdata-'));
 	const extensionsDir = mkdtempSync(join(tmpdir(), 'gs-e2e-extensions-'));
 	writeUserSettings(userDataDir);
 	const debugPort = pickPort();
 
-	const childEnv: NodeJS.ProcessEnv = { ...process.env, GIT_SPICE_BIN: GS_BIN };
+	const childEnv: NodeJS.ProcessEnv = { ...process.env, GIT_SPICE_BIN: GS_BIN, ...extraEnv };
 	delete childEnv.ELECTRON_RUN_AS_NODE;
 
 	// `--extensions-dir=<temp>` already isolates from user-installed extensions
