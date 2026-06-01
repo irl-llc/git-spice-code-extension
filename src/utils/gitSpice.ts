@@ -6,7 +6,11 @@ import { promisify } from 'node:util';
 
 import * as vscode from 'vscode';
 
-import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
+import {
+	BRANCH_CREATE_TIMEOUT_MS,
+	GIT_SPICE_PROBE_TIMEOUT_MS,
+	GIT_SPICE_TIMEOUT_MS,
+} from '../constants';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
 import { resolveGitSpiceBinary } from './gitSpiceBinary';
@@ -111,7 +115,7 @@ export async function execGitSpiceSupportsIntegration(folder: FolderUri): Promis
 	try {
 		const { stdout } = await execFileAsync(getGitSpiceBinary(), ['--help'], {
 			cwd,
-			timeout: GIT_SPICE_TIMEOUT_MS,
+			timeout: GIT_SPICE_PROBE_TIMEOUT_MS,
 			env: NO_OPTIONAL_LOCKS_ENV,
 		});
 		return parseIntegrationSupport(stdout);

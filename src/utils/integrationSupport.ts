@@ -24,15 +24,26 @@
 const INTEGRATION_COMMAND_PATTERN = /\bintegration\s+\(int\)/;
 
 /**
+ * Matches ANSI SGR/CSI escape sequences (e.g. color codes) so they can be
+ * stripped before pattern-matching. Forced-color environments
+ * (`CLICOLOR_FORCE`, `FORCE_COLOR`) can colorize `gs --help` output, which would
+ * otherwise inject escape codes between the `integration` and `(int)` tokens
+ * and defeat {@link INTEGRATION_COMMAND_PATTERN}.
+ */
+const ANSI_ESCAPE_PATTERN = /\[[0-9;]*[A-Za-z]/g;
+
+/**
  * Returns true when `gs --help` output advertises the integration-branch
  * command group, i.e. the resolved binary supports the feature.
  *
  * Pure function: takes the captured stdout (and tolerates undefined/empty for
- * the failure-to-probe case) and returns a boolean. No I/O.
+ * the failure-to-probe case) and returns a boolean. ANSI color escapes are
+ * stripped first so forced-color environments still match. No I/O.
  */
 export function parseIntegrationSupport(helpOutput: string | undefined): boolean {
 	if (typeof helpOutput !== 'string' || helpOutput.length === 0) {
 		return false;
 	}
-	return INTEGRATION_COMMAND_PATTERN.test(helpOutput);
+	const cleanOutput = helpOutput.replace(ANSI_ESCAPE_PATTERN, '');
+	return INTEGRATION_COMMAND_PATTERN.test(cleanOutput);
 }

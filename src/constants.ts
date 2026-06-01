@@ -18,6 +18,13 @@ export const GIT_SPICE_TIMEOUT_MS = 30_000;
 /** Git-spice CLI timeout for branch creation in ms. */
 export const BRANCH_CREATE_TIMEOUT_MS = 10_000;
 
+/**
+ * Git-spice CLI timeout for the `--help` capability probe in ms.
+ * Kept short: the probe runs on every refresh and a hung/misconfigured binary
+ * should not block integration detection for the full standard timeout.
+ */
+export const GIT_SPICE_PROBE_TIMEOUT_MS = 5_000;
+
 /** Number of commits to render per chunk in lazy loading. */
 export const COMMIT_RENDER_CHUNK_SIZE = 10;
 
