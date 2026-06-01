@@ -7,7 +7,10 @@
  * tip to exercise the needs-rebuild state. Captures:
  *  - built (up-to-date) integration card atop the stack,
  *  - needs-rebuild integration card (drifted tip → warning styling),
- *  - the out-of-integration "X" marker on a branch excluded from the tips.
+ *  - the out-of-integration "X" marker on a branch excluded from the tips,
+ *  - the post-"tip add" state: a branch added to the tip list via the same
+ *    `gs integration tip add` command the context-menu action runs, so its "X"
+ *    marker clears (the inverse of the out-of-integration capture).
  *
  * Snapshots are Linux-rendered (Docker compose); regenerate via
  * `npm run test:e2e:playwright:docker:update`.
@@ -109,6 +112,21 @@ const SCENARIOS: Scenario[] = [
 			repo.gs('integration', 'create', 'integ', '--tip', 'feat-a');
 			repo.gs('integration', 'rebuild');
 			repo.gs('branch', 'checkout', 'feat-a');
+		},
+	},
+	{
+		name: 'tip add clears the out-of-integration X marker',
+		snapshot: 'integration-tip-added.png',
+		seed: (repo) => {
+			seedStack(repo);
+			// Start with feat-b excluded, then add it to the tip list via the
+			// exact command the context-menu "Add to integration build" action
+			// runs. feat-b's "X" marker should clear once it is a tip.
+			repo.gs('integration', 'create', 'integ', '--tip', 'feat-a');
+			repo.gs('integration', 'rebuild');
+			repo.gs('integration', 'tip', 'add', 'feat-b');
+			repo.gs('integration', 'rebuild');
+			repo.gs('branch', 'checkout', 'feat-b');
 		},
 	},
 ];
