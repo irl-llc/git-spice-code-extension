@@ -23,11 +23,18 @@ import { openGitSpiceEditor } from './fixtures/webview';
 /** Seeds a feat1/feat2/feat3 stack, then posts comments via shamhub. */
 async function seedCommentScenario(): Promise<ShamhubStack> {
 	const stack = await seedShamhubStack({ branches: ['feat1', 'feat2', 'feat3'] });
-	// feat1 (#1): one unresolved + one resolved -> 1/2; feat2 (#2): resolved -> 1/1.
-	await stack.shamhub.seedComment(1, false, 'feat1 unresolved');
-	await stack.shamhub.seedComment(1, true, 'feat1 resolved');
-	await stack.shamhub.seedComment(2, true, 'feat2 resolved');
-	return stack;
+	try {
+		// feat1 (#1): one unresolved + one resolved -> 1/2; feat2 (#2): resolved -> 1/1.
+		await stack.shamhub.seedComment(1, false, 'feat1 unresolved');
+		await stack.shamhub.seedComment(1, true, 'feat1 resolved');
+		await stack.shamhub.seedComment(2, true, 'feat2 resolved');
+		return stack;
+	} catch (error) {
+		// Comment seeding threw: tear down the stack so beforeAll doesn't leak it.
+		await stack.shamhub.close();
+		stack.cleanup();
+		throw error;
+	}
 }
 
 /** Enables comment progress via the command palette (default is off). */

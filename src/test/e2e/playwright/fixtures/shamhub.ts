@@ -155,15 +155,24 @@ export async function seedShamhubStack(options: SeedStackOptions): Promise<Shamh
 	const shamhub = await startShamhub();
 	const repoPath = mkdtempSync(join(tmpdir(), 'gs-shamhub-'));
 	const home = mkdtempSync(join(tmpdir(), 'gs-shamhub-home-'));
-	const env = buildStackEnv(home, shamhub.env);
-	const runners = createRepoRunners(repoPath, env);
-	const trunk = options.trunk ?? TRUNK;
+	try {
+		const env = buildStackEnv(home, shamhub.env);
+		seedStackRepo(createRepoRunners(repoPath, env), shamhub.repoUrl, options);
+		return { shamhub, repoPath, env, cleanup: () => cleanupDirs(repoPath, home) };
+	} catch (error) {
+		// Setup threw partway through: don't leak the shamhub child or temp dirs.
+		await shamhub.close();
+		cleanupDirs(repoPath, home);
+		throw error;
+	}
+}
 
-	initAndPushTrunk(runners, shamhub.repoUrl, trunk);
+/** init -> push trunk -> create branches -> submit, against an already-started shamhub. */
+function seedStackRepo(runners: RepoRunners, repoUrl: string, options: SeedStackOptions): void {
+	const trunk = options.trunk ?? TRUNK;
+	initAndPushTrunk(runners, repoUrl, trunk);
 	for (const name of options.branches) createSubmittableBranch(runners, name);
 	if (options.submit ?? true) runners.gs('stack', 'submit', '--fill');
-
-	return { shamhub, repoPath, env, cleanup: () => cleanupDirs(repoPath, home) };
 }
 
 /** Env pointing VS Code, `gs`, and git at the shared shamhub home + forge. */
