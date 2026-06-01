@@ -66,7 +66,11 @@ test.describe('comment counts (shamhub)', () => {
 		const workbench = vscode.workbench;
 		const webview = await openGitSpiceEditor(workbench);
 		const repoContainer = webview.locator('#repoContainer');
-		await webview.locator('.stack-item').first().waitFor({ state: 'visible', timeout: 30_000 });
+		// 60s headroom (matching openGitSpiceEditor): the first render waits on
+		// the extension's initial `gs ll` against the shamhub-backed repo, and
+		// shamhub can be slow to settle under CI load (template lookups have been
+		// observed to hit context-deadline timeouts), delaying the first state push.
+		await webview.locator('.stack-item').first().waitFor({ state: 'visible', timeout: 60_000 });
 
 		// OFF (default): no comment indicators rendered. (toHaveScreenshot has
 		// built-in stability waits, so no explicit timeout is needed.)
