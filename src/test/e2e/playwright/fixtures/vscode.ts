@@ -133,29 +133,41 @@ async function closeInstance(browser: Browser, proc: ChildProcess): Promise<void
 	if (!proc.killed) proc.kill('SIGKILL');
 }
 
+/** Probes the CDP version endpoint once; returns the error on failure, undefined on success. */
+async function probeCdp(port: number): Promise<unknown> {
+	try {
+		const res = await fetch(`http://127.0.0.1:${port}/json/version`);
+		return res.ok ? undefined : new Error(`CDP responded ${res.status}`);
+	} catch (err) {
+		return err;
+	}
+}
+
 async function waitForCdp(port: number, timeoutMs: number): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	let lastErr: unknown;
 	while (Date.now() < deadline) {
-		try {
-			const res = await fetch(`http://127.0.0.1:${port}/json/version`);
-			if (res.ok) return;
-		} catch (err) {
-			lastErr = err;
-		}
+		lastErr = await probeCdp(port);
+		if (lastErr === undefined) return;
 		await new Promise((r) => setTimeout(r, 500));
 	}
 	throw new Error(`CDP did not come up on port ${port} within ${timeoutMs}ms: ${String(lastErr)}`);
 }
 
+/** Returns the open workbench page across all browser contexts, if any. */
+function findWorkbenchPage(browser: Browser): Page | undefined {
+	for (const ctx of browser.contexts()) {
+		const page = ctx.pages().find((p) => p.url().includes('workbench.html'));
+		if (page) return page;
+	}
+	return undefined;
+}
+
 async function waitForWorkbench(browser: Browser, timeoutMs: number): Promise<Page> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		for (const ctx of browser.contexts()) {
-			for (const page of ctx.pages()) {
-				if (page.url().includes('workbench.html')) return page;
-			}
-		}
+		const page = findWorkbenchPage(browser);
+		if (page) return page;
 		await new Promise((r) => setTimeout(r, 500));
 	}
 	throw new Error(`No VS Code workbench page found within ${timeoutMs}ms`);

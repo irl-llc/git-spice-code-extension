@@ -30,22 +30,29 @@ export function buildTreeFragments(branches: BranchTreeInput[]): Map<string, Tre
 
 	for (let rowIndex = 0; rowIndex < branches.length; rowIndex++) {
 		const branch = branches[rowIndex];
-		const lanes = buildLanesForRow(branches, rowIndex, maxLane, branchIndexByName);
-		const childForkLanes = findChildForkLanes(branches, rowIndex);
-		const nodeStyle = determineNodeStyle(branch);
-
-		result.set(branch.name, {
-			lanes,
-			maxLane,
-			nodeLane: branch.lane,
-			parentLane: undefined, // Not used - parent draws connectors via childForkLanes
-			childForkLanes,
-			nodeStyle,
-			nodeNeedsRestack: branch.needsRestack,
-		});
+		result.set(branch.name, buildRowFragment(branches, rowIndex, maxLane, branchIndexByName));
 	}
 
 	return result;
+}
+
+/** Builds the tree fragment for a single row. */
+function buildRowFragment(
+	branches: BranchTreeInput[],
+	rowIndex: number,
+	maxLane: number,
+	branchIndexByName: Map<string, number>,
+): TreeFragmentData {
+	const branch = branches[rowIndex];
+	return {
+		lanes: buildLanesForRow(branches, rowIndex, maxLane, branchIndexByName),
+		maxLane,
+		nodeLane: branch.lane,
+		parentLane: undefined, // Not used - parent draws connectors via childForkLanes
+		childForkLanes: findChildForkLanes(branches, rowIndex),
+		nodeStyle: determineNodeStyle(branch),
+		nodeNeedsRestack: branch.needsRestack,
+	};
 }
 
 /** Builds lane segment states for a single row. */

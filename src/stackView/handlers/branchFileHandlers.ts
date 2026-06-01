@@ -87,21 +87,26 @@ async function openBranchChangesView(cwd: string, branchName: string, parentName
 	}
 
 	const mergeBase = await fetchBranchMergeBase(cwd, branchName, parentName);
-	const resourceList = buildBranchResourceList(files, cwd, branchName, mergeBase, path);
+	const resourceList = buildBranchResourceList(files, { cwd, branchName, mergeBase, path });
 	await vscode.commands.executeCommand('vscode.changes', `Changes in ${branchName}`, resourceList);
+}
+
+/** Shared context for resolving a branch file's diff URIs. */
+interface BranchDiffResources {
+	cwd: string;
+	branchName: string;
+	mergeBase: string;
+	path: typeof import('node:path');
 }
 
 /** Builds the resource list for the vscode.changes command. */
 function buildBranchResourceList(
 	files: CommitFileChange[],
-	cwd: string,
-	branchName: string,
-	mergeBase: string,
-	path: typeof import('node:path'),
+	resources: BranchDiffResources,
 ): [vscode.Uri, vscode.Uri, vscode.Uri][] {
 	return files.map((file) => {
-		const fileUri = vscode.Uri.file(path.join(cwd, file.path));
-		const { left, right } = buildBranchFileDiffUris(fileUri, mergeBase, branchName, file.status);
+		const fileUri = vscode.Uri.file(resources.path.join(resources.cwd, file.path));
+		const { left, right } = buildBranchFileDiffUris(fileUri, resources.mergeBase, resources.branchName, file.status);
 		return [fileUri, left, right];
 	});
 }
@@ -117,7 +122,7 @@ export async function handleOpenBranchFileDiff(
 	if (!ctx) return;
 
 	try {
-		await openBranchFileDiff(ctx.cwd, branchName, ctx.parentName, filePath, status);
+		await openBranchFileDiff({ cwd: ctx.cwd, branchName, parentName: ctx.parentName, filePath, status });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		void vscode.window.showErrorMessage(`Failed to open branch file diff: ${message}`);
@@ -140,14 +145,18 @@ function buildBranchFileDiffUris(
 	return { left: buildGitUri(fileUri, mergeBase), right: buildGitUri(fileUri, branchName) };
 }
 
+/** Identifies a single branch file to diff against its merge-base. */
+interface BranchFileDiffRequest {
+	cwd: string;
+	branchName: string;
+	parentName: string;
+	filePath: string;
+	status?: string;
+}
+
 /** Builds URIs and opens the diff editor for a branch file. */
-async function openBranchFileDiff(
-	cwd: string,
-	branchName: string,
-	parentName: string,
-	filePath: string,
-	status?: string,
-): Promise<void> {
+async function openBranchFileDiff(request: BranchFileDiffRequest): Promise<void> {
+	const { cwd, branchName, parentName, filePath, status } = request;
 	const path = await import('node:path');
 	const mergeBase = await fetchBranchMergeBase(cwd, branchName, parentName);
 	const fileUri = vscode.Uri.file(path.join(cwd, filePath));

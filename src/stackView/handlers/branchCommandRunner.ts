@@ -86,20 +86,26 @@ export async function runWithProgress(
 	refresh: () => Promise<void>,
 ): Promise<boolean> {
 	let success = false;
-	await vscode.window.withProgress(
-		{ location: vscode.ProgressLocation.Notification, title, cancellable: false },
-		async () => {
-			try {
-				const result = await operation();
-				success = showResult(result, successMessage);
-				await refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
-			}
-		},
+	await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, () =>
+		runProgressBody(operation, successMessage, refresh, (value) => (success = value)),
 	);
 	return success;
+}
+
+/** Body of the progress notification: runs the operation and reports the result. */
+async function runProgressBody(
+	operation: () => Promise<CommandResult>,
+	successMessage: string,
+	refresh: () => Promise<void>,
+	setSuccess: (value: boolean) => void,
+): Promise<void> {
+	try {
+		setSuccess(showResult(await operation(), successMessage));
+		await refresh();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
+	}
 }
 
 /** Shows the result of a branch command. Returns true on success. */

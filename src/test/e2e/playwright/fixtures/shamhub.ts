@@ -83,21 +83,23 @@ export async function startShamhub(): Promise<ShamhubServer> {
 			SHAMHUB_USERNAME: 'alice',
 			GIT_SPICE_SECRET_BACKEND: 'file',
 		},
-		seedComment: (change, resolved, body) => seedComment(child, pendingReplies, change, resolved, body),
+		seedComment: (change, resolved, body) => seedComment({ child, pendingReplies }, change, resolved, body),
 		close: () => closeChild(child),
 	};
 }
 
-function seedComment(
-	child: ChildProcessByStdio<Writable, Readable, Readable>,
-	pendingReplies: Array<(line: string) => void>,
-	change: number,
-	resolved: boolean,
-	body: string,
-): Promise<void> {
+/** stdio channel to the shamhub helper: the process and its reply queue. */
+interface ShamhubChannel {
+	child: ChildProcessByStdio<Writable, Readable, Readable>;
+	pendingReplies: Array<(line: string) => void>;
+}
+
+function seedComment(channel: ShamhubChannel, change: number, resolved: boolean, body: string): Promise<void> {
 	return new Promise<void>((res, rej) => {
-		pendingReplies.push((line) => (line.startsWith('OK') ? res() : rej(new Error(`seed comment failed: ${line}`))));
-		child.stdin.write(`comment ${change} ${resolved ? 'resolved' : 'unresolved'} ${body}\n`);
+		channel.pendingReplies.push((line) =>
+			line.startsWith('OK') ? res() : rej(new Error(`seed comment failed: ${line}`)),
+		);
+		channel.child.stdin.write(`comment ${change} ${resolved ? 'resolved' : 'unresolved'} ${body}\n`);
 	});
 }
 

@@ -111,31 +111,33 @@ function postOrderTraverse(branch: GitSpiceBranch, ctx: TraversalContext, state:
 	const isLastChild = ctx.siblingIndex === ctx.siblingCount - 1;
 	const lane = computeLane(ctx.siblingIndex, ctx.parentLane, ctx.nextLane);
 
-	visitChildren(children, ctx, lane, isLastChild, state);
+	visitChildren(children, { parent: ctx, lane, isLastChild }, state);
 	state.result.push({ branch, tree: createTreePosition(branch, ctx, lane, isLastChild) });
 }
 
+/** Position of a parent node relative to which its children are traversed. */
+type ChildVisitFrame = {
+	parent: TraversalContext;
+	lane: number;
+	isLastChild: boolean;
+};
+
+/** Builds the traversal context for the i-th child of a parent frame. */
+function buildChildContext(frame: ChildVisitFrame, siblingIndex: number, siblingCount: number): TraversalContext {
+	return {
+		depth: frame.parent.depth + 1,
+		ancestorIsLast: [...frame.parent.ancestorIsLast, frame.isLastChild],
+		siblingIndex,
+		siblingCount,
+		nextLane: frame.parent.nextLane,
+		parentLane: frame.lane,
+	};
+}
+
 /** Recursively visits all children in post-order. */
-function visitChildren(
-	children: GitSpiceBranch[],
-	ctx: TraversalContext,
-	lane: number,
-	isLastChild: boolean,
-	state: TraversalState,
-): void {
+function visitChildren(children: GitSpiceBranch[], frame: ChildVisitFrame, state: TraversalState): void {
 	for (let i = 0; i < children.length; i++) {
-		postOrderTraverse(
-			children[i],
-			{
-				depth: ctx.depth + 1,
-				ancestorIsLast: [...ctx.ancestorIsLast, isLastChild],
-				siblingIndex: i,
-				siblingCount: children.length,
-				nextLane: ctx.nextLane,
-				parentLane: lane,
-			},
-			state,
-		);
+		postOrderTraverse(children[i], buildChildContext(frame, i, children.length), state);
 	}
 }
 
@@ -174,25 +176,30 @@ function buildChildrenMap(branches: GitSpiceBranch[]): Map<string, GitSpiceBranc
 function orderStackWithTree(branches: GitSpiceBranch[], branchMap: Map<string, GitSpiceBranch>): BranchWithTree[] {
 	const state: TraversalState = { result: [], visited: new Set(), childrenMap: buildChildrenMap(branches) };
 	const laneCounter = { value: 0 };
-	const startingBranches = findRootBranches(branches, branchMap);
+	const roots = findRootBranches(branches, branchMap);
 
-	for (let i = 0; i < startingBranches.length; i++) {
-		const rootLane = laneCounter.value++;
-		postOrderTraverse(
-			startingBranches[i],
-			{
-				depth: 0,
-				ancestorIsLast: [],
-				siblingIndex: i,
-				siblingCount: startingBranches.length,
-				nextLane: laneCounter,
-				parentLane: rootLane,
-			},
-			state,
-		);
+	for (let i = 0; i < roots.length; i++) {
+		const ctx = buildRootContext(i, roots.length, laneCounter);
+		postOrderTraverse(roots[i], ctx, state);
 	}
 
 	return state.result;
+}
+
+/** Builds the traversal context for the i-th root branch. */
+function buildRootContext(
+	siblingIndex: number,
+	siblingCount: number,
+	laneCounter: { value: number },
+): TraversalContext {
+	return {
+		depth: 0,
+		ancestorIsLast: [],
+		siblingIndex,
+		siblingCount,
+		nextLane: laneCounter,
+		parentLane: laneCounter.value++,
+	};
 }
 
 /**
