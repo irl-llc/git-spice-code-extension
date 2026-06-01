@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Run on every PR regardless of base branch so stacked PRs (which target
+  # other feature branches, not main) also get CI.
   pull_request:
-    branches: [main]
   release:
     types: [created]
   workflow_dispatch:
@@ -68,7 +69,12 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      # Advisory only — posts inline lint annotations. The real gate is the
+      # "Lint (fail on error)" step below. reviewdog can exit non-zero on its
+      # own comment-management (e.g. 404 deleting a stale annotation after a
+      # force-push), so don't let that fail the build.
       - name: Lint with reviewdog annotations
+        continue-on-error: true
         uses: reviewdog/action-eslint@v1
         with:
           reporter: github-pr-review
@@ -120,15 +126,39 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Run buildx directly (not docker/build-push-action) so we can retry:
+      # the base-image manifest resolve against mcr.microsoft.com intermittently
+      # 403s, and the layer cache doesn't avoid that registry round-trip.
+      # Truncated exponential backoff with full jitter.
       - name: Build Playwright Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          load: true
-          tags: git-spice-playwright:v1.60.0-jammy
-          cache-from: type=local,src=/tmp/.docker-buildx-cache
-          cache-to: type=local,dest=/tmp/.docker-buildx-cache-new,mode=max
+        shell: bash
+        run: |
+          set -uo pipefail
+          build() {
+            docker buildx build \
+              --file Dockerfile \
+              --tag git-spice-playwright:v1.60.0-jammy \
+              --load \
+              --cache-from type=local,src=/tmp/.docker-buildx-cache \
+              --cache-to type=local,dest=/tmp/.docker-buildx-cache-new,mode=max \
+              .
+          }
+          attempt=0
+          max_attempts=5
+          base=5 # seconds
+          cap=60 # truncate the exponential window here
+          until build; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "buildx failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            window=$((base * (2 ** (attempt - 1))))
+            [ "$window" -gt "$cap" ] && window=$cap
+            delay=$((RANDOM % (window + 1))) # full jitter in [0, window]
+            echo "buildx attempt ${attempt} failed; retrying in ${delay}s (window ${window}s)" >&2
+            sleep "$delay"
+          done
 
       - name: Move Docker cache (per actions/cache best practice)
         run: rm -rf /tmp/.docker-buildx-cache && mv /tmp/.docker-buildx-cache-new /tmp/.docker-buildx-cache
