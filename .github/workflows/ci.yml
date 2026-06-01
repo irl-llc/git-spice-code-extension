@@ -69,19 +69,23 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      # Advisory only — posts inline lint annotations. The real gate is the
-      # "Lint (fail on error)" step below. reviewdog can exit non-zero on its
-      # own comment-management (e.g. 404 deleting a stale annotation after a
-      # force-push), so don't let that fail the build.
+      # Advisory annotations only — posts inline lint comments for reviewer
+      # context. The real gate is the "Lint (fail on warnings)" step below,
+      # which runs the same `eslint --max-warnings=0` as the local husky
+      # pre-commit hook, so CI, reviewdog, and local checks all agree.
+      # reviewdog can exit non-zero on its own comment-management (e.g. 404
+      # deleting a stale annotation after a force-push), so don't let that
+      # fail the build.
       - name: Lint with reviewdog annotations
         continue-on-error: true
         uses: reviewdog/action-eslint@v1
         with:
           reporter: github-pr-review
-          eslint_flags: 'src/'
+          eslint_flags: 'src/ --max-warnings=0'
           fail_level: none
 
-      - name: Lint (fail on error)
+      # Hard gate: matches the husky pre-commit hook (`eslint --max-warnings=0`).
+      - name: Lint (fail on warnings)
         run: npm run lint
 
       - name: Compile TypeScript
