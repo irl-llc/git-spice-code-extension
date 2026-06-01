@@ -159,8 +159,12 @@
         "icon": "$(copy)"
       },
       {
-        "command": "git-spice.toggleCommentProgress",
+        "command": "git-spice.enableCommentProgress",
         "title": "Show Comment Progress (Beta)"
+      },
+      {
+        "command": "git-spice.disableCommentProgress",
+        "title": "Hide Comment Progress (Beta)"
       },
       {
         "command": "git-spice.openInEditor",
@@ -189,6 +193,16 @@
       ]
     },
     "menus": {
+      "commandPalette": [
+        {
+          "command": "git-spice.enableCommentProgress",
+          "when": "!gitSpice.showCommentProgress"
+        },
+        {
+          "command": "git-spice.disableCommentProgress",
+          "when": "gitSpice.showCommentProgress"
+        }
+      ],
       "view/title": [
         {
           "command": "git-spice.refresh",
@@ -201,10 +215,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "git-spice.toggleCommentProgress",
-          "when": "view == gitSpice.branches",
-          "group": "2_options@1",
-          "toggled": "config.git-spice.showCommentProgress"
+          "command": "git-spice.enableCommentProgress",
+          "when": "view == gitSpice.branches && !gitSpice.showCommentProgress",
+          "group": "2_options@1"
+        },
+        {
+          "command": "git-spice.disableCommentProgress",
+          "when": "view == gitSpice.branches && gitSpice.showCommentProgress",
+          "group": "2_options@1"
         }
       ],
       "webview/context": [
