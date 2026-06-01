@@ -73,7 +73,12 @@ async function runGitSpiceCommand(
 	}
 }
 
-export async function execGitSpice(folder: FolderUri): Promise<BranchLoadResult> {
+/**
+ * Loads the branch listing via `gs ll`. Pass `withComments` to add `-c`, which
+ * queries the forge for PR comment counts (a network call). Callers omit it on
+ * high-frequency local refreshes and rely on the cached counts instead.
+ */
+export async function execGitSpice(folder: FolderUri, withComments = false): Promise<BranchLoadResult> {
 	const context = 'Load branches';
 	try {
 		const cwd = getWorkspaceFolderPath(folder);
@@ -81,8 +86,7 @@ export async function execGitSpice(folder: FolderUri): Promise<BranchLoadResult>
 			return { error: formatError(context, 'Workspace folder path is unavailable') };
 		}
 
-		const showComments = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
-		const args = showComments ? ['ll', '-a', '-c', '--json'] : ['ll', '-a', '--json'];
+		const args = withComments ? ['ll', '-a', '-c', '--json'] : ['ll', '-a', '--json'];
 
 		const { stdout } = await execFileAsync(getGitSpiceBinary(), args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
 		return { value: parseGitSpiceBranches(stdout) };

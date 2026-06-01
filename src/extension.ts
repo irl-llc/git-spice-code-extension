@@ -324,7 +324,8 @@ function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: 
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
 				syncCommentProgressContext();
-				void provider.refresh();
+				// force: re-fetch comment counts now that the toggle changed.
+				void provider.refresh(true);
 			}
 		}),
 	);

@@ -27,11 +27,11 @@ export interface RepoState {
 type BranchResult = { value: GitSpiceBranch[] } | { error: string };
 
 /** Fetches branch + working-copy data for a single discovered repo. */
-export async function fetchRepoState(repo: DiscoveredRepo): Promise<RepoState> {
+export async function fetchRepoState(repo: DiscoveredRepo, withComments = false): Promise<RepoState> {
 	const folder = toWorkspaceFolder(repo);
 	const cwd = repo.rootUri.fsPath;
 	const [branchResult, uncommitted, currentBranch] = await Promise.all([
-		execGitSpice(folder),
+		execGitSpice(folder, withComments),
 		fetchWorkingCopyChanges(cwd),
 		fetchCurrentBranchName(cwd),
 	]);
@@ -39,10 +39,10 @@ export async function fetchRepoState(repo: DiscoveredRepo): Promise<RepoState> {
 }
 
 /** Fetches branch + working-copy data for a single workspace folder. */
-export async function fetchFolderState(folder: vscode.WorkspaceFolder): Promise<RepoState> {
+export async function fetchFolderState(folder: vscode.WorkspaceFolder, withComments = false): Promise<RepoState> {
 	const cwd = folder.uri.fsPath;
 	const [branchResult, uncommitted, currentBranch] = await Promise.all([
-		execGitSpice(folder),
+		execGitSpice(folder, withComments),
 		fetchWorkingCopyChanges(cwd),
 		fetchCurrentBranchName(cwd),
 	]);
