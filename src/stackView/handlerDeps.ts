@@ -37,6 +37,7 @@ export function buildBranchHandlerDeps(host: HandlerDepsHost, repoId?: string): 
 	return {
 		workspaceFolder: host.resolveWorkspaceFolder(repoId),
 		branches: state?.branches ?? [],
+		integration: state?.integration ?? null,
 		runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => host.refresh()),
 		handleBranchCommandInternal: (cmd, branch, fn) => host.handleBranchCommandInternal(repoId, cmd, branch, fn),
 		postMessageToWebview: (message) => host.broadcast(message),
