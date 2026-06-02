@@ -1,0 +1,2 @@
+kind: Added
+body: 'Show change-request (PR/MR) status badges — Open, Merged, or Closed — on each branch card, fetched from the forge (`gs ll -S`) alongside comment counts. The `git-spice.showCommentProgress` setting is renamed to `git-spice.showRemoteForgeStatus`, which now gates both comment counts and change-request status; re-enable it after upgrading.'

@@ -182,25 +182,25 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		await this.refreshCoalescer.run(() => this.doRefresh(force));
 	}
 
-	/** Whether this refresh should re-fetch comment counts (network) from the forge. */
-	private shouldFetchComments(): boolean {
-		const enabled = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
+	/** Whether this refresh should re-fetch forge status (comment counts + CR status) over the network. */
+	private shouldFetchForgeStatus(): boolean {
+		const enabled = vscode.workspace.getConfiguration('git-spice').get<boolean>('showRemoteForgeStatus', false);
 		return enabled && this.commentsDirty;
 	}
 
 	/** Fetches latest state from all repos and pushes to webview. */
 	private async doRefresh(force: boolean): Promise<void> {
 		this.broadcast({ type: 'refreshing' });
-		const withComments = this.shouldFetchComments();
+		const withForgeStatus = this.shouldFetchForgeStatus();
 		const repos = this.getDiscoveredRepos();
 		if (repos.length > 0) {
-			await this.refreshRepos(repos, withComments);
+			await this.refreshRepos(repos, withForgeStatus);
 		} else if (this.fallbackFolder) {
-			await this.refreshFallback(withComments);
+			await this.refreshFallback(withForgeStatus);
 		} else {
 			this.repoStates.clear();
 		}
-		if (withComments) {
+		if (withForgeStatus) {
 			this.updateCommentCache();
 			this.commentsDirty = false;
 		}
@@ -208,15 +208,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	/** Refreshes all discovered repos in parallel. */
-	private async refreshRepos(repos: ReadonlyArray<DiscoveredRepo>, withComments: boolean): Promise<void> {
-		const results = await Promise.all(repos.map((repo) => fetchRepoState(repo, withComments)));
+	private async refreshRepos(repos: ReadonlyArray<DiscoveredRepo>, withForgeStatus: boolean): Promise<void> {
+		const results = await Promise.all(repos.map((repo) => fetchRepoState(repo, withForgeStatus)));
 		this.repoStates.clear();
 		for (const state of results) this.repoStates.set(state.rootPath, state);
 	}
 
 	/** Fallback: single-folder mode (no discovery). */
-	private async refreshFallback(withComments: boolean): Promise<void> {
-		const state = await fetchFolderState(this.fallbackFolder!, withComments);
+	private async refreshFallback(withForgeStatus: boolean): Promise<void> {
+		const state = await fetchFolderState(this.fallbackFolder!, withForgeStatus);
 		this.repoStates.clear();
 		this.repoStates.set(state.rootPath, state);
 	}

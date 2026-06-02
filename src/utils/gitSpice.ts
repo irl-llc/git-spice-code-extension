@@ -71,11 +71,12 @@ async function runGitSpiceCommand(
 }
 
 /**
- * Loads the branch listing via `gs ll`. Pass `withComments` to add `-c`, which
- * queries the forge for PR comment counts (a network call). Callers omit it on
- * high-frequency local refreshes and rely on the cached counts instead.
+ * Loads the branch listing via `gs ll`. Pass `withForgeStatus` to add `-c -S`,
+ * which queries the forge for PR comment counts AND change-request status
+ * (open/merged/closed) — a network call. Callers omit it on high-frequency
+ * local refreshes and rely on the cached values instead.
  */
-export async function execGitSpice(folder: FolderUri, withComments = false): Promise<BranchLoadResult> {
+export async function execGitSpice(folder: FolderUri, withForgeStatus = false): Promise<BranchLoadResult> {
 	const context = 'Load branches';
 	try {
 		const cwd = getWorkspaceFolderPath(folder);
@@ -83,9 +84,13 @@ export async function execGitSpice(folder: FolderUri, withComments = false): Pro
 			return { error: formatError(context, 'Workspace folder path is unavailable') };
 		}
 
-		const args = withComments ? ['ll', '-a', '-c', '--json'] : ['ll', '-a', '--json'];
+		const args = withForgeStatus ? ['ll', '-a', '-c', '-S', '--json'] : ['ll', '-a', '--json'];
 
-		const { stdout } = await execFileAsync(getGitSpiceBinary(), args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
+		const { stdout } = await execFileAsync(getGitSpiceBinary(), args, {
+			cwd,
+			timeout: GIT_SPICE_TIMEOUT_MS,
+			env: NO_OPTIONAL_LOCKS_ENV,
+		});
 		return { value: parseGitSpiceBranches(stdout) };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };

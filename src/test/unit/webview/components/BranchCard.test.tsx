@@ -336,20 +336,29 @@ describe('BranchCard', () => {
 	});
 
 	describe('meta and slots', () => {
-		it('renders branch-meta when change.status is set', () => {
-			const h = harness();
-			const { container } = render(
-				<BranchCard
-					branch={makeBranch({ change: { id: '#1', status: 'open' } })}
-					postMessage={h.postMessage}
-					setArticleClass={h.setArticleClass}
-				/>,
-			);
-			assert.ok(container.querySelector('.branch-meta'));
-			assert.ok(screen.getByText('open'));
+		it('renders the CR-status badge with status-specific class and label', () => {
+			const cases = [
+				['open', 'Open'],
+				['merged', 'Merged'],
+				['closed', 'Closed'],
+			] as const;
+			for (const [status, label] of cases) {
+				const h = harness();
+				const { container } = render(
+					<BranchCard
+						branch={makeBranch({ change: { id: '#1', status } })}
+						postMessage={h.postMessage}
+						setArticleClass={h.setArticleClass}
+					/>,
+				);
+				const badge = container.querySelector(`.tag-cr.tag-cr-${status}`);
+				assert.ok(badge, `badge for ${status} present`);
+				assert.ok(screen.getByText(label), `label ${label} visible`);
+				cleanup();
+			}
 		});
 
-		it('omits branch-meta when change has no status', () => {
+		it('omits the CR-status badge when change has no status', () => {
 			const h = harness();
 			const { container } = render(
 				<BranchCard
@@ -358,7 +367,18 @@ describe('BranchCard', () => {
 					setArticleClass={h.setArticleClass}
 				/>,
 			);
-			assert.strictEqual(container.querySelector('.branch-meta'), null);
+			assert.strictEqual(container.querySelector('.tag-cr'), null);
+		});
+
+		it('renders an unknown CR status defensively (no crash, raw label)', () => {
+			const h = harness();
+			// Simulate a future CLI/forge status outside the typed set.
+			const change = { id: '#1', status: 'draft' as unknown as 'open' };
+			const { container } = render(
+				<BranchCard branch={makeBranch({ change })} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />,
+			);
+			assert.ok(container.querySelector('.tag-cr.tag-cr-draft'), 'badge still renders for unknown status');
+			assert.ok(screen.getByText('draft'), 'falls back to the raw status text');
 		});
 
 		it('renders the `commits` child prop when provided', () => {

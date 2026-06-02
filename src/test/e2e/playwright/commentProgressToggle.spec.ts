@@ -1,5 +1,5 @@
 /**
- * Behavior test for the "Show/Hide Comment Progress (Beta)" toggle in the
+ * Behavior test for the "Show/Hide Remote Forge Status (Beta)" toggle in the
  * Git Spice view's `...` (More Actions) menu.
  *
  * Regression guard for the bug where the menu item never reflected the
@@ -10,7 +10,7 @@
  * API), and `$(icon)` codicons are stripped from overflow-menu titles — so
  * the fix swaps two `when`-gated commands whose verb label reflects state
  * ("Show…" when off, "Hide…" when on), gated on the extension-managed
- * `gitSpice.showCommentProgress` context key.
+ * `gitSpice.showRemoteForgeStatus` context key.
  *
  * Not a snapshot test — it asserts which command label the menu offers, so
  * no Linux baseline is needed.
@@ -23,8 +23,8 @@ import { launchVSCode, type VSCodeInstance } from './fixtures/vscode';
 import { openGitSpiceView } from './fixtures/webview';
 
 const TRUNK = 'main';
-const SHOW_LABEL = 'Show Comment Progress (Beta)';
-const HIDE_LABEL = 'Hide Comment Progress (Beta)';
+const SHOW_LABEL = 'Show Remote Forge Status (Beta)';
+const HIDE_LABEL = 'Hide Remote Forge Status (Beta)';
 
 /** Opens the Git Spice view's `...` (More Actions) menu; returns the open menu. */
 async function openMoreActionsMenu(workbench: Page): Promise<Locator> {
@@ -52,7 +52,7 @@ function dropdownMenu(workbench: Page): Locator {
 	return workbench.locator('.monaco-menu:visible').first();
 }
 
-test.describe('comment progress toggle', () => {
+test.describe('remote forge status toggle', () => {
 	let repo: WorkspaceRepo;
 	let vscode: VSCodeInstance;
 

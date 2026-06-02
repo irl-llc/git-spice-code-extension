@@ -8,7 +8,7 @@
  *   create stack -> gs stack submit (creates CRs) -> seed resolvable comments.
  *
  * Then VS Code is launched against the same repo + env, and we screenshot the
- * stack with comment progress OFF (counts hidden) and ON (counts shown:
+ * stack with remote forge status OFF (counts hidden) and ON (counts shown:
  * feat1 has an unresolved comment, feat2 is fully resolved, feat3 has none).
  *
  * Linux-rendered snapshots — regenerate via the Docker compose harness.
@@ -37,13 +37,13 @@ async function seedCommentScenario(): Promise<ShamhubStack> {
 	}
 }
 
-/** Enables comment progress via the command palette (default is off). */
-async function enableCommentProgress(workbench: Page): Promise<void> {
+/** Enables remote forge status via the command palette (default is off). */
+async function enableRemoteForgeStatus(workbench: Page): Promise<void> {
 	await workbench.keyboard.press('F1');
 	await workbench.locator('.quick-input-widget').waitFor({ state: 'visible', timeout: 10_000 });
-	await workbench.keyboard.type('Show Comment Progress');
+	await workbench.keyboard.type('Show Remote Forge Status');
 	// Wait for the palette to filter to the command (deterministic, not a timeout).
-	await workbench.locator('.quick-input-list-entry', { hasText: 'Show Comment Progress' }).first().waitFor();
+	await workbench.locator('.quick-input-list-entry', { hasText: 'Show Remote Forge Status' }).first().waitFor();
 	await workbench.keyboard.press('Enter');
 }
 
@@ -77,8 +77,8 @@ test.describe('comment counts (shamhub)', () => {
 		await expect(webview.locator('.comments-indicator')).toHaveCount(0);
 		await expect(repoContainer).toHaveScreenshot('comment-counts-hidden.png');
 
-		// ON: enable comment progress; counts fetched from shamhub appear.
-		await enableCommentProgress(workbench);
+		// ON: enable remote forge status; counts fetched from shamhub appear.
+		await enableRemoteForgeStatus(workbench);
 		// feat1 (1/2) and feat2 (1/1) both show an indicator; feat3 has none.
 		await expect(webview.locator('.comments-indicator')).toHaveCount(2);
 		await expect(webview.locator('.comments-indicator', { hasText: '1/2' })).toBeVisible();
