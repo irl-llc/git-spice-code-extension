@@ -1,28 +1,24 @@
 /**
- * Visual snapshot test for the refresh-in-flight indicator (issue #37).
+ * Behavioral test for the refresh-in-flight indicator (issue #37).
  *
  * The extension host posts a `refreshing` message to the webview when a
  * refresh begins and a `state` message when it completes. The webview
  * renders a thin top banner ("Refreshing…") for the duration so the user
  * gets visible feedback that the refresh button actually did something.
  *
- * We capture two states:
- *   - active:  the banner visible mid-refresh. The real refresh resolves
- *              near-instantly in tests, so we drive the banner on by
- *              dispatching the SAME `refreshing` message event the host
- *              posts (the real webview contract — a `window` message event,
+ * This is intentionally NOT a screenshot test. The banner is a transient,
+ * ANIMATED element (a spinning `codicon-loading` glyph), so a snapshot of it
+ * is both timing-fragile and font-dependent — it does not reliably depict the
+ * indicator and only causes confusion. Instead we assert the real DOM
+ * contract directly:
+ *   - active:  dispatching the host's `refreshing` message makes the banner
+ *              appear (the real webview contract — a `window` message event,
  *              not a mock of business logic).
- *   - cleared: the banner gone after a real refresh completes. We write a
- *              file in the repo, which the extension's file watcher picks up
- *              and turns into a genuine refresh: the host posts `refreshing`
- *              then a real `state`, the banner clears, and the actual stack
- *              stays rendered.
- *
- * Snapshots are Linux-rendered (Docker compose); regenerate via
- * `npm run test:e2e:playwright:docker:update`.
+ *   - cleared: a real, file-watch-driven refresh re-fetches and posts fresh
+ *              state, which removes the banner while the stack stays rendered.
  */
 
-import { expect, test, type Frame } from '@playwright/test';
+import { test, type Frame } from '@playwright/test';
 
 import { createTempRepo, type WorkspaceRepo } from './fixtures/repo';
 import { launchVSCode, type VSCodeInstance } from './fixtures/vscode';
@@ -60,21 +56,16 @@ test.describe('refresh indicator', () => {
 	test('shows the banner while refreshing and clears when a real refresh completes', async () => {
 		const webview = await openGitSpiceEditor(vscode.workbench);
 		await webview.locator('.stack-item').first().waitFor({ state: 'visible', timeout: 30_000 });
-		await vscode.workbench.waitForTimeout(500);
 
-		// Active state: dispatch `refreshing` and snapshot the visible banner.
+		// Active: dispatching `refreshing` makes the banner appear.
 		await postHostMessage(webview, { type: 'refreshing' });
 		const indicator = webview.locator('[data-role="refresh-indicator"]');
 		await indicator.waitFor({ state: 'visible', timeout: 5_000 });
-		const repoContainer = webview.locator('#repoContainer');
-		await expect(repoContainer).toHaveScreenshot('refresh-indicator-active.png');
 
-		// Cleared state: a real, file-watch-driven refresh re-fetches and posts
-		// fresh state, which removes the banner while keeping the stack rendered.
+		// Cleared: a real, file-watch-driven refresh re-fetches and posts fresh
+		// state, which removes the banner while keeping the stack rendered.
 		repo.writeFile('trigger.txt', 'touch\n');
 		await indicator.waitFor({ state: 'detached', timeout: 15_000 });
 		await webview.locator('.stack-item').first().waitFor({ state: 'visible', timeout: 10_000 });
-		await vscode.workbench.waitForTimeout(500);
-		await expect(repoContainer).toHaveScreenshot('refresh-indicator-cleared.png');
 	});
 });
