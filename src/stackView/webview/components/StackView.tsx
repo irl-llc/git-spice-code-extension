@@ -87,19 +87,8 @@ function reducer(state: AppState, action: Action): AppState {
 	switch (action.type) {
 		case 'refreshing':
 			return state.refreshing ? state : { ...state, refreshing: true };
-		case 'setDisplay': {
-			// Drop UI state for repos that no longer exist.
-			const activeIds = new Set(action.payload.repositories.map((r) => r.id));
-			const ui: Record<string, RepoUiState> = {};
-			for (const [id, repoUi] of Object.entries(state.ui)) {
-				if (activeIds.has(id)) ui[id] = repoUi;
-			}
-			for (const repo of action.payload.repositories) {
-				if (!ui[repo.id]) ui[repo.id] = initialRepoUi();
-			}
-			// A fresh state always clears the in-flight refresh indicator.
-			return { ...state, display: action.payload, ui, refreshing: false };
-		}
+		case 'setDisplay':
+			return applySetDisplay(state, action.payload);
 		case 'commitFiles':
 			return mapMatchingRepos(state, action.repoId, (repoUi) => ({
 				...repoUi,
@@ -110,6 +99,26 @@ function reducer(state: AppState, action: Action): AppState {
 				...repoUi,
 				branchFileCache: new Map(repoUi.branchFileCache).set(action.branchName, action.files),
 			}));
+		default:
+			return uiReducer(state, action);
+	}
+}
+
+/** Rebuilds per-repo UI state for a fresh display payload, dropping dead repos. */
+function applySetDisplay(state: AppState, payload: DisplayState): AppState {
+	const activeIds = new Set(payload.repositories.map((r) => r.id));
+	const ui: Record<string, RepoUiState> = {};
+	for (const [id, repoUi] of Object.entries(state.ui)) {
+		if (activeIds.has(id)) ui[id] = repoUi;
+	}
+	for (const repo of payload.repositories) ui[repo.id] ??= initialRepoUi();
+	// A fresh state always clears the in-flight refresh indicator.
+	return { ...state, display: payload, ui, refreshing: false };
+}
+
+/** Reducer slice for per-repo UI toggles and the commit-message field. */
+function uiReducer(state: AppState, action: Action): AppState {
+	switch (action.type) {
 		case 'toggleCommit':
 			return updateRepo(state, action.repoId, (repoUi) => ({
 				...repoUi,
@@ -131,15 +140,11 @@ function reducer(state: AppState, action: Action): AppState {
 				expandedUnstagedSection: !repoUi.expandedUnstagedSection,
 			}));
 		case 'setCommitMessage':
-			return updateRepo(state, action.repoId, (repoUi) => ({
-				...repoUi,
-				commitMessageValue: action.value,
-			}));
+			return updateRepo(state, action.repoId, (repoUi) => ({ ...repoUi, commitMessageValue: action.value }));
 		case 'clearCommitMessage':
-			return updateRepo(state, action.repoId, (repoUi) => ({
-				...repoUi,
-				commitMessageValue: '',
-			}));
+			return updateRepo(state, action.repoId, (repoUi) => ({ ...repoUi, commitMessageValue: '' }));
+		default:
+			return state;
 	}
 }
 

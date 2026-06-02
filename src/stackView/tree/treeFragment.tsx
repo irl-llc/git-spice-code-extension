@@ -112,17 +112,19 @@ function renderLaneSegments(data: TreeFragmentData, colors: TreeColors): JSX.Ele
 		// Skip top segment on child fork lanes — the fork connector draws the vertical there.
 		const skipTopSegment = childForkLaneSet.has(lane);
 
-		out.push(...renderLaneSegment(lane, segment, colors, isDashed, skipTopSegment));
+		out.push(...renderLaneSegment(lane, segment, colors, { isDashed, skipTopSegment }));
 	}
 	return out;
 }
+
+/** Per-lane render flags computed by the caller from surrounding context. */
+type LaneSegmentFlags = { isDashed: boolean; skipTopSegment: boolean };
 
 function renderLaneSegment(
 	lane: number,
 	segment: LaneSegment,
 	colors: TreeColors,
-	isDashed: boolean,
-	skipTopSegment: boolean,
+	{ isDashed, skipTopSegment }: LaneSegmentFlags,
 ): JSX.Element[] {
 	const x = getLaneX(lane);
 	const stroke = segment.needsRestack ? colors.restack : colors.line;
