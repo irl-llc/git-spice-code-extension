@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 
-import { execRepoSync, type RepoSyncResult } from '../../utils/gitSpice';
+import { execRepoSync, type RepoSyncResult } from '../../utils/gitSpiceRepoSync';
 
 /** Dependencies needed by the sync handler. */
 export interface SyncHandlerDeps {

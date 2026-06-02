@@ -372,6 +372,27 @@ When adding a new webview component:
 
 ## Code Quality Standards
 
+### Lint Enforcement (local + CI consistency)
+
+The ESLint rules in `eslint.config.mjs` are a **hard gate** — warnings fail
+the build. `npm run lint` runs `eslint src --max-warnings=0`, so any warning
+(file/function size, complexity, naming, etc.) is treated as an error. The
+same command runs in three places, which must always agree:
+
+- **Local pre-commit** — a `husky` hook (`.husky/pre-commit`) runs
+  `lint-staged`, which applies `eslint --max-warnings=0` + `prettier --write`
+  to staged `src/**/*.{ts,tsx}` files (formatting fixes are auto-restaged). The
+  hook is installed automatically by the `prepare` script on `npm install`.
+- **CI gate** — the "Lint (fail on warnings)" step in `.github/workflows/ci.yml`
+  runs `npm run lint`.
+- **reviewdog** — posts the same `eslint --max-warnings=0` output as advisory
+  PR annotations (`fail_level: none`), so reviewers see inline context while
+  the hard gate stays the `npm run lint` step.
+
+Because the gate is zero-warnings, test files have relaxed structural rules
+(see the `src/test/**` override in `eslint.config.mjs`): BDD nesting and long
+suite bodies are intentional there. Source and test *helpers* must stay clean.
+
 ### File and Function Limits
 
 - **Files**: Maximum 400 lines per file. Split at ~300 lines proactively.
