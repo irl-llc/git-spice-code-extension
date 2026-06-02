@@ -97,6 +97,22 @@ export type ChildForkStyle = {
 	isUncommitted: boolean;
 };
 
+/**
+ * A connector between a node and the integration branch's swimlane — the mirror
+ * of the trunk fan-out. `direction: 'down'` is the integration node (top) fanning
+ * down into a tip's lane; `direction: 'up'` is a mid-stack tip fanning up into a
+ * bypass lane to reach the integration node above it. `needsRebuild` colors the
+ * connector marigold (same color as restack).
+ */
+export type IntegrationFork = {
+	/** The lane the connector turns into (the tip's lane, or its bypass lane). */
+	lane: number;
+	/** 'down' for the integration node→tip; 'up' for a mid-stack tip→bypass lane. */
+	direction: 'up' | 'down';
+	/** Marigold styling when the integration build needs a rebuild. */
+	needsRebuild: boolean;
+};
+
 /** Complete tree fragment data for rendering a single row's tree section. */
 export type TreeFragmentData = {
 	/** State of each lane (index = lane number). */
@@ -113,6 +129,12 @@ export type TreeFragmentData = {
 	nodeStyle: TreeNodeStyle;
 	/** Node needs restack indicator. */
 	nodeNeedsRestack: boolean;
+	/**
+	 * Integration-branch connectors for this row (the mirror of `childForkLanes`):
+	 * downward forks on the integration node, an upward fork on a mid-stack tip.
+	 * Empty/omitted when no integration link touches this row.
+	 */
+	integrationForks?: IntegrationFork[];
 };
 
 export type BranchViewModel = {

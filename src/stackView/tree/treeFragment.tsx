@@ -12,7 +12,7 @@
 
 import { type JSX } from 'react';
 
-import type { ChildForkStyle, LaneSegment, TreeFragmentData } from '../types';
+import type { ChildForkStyle, IntegrationFork, LaneSegment, TreeFragmentData } from '../types';
 import {
 	CONNECTOR_WIDTH,
 	CURVE_RADIUS,
@@ -46,6 +46,7 @@ export function TreeFragmentSvg({ fragment, colors, outOfIntegration }: TreeFrag
 		<svg className="tree-fragment-svg" width={width} style={{ width: `${width}px` }}>
 			{renderLaneSegments(fragment, colors)}
 			{renderChildForkConnectors(fragment, colors)}
+			{renderIntegrationForks(fragment, colors)}
 			{renderNode(fragment, colors)}
 			{outOfIntegration ? renderOutOfIntegrationMark(fragment, colors) : null}
 		</svg>
@@ -213,6 +214,70 @@ function renderSingleChildFork(
 			y1={arcEndY}
 			x2={childX}
 			y2={0}
+			stroke={stroke}
+			strokeWidth={CONNECTOR_WIDTH}
+			strokeDasharray={dashArray}
+		/>,
+	];
+}
+
+/**
+ * Renders the integration-branch connectors for a row (mirror of child forks):
+ * the integration node fans `down` into each tip lane; a mid-stack tip fans `up`
+ * into its bypass lane. Marigold (restack color) when the build needs a rebuild.
+ */
+function renderIntegrationForks(data: TreeFragmentData, colors: TreeColors): JSX.Element[] {
+	if (!data.integrationForks?.length) return [];
+	return data.integrationForks.flatMap((fork, i) => renderIntegrationFork(data.nodeLane, fork, colors, i));
+}
+
+function renderIntegrationFork(
+	nodeLane: number,
+	fork: IntegrationFork,
+	colors: TreeColors,
+	index: number,
+): JSX.Element[] {
+	const nodeX = getLaneX(nodeLane);
+	const targetX = getLaneX(fork.lane);
+	const goingRight = targetX > nodeX;
+	const radius = CURVE_RADIUS;
+	const down = fork.direction === 'down';
+
+	const stroke = fork.needsRebuild ? colors.restack : colors.line;
+	const dashArray = fork.needsRebuild ? '3 2' : undefined;
+
+	const arcStartX = goingRight ? targetX - radius : targetX + radius;
+	const arcEndY = down ? NODE_Y + radius : NODE_Y - radius;
+	// Sweep mirrors the upward fork's arc when drawing downward.
+	const sweep = down ? (goingRight ? 1 : 0) : goingRight ? 0 : 1;
+	const arcD = `M ${arcStartX} ${NODE_Y} A ${radius} ${radius} 0 0 ${sweep} ${targetX} ${arcEndY}`;
+	const vEndY = down ? '100%' : 0;
+
+	return [
+		<line
+			key={`ifork-h-${index}`}
+			x1={nodeX}
+			y1={NODE_Y}
+			x2={arcStartX}
+			y2={NODE_Y}
+			stroke={stroke}
+			strokeWidth={CONNECTOR_WIDTH}
+			strokeDasharray={dashArray}
+		/>,
+		<path
+			key={`ifork-a-${index}`}
+			d={arcD}
+			stroke={stroke}
+			strokeWidth={CONNECTOR_WIDTH}
+			fill="none"
+			strokeDasharray={dashArray}
+		/>,
+		<line
+			key={`ifork-v-${index}`}
+			x1={targetX}
+			y1={arcEndY}
+			x2={targetX}
+			y2={vEndY}
 			stroke={stroke}
 			strokeWidth={CONNECTOR_WIDTH}
 			strokeDasharray={dashArray}

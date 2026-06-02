@@ -21,10 +21,23 @@ import { openGitSpiceEditor } from './fixtures/webview';
 
 const TRUNK = 'main';
 
-/** Seeds a two-branch stack used by every scenario. */
+/** Seeds a two-branch linear stack (feat-a → feat-b) used by the linear scenarios. */
 function seedStack(repo: WorkspaceRepo): void {
 	repo.createBranch({ name: 'feat-a', base: TRUNK, commits: [{ message: 'add a', files: { 'a.txt': 'a\n' } }] });
 	repo.createBranch({ name: 'feat-b', base: 'feat-a', commits: [{ message: 'add b', files: { 'b.txt': 'b\n' } }] });
+}
+
+/** Seeds two sibling stacks off trunk (feat-a and feat-c). */
+function seedSiblings(repo: WorkspaceRepo): void {
+	repo.createBranch({ name: 'feat-a', base: TRUNK, commits: [{ message: 'add a', files: { 'a.txt': 'a\n' } }] });
+	repo.createBranch({ name: 'feat-c', base: TRUNK, commits: [{ message: 'add c', files: { 'c.txt': 'c\n' } }] });
+}
+
+/** Seeds one tip branch (feat-a) plus a separate, non-integration sibling stack (feat-b → feat-c). */
+function seedMixed(repo: WorkspaceRepo): void {
+	repo.createBranch({ name: 'feat-a', base: TRUNK, commits: [{ message: 'add a', files: { 'a.txt': 'a\n' } }] });
+	repo.createBranch({ name: 'feat-b', base: TRUNK, commits: [{ message: 'add b', files: { 'b.txt': 'b\n' } }] });
+	repo.createBranch({ name: 'feat-c', base: 'feat-b', commits: [{ message: 'add c', files: { 'c.txt': 'c\n' } }] });
 }
 
 interface Scenario {
@@ -70,6 +83,32 @@ const SCENARIOS: Scenario[] = [
 			repo.gs('integration', 'create', 'integ', '--tip', 'feat-a');
 			repo.gs('integration', 'rebuild');
 			repo.gs('branch', 'checkout', 'feat-b');
+		},
+	},
+	{
+		// Two sibling stacks, both integration tips → integ fans DOWN into both
+		// lanes, mirroring the way trunk fans UP into them (the clearest view of
+		// the reverse-trunk fan-in).
+		name: 'sibling tips fan into integration',
+		snapshot: 'integration-sibling-tips.png',
+		seed: (repo) => {
+			seedSiblings(repo);
+			repo.gs('integration', 'create', 'integ', '--tip', 'feat-a', '--tip', 'feat-c');
+			repo.gs('integration', 'rebuild');
+			repo.gs('branch', 'checkout', 'feat-a');
+		},
+	},
+	{
+		// One tip (feat-a) plus a separate sibling stack (feat-b → feat-c) that is
+		// NOT part of the integration: its column survives from the bottom-up
+		// fan-out with no link to integ, and feat-c gets the out-of-integration ✕.
+		name: 'integration alongside a non-integration sibling stack',
+		snapshot: 'integration-non-integration-sibling.png',
+		seed: (repo) => {
+			seedMixed(repo);
+			repo.gs('integration', 'create', 'integ', '--tip', 'feat-a');
+			repo.gs('integration', 'rebuild');
+			repo.gs('branch', 'checkout', 'feat-a');
 		},
 	},
 ];
