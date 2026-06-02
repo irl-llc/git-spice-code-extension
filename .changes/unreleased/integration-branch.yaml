@@ -1,0 +1,2 @@
+kind: Added
+body: 'Integration-branch support (beta): renders the git-spice integration branch atop the stack with its build status and a marigold "rebuild" state, marks branches outside the integration build, and lets you add/remove branches from the integration tip list via the branch context menu. Requires a git-spice build that provides the `integration` command.'

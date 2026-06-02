@@ -6,7 +6,6 @@
 import * as vscode from 'vscode';
 
 import type { GitSpiceBranch } from '../../gitSpiceSchema';
-import type { BranchContextMenuItem } from '../types';
 import {
 	type BranchCommandResult,
 	execBranchTrack,
@@ -22,12 +21,22 @@ import {
 	execBranchMove,
 	execUpstackMove,
 } from '../../utils/gitSpice';
+import { execGitSpiceIntegrationTipAdd, execGitSpiceIntegrationTipRemove } from '../../utils/integrationExec';
+import type { IntegrationState } from '../../utils/integrationState';
 import { requireNonEmpty, requireAllNonEmpty, requireWorkspace } from '../../utils/validation';
+import {
+	buildIntegrationMenuItems,
+	INTEGRATION_TIP_ADD_ACTION,
+	INTEGRATION_TIP_REMOVE_ACTION,
+} from '../integrationMenu';
+import type { BranchContextMenuItem } from '../types';
 
 /** Dependencies needed by branch handlers. */
 export interface BranchHandlerDeps {
 	workspaceFolder: vscode.WorkspaceFolder | undefined;
 	branches: GitSpiceBranch[];
+	/** Parsed integration-branch state, or null when unconfigured/unsupported. */
+	integration: IntegrationState | null;
 	runBranchCommand: (
 		title: string,
 		operation: () => Promise<BranchCommandResult>,
@@ -46,7 +55,7 @@ export async function handleBranchContextMenu(branchName: string, deps: BranchHa
 	const branch = deps.branches.find((b) => b.name === branchName);
 	if (!branch) return;
 
-	const items = buildContextMenuItems(branch);
+	const items = buildContextMenuItems(branch, deps.integration);
 	const selected = await vscode.window.showQuickPick(items, {
 		placeHolder: `Actions for branch '${branchName}'`,
 	});
@@ -83,15 +92,16 @@ function branchNeedsRestack(branch: GitSpiceBranch): boolean {
 	return branch.down?.needsRestack === true || (branch.ups ?? []).some((link) => link.needsRestack === true);
 }
 
-/** Builds the context menu items based on branch state. */
-function buildContextMenuItems(branch: GitSpiceBranch): BranchContextMenuItem[] {
+/** Builds the context menu items based on branch state and integration config. */
+function buildContextMenuItems(branch: GitSpiceBranch, integration: IntegrationState | null): BranchContextMenuItem[] {
 	const items = getBaseMenuItems();
 
 	if (branch.current === true) items.push({ label: '$(edit) Edit', action: 'edit' });
 	if (branchNeedsRestack(branch))
 		items.push({ label: '$(refresh) Restack', action: 'restack', description: 'Needs restack' });
 
-	return [...items, ...getTrailingMenuItems(Boolean(branch.change))];
+	const integrationItems = buildIntegrationMenuItems(branch.name, integration);
+	return [...items, ...integrationItems, ...getTrailingMenuItems(Boolean(branch.change))];
 }
 
 /** Map of actions to their exec functions for simple branch commands. */
@@ -103,6 +113,8 @@ const EXEC_ACTION_MAP: Record<string, typeof execBranchCheckout> = {
 	fold: execBranchFold,
 	squash: execBranchSquash,
 	untrack: execBranchUntrack,
+	[INTEGRATION_TIP_ADD_ACTION]: execGitSpiceIntegrationTipAdd,
+	[INTEGRATION_TIP_REMOVE_ACTION]: execGitSpiceIntegrationTipRemove,
 };
 
 /** Copies a branch name to the clipboard. */
