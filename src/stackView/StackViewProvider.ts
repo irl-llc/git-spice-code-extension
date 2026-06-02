@@ -191,6 +191,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	/** Fetches latest state from all repos and pushes to webview. */
 	private async doRefresh(force: boolean): Promise<void> {
+		this.broadcast({ type: 'refreshing' });
 		const withComments = this.shouldFetchComments();
 		const repos = this.getDiscoveredRepos();
 		if (repos.length > 0) {

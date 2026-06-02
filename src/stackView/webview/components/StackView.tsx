@@ -4,8 +4,10 @@
  * mount wrappers.
  *
  * Responsibilities:
- * - Subscribe to messages from the extension host (state, commitFiles,
- *   branchFiles) and reduce them into local state.
+ * - Subscribe to messages from the extension host (refreshing, state,
+ *   commitFiles, branchFiles) and reduce them into local state. The
+ *   `refreshing` message toggles a transient in-flight indicator that
+ *   `state` clears, giving the user visible refresh feedback.
  * - Manage per-repo UI state (expanded shas, file caches, commit message,
  *   section toggles). Reducer-shaped so all the mutations are explicit.
  * - Render repo sections, each containing the branch stack and the
@@ -59,9 +61,11 @@ function initialRepoUi(): RepoUiState {
 interface AppState {
 	display: DisplayState | null;
 	ui: Record<string, RepoUiState>;
+	refreshing: boolean;
 }
 
 type Action =
+	| { type: 'refreshing' }
 	| { type: 'setDisplay'; payload: DisplayState }
 	| { type: 'commitFiles'; repoId: string | undefined; sha: string; files: CommitFileChange[] }
 	| { type: 'branchFiles'; repoId: string | undefined; branchName: string; files: CommitFileChange[] }
@@ -74,6 +78,8 @@ type Action =
 
 function reducer(state: AppState, action: Action): AppState {
 	switch (action.type) {
+		case 'refreshing':
+			return state.refreshing ? state : { ...state, refreshing: true };
 		case 'setDisplay': {
 			// Drop UI state for repos that no longer exist.
 			const activeIds = new Set(action.payload.repositories.map((r) => r.id));
@@ -84,7 +90,8 @@ function reducer(state: AppState, action: Action): AppState {
 			for (const repo of action.payload.repositories) {
 				if (!ui[repo.id]) ui[repo.id] = initialRepoUi();
 			}
-			return { ...state, display: action.payload, ui };
+			// A fresh state always clears the in-flight refresh indicator.
+			return { ...state, display: action.payload, ui, refreshing: false };
 		}
 		case 'commitFiles':
 			return mapMatchingRepos(state, action.repoId, (repoUi) => ({
@@ -169,14 +176,15 @@ export interface StackViewProps {
 }
 
 export function StackView({ postMessage, subscribeMessages }: StackViewProps): JSX.Element {
-	const [state, dispatch] = useReducer(reducer, { display: null, ui: {} });
+	const [state, dispatch] = useReducer(reducer, { display: null, ui: {}, refreshing: false });
 	const dispatchRef = useRef(dispatch);
 	dispatchRef.current = dispatch;
 	const treeColors = useReadTreeColors();
 
 	useEffect(() => {
 		return subscribeMessages((message) => {
-			if (message.type === 'state') dispatchRef.current({ type: 'setDisplay', payload: message.payload });
+			if (message.type === 'refreshing') dispatchRef.current({ type: 'refreshing' });
+			else if (message.type === 'state') dispatchRef.current({ type: 'setDisplay', payload: message.payload });
 			else if (message.type === 'commitFiles')
 				dispatchRef.current({ type: 'commitFiles', repoId: message.repoId, sha: message.sha, files: message.files });
 			else if (message.type === 'branchFiles')
@@ -189,15 +197,14 @@ export function StackView({ postMessage, subscribeMessages }: StackViewProps): J
 		});
 	}, [subscribeMessages]);
 
-	if (state.display === null) return <></>;
-	const repos = state.display.repositories;
-	if (repos.length === 0) {
-		return <section className="empty">No git-spice repositories found.</section>;
-	}
-
+	const repos = state.display?.repositories ?? [];
 	const isSingle = repos.length === 1;
 	return (
 		<>
+			<RefreshIndicator active={state.refreshing} />
+			{state.display !== null && repos.length === 0 ? (
+				<section className="empty">No git-spice repositories found.</section>
+			) : null}
 			{repos.map((repo) => (
 				<RepoView
 					key={repo.id}
@@ -210,6 +217,21 @@ export function StackView({ postMessage, subscribeMessages }: StackViewProps): J
 				/>
 			))}
 		</>
+	);
+}
+
+/**
+ * Thin top banner shown while a refresh is in flight. Gives the user
+ * immediate feedback that the refresh button (or a file-watch refresh)
+ * is doing work, so they don't assume it is broken and click repeatedly.
+ */
+function RefreshIndicator({ active }: { active: boolean }): JSX.Element {
+	if (!active) return <></>;
+	return (
+		<div className="refresh-indicator" role="status" aria-live="polite" data-role="refresh-indicator">
+			<i className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+			<span>Refreshing…</span>
+		</div>
 	);
 }
 
