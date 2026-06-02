@@ -6,10 +6,11 @@ import { promisify } from 'node:util';
 
 import * as vscode from 'vscode';
 
-import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
+import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_PROBE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
 import { resolveGitSpiceBinary } from './gitSpiceBinary';
+import { parseIntegrationSupport } from './integrationSupport';
 
 const execFileAsync = promisify(execFile);
 
@@ -92,6 +93,30 @@ export async function execGitSpice(folder: FolderUri, withComments = false): Pro
 		return { value: parseGitSpiceBranches(stdout) };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };
+	}
+}
+
+/**
+ * Detects whether the resolved git-spice binary supports the beta
+ * integration-branch feature by probing `gs --help`. Returns false (feature
+ * absent) on any failure — a missing binary, a stock build, or a probe error —
+ * so the extension degrades cleanly rather than surfacing integration UI it
+ * cannot drive.
+ */
+export async function execGitSpiceSupportsIntegration(folder: FolderUri): Promise<boolean> {
+	const cwd = getWorkspaceFolderPath(folder);
+	if (!cwd) {
+		return false;
+	}
+	try {
+		const { stdout } = await execFileAsync(getGitSpiceBinary(), ['--help'], {
+			cwd,
+			timeout: GIT_SPICE_PROBE_TIMEOUT_MS,
+			env: NO_OPTIONAL_LOCKS_ENV,
+		});
+		return parseIntegrationSupport(stdout);
+	} catch {
+		return false;
 	}
 }
 
