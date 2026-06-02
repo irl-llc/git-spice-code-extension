@@ -9,9 +9,35 @@ This repository is configured for **automatic publishing** to both the VS Code M
 1. **CI runs on every push/PR** - Validates code quality, runs tests
 2. **Publishing happens automatically on release** - When you create a GitHub release with a tag, the extension is published to both registries
 
-### Publishing a New Version
+### Default path: scheduled auto-release (Changie)
 
-There are **two ways** to publish:
+**This is the default release mechanism.** A daily scheduled workflow
+([`.github/workflows/auto-release.yml`](workflows/auto-release.yml)) batches any
+pending [Changie](https://changie.dev) change fragments under
+`.changes/unreleased/` into a new release. You do not normally create releases
+by hand — you add a change fragment to your PR (see
+[CONTRIBUTING.md](../CONTRIBUTING.md)) and the scheduled job ships it.
+
+- **When it runs:** daily at 05:00 UTC (≈ midnight US Eastern). It also has a
+  manual `workflow_dispatch` trigger (with an optional `dry_run` that prints the
+  plan without tagging/publishing).
+- **Version derivation (pre-1.0, stay on `0.x`):** the bump is derived from the
+  pending fragments' kinds — a feature or breaking change (`Added`/`Changed`/
+  `Removed`/`Deprecated`) bumps the **minor** (`0.x.0`); a bug fix
+  (`Fixed`/`Security`) bumps the **patch** (`0.0.x`). We never bump major while
+  on `0.x`. The highest pending bump wins.
+- **No-op on quiet days:** with zero pending fragments the job exits silently and
+  makes no release, avoiding release noise for users.
+- **What it does:** runs `changie batch <level>` + `changie merge` to fold
+  fragments into `CHANGELOG.md`, bumps `package.json`, commits, tags
+  `v<version>`, and creates a GitHub Release — which triggers the publish steps
+  below exactly like a hand-created release.
+
+The manual options below remain available for one-off or emergency releases.
+
+### Publishing a New Version (manual)
+
+There are **two ways** to publish manually:
 
 #### Option 1: GitHub Release (Recommended for Production)
 
