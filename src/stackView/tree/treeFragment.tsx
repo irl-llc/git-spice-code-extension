@@ -12,7 +12,7 @@
 
 import { type JSX } from 'react';
 
-import type { ChildForkStyle, LaneSegment, TreeFragmentData } from '../types';
+import type { ChildForkStyle, IntegrationFork, LaneSegment, TreeFragmentData } from '../types';
 import {
 	CONNECTOR_WIDTH,
 	CURVE_RADIUS,
@@ -36,16 +36,56 @@ export type TreeColors = {
 export interface TreeFragmentSvgProps {
 	fragment: TreeFragmentData;
 	colors: TreeColors;
+	/** When true, draws an "X" over this row's node (branch excluded from the integration build). */
+	outOfIntegration?: boolean;
 }
 
-export function TreeFragmentSvg({ fragment, colors }: TreeFragmentSvgProps): JSX.Element {
+export function TreeFragmentSvg({ fragment, colors, outOfIntegration }: TreeFragmentSvgProps): JSX.Element {
 	const width = calculateFragmentWidth(fragment.maxLane);
 	return (
 		<svg className="tree-fragment-svg" width={width} style={{ width: `${width}px` }}>
 			{renderLaneSegments(fragment, colors)}
 			{renderChildForkConnectors(fragment, colors)}
+			{renderIntegrationForks(fragment, colors)}
 			{renderNode(fragment, colors)}
+			{outOfIntegration ? renderOutOfIntegrationMark(fragment, colors) : null}
 		</svg>
+	);
+}
+
+/**
+ * Draws an "X" centered on the node to mark a branch excluded from the
+ * integration build. Renders a bg-colored halo under a line-colored cross so
+ * it stays legible on both filled (normal) and hollow (current) node circles.
+ */
+function renderOutOfIntegrationMark(data: TreeFragmentData, colors: TreeColors): JSX.Element {
+	const x = getLaneX(data.nodeLane);
+	const d = NODE_RADIUS_CURRENT - 0.5;
+	const cross = (stroke: string, w: number, keyPrefix: string): JSX.Element[] => [
+		<line
+			key={`${keyPrefix}-a`}
+			x1={x - d}
+			y1={NODE_Y - d}
+			x2={x + d}
+			y2={NODE_Y + d}
+			stroke={stroke}
+			strokeWidth={w}
+		/>,
+		<line
+			key={`${keyPrefix}-b`}
+			x1={x - d}
+			y1={NODE_Y + d}
+			x2={x + d}
+			y2={NODE_Y - d}
+			stroke={stroke}
+			strokeWidth={w}
+		/>,
+	];
+	return (
+		<g className="out-of-integration-mark" strokeLinecap="round">
+			{...cross(colors.bg, 2.5, 'halo')}
+			{...cross(colors.line, 1.25, 'mark')}
+		</g>
 	);
 }
 
@@ -181,6 +221,70 @@ function renderSingleChildFork(
 	];
 }
 
+/**
+ * Renders the integration-branch connectors for a row (mirror of child forks):
+ * the integration node fans `down` into each tip lane; a mid-stack tip fans `up`
+ * into its bypass lane. Marigold (restack color) when the build needs a rebuild.
+ */
+function renderIntegrationForks(data: TreeFragmentData, colors: TreeColors): JSX.Element[] {
+	if (!data.integrationForks?.length) return [];
+	return data.integrationForks.flatMap((fork, i) => renderIntegrationFork(data.nodeLane, fork, colors, i));
+}
+
+function renderIntegrationFork(
+	nodeLane: number,
+	fork: IntegrationFork,
+	colors: TreeColors,
+	index: number,
+): JSX.Element[] {
+	const nodeX = getLaneX(nodeLane);
+	const targetX = getLaneX(fork.lane);
+	const goingRight = targetX > nodeX;
+	const radius = CURVE_RADIUS;
+	const down = fork.direction === 'down';
+
+	const stroke = fork.needsRebuild ? colors.restack : colors.line;
+	const dashArray = fork.needsRebuild ? '3 2' : undefined;
+
+	const arcStartX = goingRight ? targetX - radius : targetX + radius;
+	const arcEndY = down ? NODE_Y + radius : NODE_Y - radius;
+	// Sweep mirrors the upward fork's arc when drawing downward.
+	const sweep = down ? (goingRight ? 1 : 0) : goingRight ? 0 : 1;
+	const arcD = `M ${arcStartX} ${NODE_Y} A ${radius} ${radius} 0 0 ${sweep} ${targetX} ${arcEndY}`;
+	const vEndY = down ? '100%' : 0;
+
+	return [
+		<line
+			key={`ifork-h-${index}`}
+			x1={nodeX}
+			y1={NODE_Y}
+			x2={arcStartX}
+			y2={NODE_Y}
+			stroke={stroke}
+			strokeWidth={CONNECTOR_WIDTH}
+			strokeDasharray={dashArray}
+		/>,
+		<path
+			key={`ifork-a-${index}`}
+			d={arcD}
+			stroke={stroke}
+			strokeWidth={CONNECTOR_WIDTH}
+			fill="none"
+			strokeDasharray={dashArray}
+		/>,
+		<line
+			key={`ifork-v-${index}`}
+			x1={targetX}
+			y1={arcEndY}
+			x2={targetX}
+			y2={vEndY}
+			stroke={stroke}
+			strokeWidth={CONNECTOR_WIDTH}
+			strokeDasharray={dashArray}
+		/>,
+	];
+}
+
 function renderNode(data: TreeFragmentData, colors: TreeColors): JSX.Element {
 	const x = getLaneX(data.nodeLane);
 	if (data.nodeStyle === 'current') {
@@ -205,6 +309,19 @@ function renderNode(data: TreeFragmentData, colors: TreeColors): JSX.Element {
 				stroke={colors.nodeCurrent}
 				strokeWidth={NODE_STROKE}
 				strokeDasharray="3 2"
+			/>
+		);
+	}
+	if (data.nodeStyle === 'integration') {
+		// Hollow ring; warning (marigold) when the integration build needs a rebuild.
+		return (
+			<circle
+				cx={x}
+				cy={NODE_Y}
+				r={NODE_RADIUS_CURRENT}
+				fill={colors.bg}
+				stroke={data.nodeNeedsRestack ? colors.restack : colors.node}
+				strokeWidth={NODE_STROKE}
 			/>
 		);
 	}

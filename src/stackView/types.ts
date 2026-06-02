@@ -85,7 +85,7 @@ export type LaneSegment = {
 };
 
 /** Node styling variant for tree visualization. */
-export type TreeNodeStyle = 'normal' | 'current' | 'uncommitted';
+export type TreeNodeStyle = 'normal' | 'current' | 'uncommitted' | 'integration';
 
 /** Styling information for a child fork connection. */
 export type ChildForkStyle = {
@@ -95,6 +95,22 @@ export type ChildForkStyle = {
 	needsRestack: boolean;
 	/** Whether the child is the uncommitted pseudo-branch. */
 	isUncommitted: boolean;
+};
+
+/**
+ * A connector between a node and the integration branch's swimlane — the mirror
+ * of the trunk fan-out. `direction: 'down'` is the integration node (top) fanning
+ * down into a tip's lane; `direction: 'up'` is a mid-stack tip fanning up into a
+ * bypass lane to reach the integration node above it. `needsRebuild` colors the
+ * connector marigold (same color as restack).
+ */
+export type IntegrationFork = {
+	/** The lane the connector turns into (the tip's lane, or its bypass lane). */
+	lane: number;
+	/** 'down' for the integration node→tip; 'up' for a mid-stack tip→bypass lane. */
+	direction: 'up' | 'down';
+	/** Marigold styling when the integration build needs a rebuild. */
+	needsRebuild: boolean;
 };
 
 /** Complete tree fragment data for rendering a single row's tree section. */
@@ -113,6 +129,12 @@ export type TreeFragmentData = {
 	nodeStyle: TreeNodeStyle;
 	/** Node needs restack indicator. */
 	nodeNeedsRestack: boolean;
+	/**
+	 * Integration-branch connectors for this row (the mirror of `childForkLanes`):
+	 * downward forks on the integration node, an upward fork on a mid-stack tip.
+	 * Empty/omitted when no integration link touches this row.
+	 */
+	integrationForks?: IntegrationFork[];
 };
 
 export type BranchViewModel = {
@@ -122,6 +144,29 @@ export type BranchViewModel = {
 	change?: BranchChangeViewModel;
 	commits?: BranchCommitViewModel[];
 	tree: TreePosition;
+	treeFragment: TreeFragmentData;
+	/**
+	 * True when an integration branch is configured AND this branch is NOT one
+	 * of its tips — i.e. this branch is excluded from the integration build, so
+	 * the UI marks it with an "X" indicator. Undefined when no integration
+	 * branch is configured (the indicator is suppressed entirely).
+	 */
+	outOfIntegration?: boolean;
+};
+
+/**
+ * View model for the configured integration branch, rendered as the topmost
+ * node of the stack. Derived from the parsed `IntegrationState`; uses
+ * "Rebuild" verbiage (the integration build is rebuilt, not restacked).
+ */
+export type IntegrationViewModel = {
+	/** Local integration branch name. */
+	name: string;
+	/** True when the integration build is stale and needs to be rebuilt. */
+	needsRebuild: boolean;
+	/** Names of the branches composing the integration tip list, in order. */
+	tipNames: string[];
+	/** Tree fragment for the integration node row (swimlanes converge up to it). */
 	treeFragment: TreeFragmentData;
 };
 
@@ -137,6 +182,8 @@ export type RepositoryViewModel = {
 	error?: string;
 	/** Name of the current branch when it is not tracked by git-spice. */
 	untrackedBranch?: string;
+	/** Configured integration branch, rendered atop the stack. Absent when unconfigured/unsupported. */
+	integration?: IntegrationViewModel;
 };
 
 /** Top-level display state sent to the webview. */
