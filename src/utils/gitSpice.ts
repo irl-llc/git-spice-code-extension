@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
  * Resolves the git-spice executable at call time so changes to the
  * `git-spice.path` setting take effect without reloading the window.
  */
-function getGitSpiceBinary(): string {
+export function getGitSpiceBinary(): string {
 	const configured = vscode.workspace.getConfiguration('git-spice').get<string>('path');
 	return resolveGitSpiceBinary(configured, process.env.GIT_SPICE_BIN);
 }
@@ -28,7 +28,7 @@ function getGitSpiceBinary(): string {
  * Non-optional locks (writes) are unaffected.
  * Inherited by child git processes spawned by git-spice.
  */
-const NO_OPTIONAL_LOCKS_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
+export const NO_OPTIONAL_LOCKS_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
 
 type NormalizedString = { value: string } | { error: string };
 type GitSpiceArgs = ReadonlyArray<string>;
@@ -40,7 +40,7 @@ export type RepoSyncResult = { value: { deletedBranches: string[]; syncedBranche
 /** Minimal folder shape required by execGitSpice. WorkspaceFolder satisfies this. */
 export type FolderUri = { uri: vscode.Uri };
 
-function getWorkspaceFolderPath(folder: FolderUri): string | null {
+export function getWorkspaceFolderPath(folder: FolderUri): string | null {
 	const fsPath = folder.uri.fsPath;
 	return typeof fsPath === 'string' && fsPath.length > 0 ? fsPath : null;
 }
@@ -119,7 +119,6 @@ export async function execGitSpiceSupportsIntegration(folder: FolderUri): Promis
 		return false;
 	}
 }
-
 export async function execBranchTrack(
 	folder: vscode.WorkspaceFolder,
 	branchName: string,
