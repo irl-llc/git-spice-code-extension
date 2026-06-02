@@ -1,6 +1,7 @@
 /**
- * Branch card React component: header (toggle, name, tags), optional meta,
- * optional Summarized Changes, and a slot for the commits container.
+ * Branch card React component: header (toggle, name, tags including the
+ * change-request status badge), optional Summarized Changes, and a slot for
+ * the commits container.
  *
  * Renders the INTERIOR of the article element. The wrapper
  * (branchRenderer.tsx) creates the article itself and sets static
@@ -12,7 +13,7 @@
 
 import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
 
-import type { GitSpiceComments } from '../../../gitSpiceSchema';
+import type { GitSpiceChangeStatus, GitSpiceComments } from '../../../gitSpiceSchema';
 import type { BranchViewModel } from '../../types';
 import type { WebviewMessage } from '../../webviewTypes';
 
@@ -59,7 +60,6 @@ export function BranchCard(props: BranchCardProps): JSX.Element {
 				onToggle={toggle}
 				onHeaderClick={handleHeaderClick}
 			/>
-			{branch.change?.status ? <BranchMeta status={branch.change.status} /> : null}
 			{summary ?? null}
 			{commits ?? null}
 		</div>
@@ -107,11 +107,23 @@ function BranchHeader({
 	);
 }
 
-function BranchMeta({ status }: { status: string }): JSX.Element {
+/** Icon + label for each change-request status, shown as a colored badge. */
+const CHANGE_STATUS_DISPLAY: Record<GitSpiceChangeStatus, { icon: string; label: string }> = {
+	open: { icon: 'codicon-git-pull-request', label: 'Open' },
+	merged: { icon: 'codicon-git-merge', label: 'Merged' },
+	closed: { icon: 'codicon-git-pull-request-closed', label: 'Closed' },
+};
+
+/** Colored badge showing the change-request (PR/MR) status from the forge. */
+function ChangeStatusBadge({ status }: { status: GitSpiceChangeStatus }): JSX.Element {
+	// Defensive: a future CLI/forge status outside the known set would otherwise
+	// crash the webview on the destructure — fall back to the raw value.
+	const { icon, label } = CHANGE_STATUS_DISPLAY[status] ?? { icon: 'codicon-git-pull-request', label: status };
 	return (
-		<div className="branch-meta">
-			<span>{status}</span>
-		</div>
+		<span className={`tag tag-cr tag-cr-${status}`} title={`Change request ${label.toLowerCase()}`}>
+			<i className={`codicon ${icon}`} aria-hidden="true" />
+			<span>{label}</span>
+		</span>
 	);
 }
 
@@ -120,14 +132,23 @@ interface BranchTagsProps {
 	postMessage: PostMessage;
 }
 
+/** The read-only status pills shown before the action buttons. */
+function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
+	const comments = branch.change?.comments;
+	return (
+		<>
+			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
+			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
+			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}
+		</>
+	);
+}
+
 function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 	const showSquash = Boolean(branch.commits && branch.commits.length > 1);
 	return (
 		<div className="branch-tags">
-			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
-			{branch.change?.comments && branch.change.comments.total > 0 ? (
-				<CommentsIndicator comments={branch.change.comments} />
-			) : null}
+			<BranchBadges branch={branch} />
 			{showSquash ? (
 				<button
 					type="button"

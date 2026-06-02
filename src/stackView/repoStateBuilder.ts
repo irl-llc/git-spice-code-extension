@@ -50,11 +50,11 @@ async function fetchIntegrationState(folder: vscode.WorkspaceFolder): Promise<In
 type BranchResult = { value: GitSpiceBranch[] } | { error: string };
 
 /** Fetches branch + working-copy data for a single discovered repo. */
-export async function fetchRepoState(repo: DiscoveredRepo, withComments = false): Promise<RepoState> {
+export async function fetchRepoState(repo: DiscoveredRepo, withForgeStatus = false): Promise<RepoState> {
 	const folder = toWorkspaceFolder(repo);
 	const cwd = repo.rootUri.fsPath;
 	const [branchResult, uncommitted, currentBranch, integration] = await Promise.all([
-		execGitSpice(folder, withComments),
+		execGitSpice(folder, withForgeStatus),
 		fetchWorkingCopyChanges(cwd),
 		fetchCurrentBranchName(cwd),
 		fetchIntegrationState(folder),
@@ -70,10 +70,10 @@ export async function fetchRepoState(repo: DiscoveredRepo, withComments = false)
 }
 
 /** Fetches branch + working-copy data for a single workspace folder. */
-export async function fetchFolderState(folder: vscode.WorkspaceFolder, withComments = false): Promise<RepoState> {
+export async function fetchFolderState(folder: vscode.WorkspaceFolder, withForgeStatus = false): Promise<RepoState> {
 	const cwd = folder.uri.fsPath;
 	const [branchResult, uncommitted, currentBranch, integration] = await Promise.all([
-		execGitSpice(folder, withComments),
+		execGitSpice(folder, withForgeStatus),
 		fetchWorkingCopyChanges(cwd),
 		fetchCurrentBranchName(cwd),
 		fetchIntegrationState(folder),

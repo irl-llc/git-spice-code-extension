@@ -1,370 +1,370 @@
 {
-  "name": "git-spice",
-  "displayName": "Git Spice",
-  "description": "Manage stacked Git branches with ease. Visualize, navigate, and submit branch stacks directly from VS Code.",
-  "version": "0.0.4",
-  "publisher": "IRLAILLC",
-  "icon": "icon.png",
-  "license": "MIT",
-  "keywords": [
-    "git",
-    "git-spice",
-    "stacked diffs",
-    "branch management",
-    "scm",
-    "version control"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/irl-llc/git-spice-code-extension.git"
-  },
-  "bugs": {
-    "url": "https://github.com/irl-llc/git-spice-code-extension/issues"
-  },
-  "engines": {
-    "vscode": "^1.98.0"
-  },
-  "categories": [
-    "SCM Providers"
-  ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "files": [
-    "dist",
-    "media",
-    "icon.png",
-    "LICENSE"
-  ],
-  "contributes": {
-    "configuration": {
-      "title": "Git Spice",
-      "properties": {
-        "git-spice.path": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path to the git-spice executable. Leave empty to use `git-spice` from your `PATH` (or the `GIT_SPICE_BIN` environment variable, when set). Set this if your binary is named `gs` or lives at a custom location."
-        },
-        "git-spice.showCommentProgress": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show PR comment progress indicator (beta). Requires git-spice with comments support."
-        }
-      }
-    },
-    "commands": [
-      {
-        "command": "git-spice.refresh",
-        "title": "Refresh",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "git-spice.syncRepo",
-        "title": "Sync Repository",
-        "icon": "$(sync)"
-      },
-      {
-        "command": "git-spice.branchCreateFromCommitMessage",
-        "title": "Git Spice: Create Branch from Commit Message"
-      },
-      {
-        "command": "git-spice.up",
-        "title": "Git Spice: Navigate Up Stack"
-      },
-      {
-        "command": "git-spice.down",
-        "title": "Git Spice: Navigate Down Stack"
-      },
-      {
-        "command": "git-spice.trunk",
-        "title": "Git Spice: Navigate to Trunk"
-      },
-      {
-        "command": "git-spice.stackRestack",
-        "title": "Restack Stack",
-        "icon": "$(layers)"
-      },
-      {
-        "command": "git-spice.stackSubmit",
-        "title": "Submit Stack",
-        "icon": "$(cloud-upload)"
-      },
-      {
-        "command": "git-spice.branchCheckout",
-        "title": "Checkout",
-        "icon": "$(git-branch)"
-      },
-      {
-        "command": "git-spice.branchRename",
-        "title": "Rename...",
-        "icon": "$(tag)"
-      },
-      {
-        "command": "git-spice.branchMove",
-        "title": "Move onto...",
-        "icon": "$(move)"
-      },
-      {
-        "command": "git-spice.branchMoveWithChildren",
-        "title": "Move with children onto...",
-        "icon": "$(type-hierarchy)"
-      },
-      {
-        "command": "git-spice.branchEdit",
-        "title": "Edit",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "git-spice.branchRestack",
-        "title": "Restack",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "git-spice.branchSubmit",
-        "title": "Submit",
-        "icon": "$(cloud-upload)"
-      },
-      {
-        "command": "git-spice.branchFold",
-        "title": "Fold",
-        "icon": "$(fold)"
-      },
-      {
-        "command": "git-spice.branchSquash",
-        "title": "Squash",
-        "icon": "$(fold-down)"
-      },
-      {
-        "command": "git-spice.branchUntrack",
-        "title": "Untrack",
-        "icon": "$(eye-closed)"
-      },
-      {
-        "command": "git-spice.branchDelete",
-        "title": "Delete",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "git-spice.commitCopySha",
-        "title": "Copy SHA",
-        "icon": "$(copy)"
-      },
-      {
-        "command": "git-spice.commitSplit",
-        "title": "Split Branch",
-        "icon": "$(split-horizontal)"
-      },
-      {
-        "command": "git-spice.copyBranchName",
-        "title": "Copy Branch Name",
-        "icon": "$(copy)"
-      },
-      {
-        "command": "git-spice.enableCommentProgress",
-        "title": "Show Comment Progress (Beta)"
-      },
-      {
-        "command": "git-spice.disableCommentProgress",
-        "title": "Hide Comment Progress (Beta)"
-      },
-      {
-        "command": "git-spice.openInEditor",
-        "title": "Open in Editor",
-        "category": "Git Spice",
-        "icon": "$(open-preview)"
-      }
-    ],
-    "keybindings": [
-      {
-        "command": "git-spice.branchCreateFromCommitMessage",
-        "key": "cmd+shift+enter",
-        "mac": "cmd+shift+enter",
-        "win": "ctrl+shift+enter",
-        "linux": "ctrl+shift+enter",
-        "when": "focusedView == 'workbench.scm' && inputFocus"
-      }
-    ],
-    "views": {
-      "scm": [
-        {
-          "id": "gitSpice.branches",
-          "name": "Git Spice",
-          "type": "webview"
-        }
-      ]
-    },
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "git-spice.enableCommentProgress",
-          "when": "!gitSpice.showCommentProgress"
-        },
-        {
-          "command": "git-spice.disableCommentProgress",
-          "when": "gitSpice.showCommentProgress"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "git-spice.refresh",
-          "when": "view == gitSpice.branches",
-          "group": "navigation@1"
-        },
-        {
-          "command": "git-spice.openInEditor",
-          "when": "view == gitSpice.branches",
-          "group": "navigation@2"
-        },
-        {
-          "command": "git-spice.enableCommentProgress",
-          "when": "view == gitSpice.branches && !gitSpice.showCommentProgress",
-          "group": "2_options@1"
-        },
-        {
-          "command": "git-spice.disableCommentProgress",
-          "when": "view == gitSpice.branches && gitSpice.showCommentProgress",
-          "group": "2_options@1"
-        }
-      ],
-      "webview/context": [
-        {
-          "command": "git-spice.branchCheckout",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "1_branch@1"
-        },
-        {
-          "command": "git-spice.copyBranchName",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "1_branch@2"
-        },
-        {
-          "command": "git-spice.branchRename",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "1_branch@3"
-        },
-        {
-          "command": "git-spice.branchMove",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "2_move@1"
-        },
-        {
-          "command": "git-spice.branchMoveWithChildren",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "2_move@2"
-        },
-        {
-          "command": "git-spice.branchEdit",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch' && webviewBranchIsCurrent == true",
-          "group": "3_actions@1"
-        },
-        {
-          "command": "git-spice.branchRestack",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch' && webviewBranchNeedsRestack == true",
-          "group": "3_actions@2"
-        },
-        {
-          "command": "git-spice.branchSubmit",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "3_actions@3"
-        },
-        {
-          "command": "git-spice.branchFold",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "4_modify@1"
-        },
-        {
-          "command": "git-spice.branchSquash",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "4_modify@2"
-        },
-        {
-          "command": "git-spice.branchUntrack",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "5_danger@1"
-        },
-        {
-          "command": "git-spice.branchDelete",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
-          "group": "5_danger@2"
-        },
-        {
-          "command": "git-spice.commitCopySha",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'commit'",
-          "group": "1_commit@1"
-        },
-        {
-          "command": "git-spice.commitSplit",
-          "when": "webviewId == 'gitSpice.branches' && webviewSection == 'commit'",
-          "group": "1_commit@2"
-        }
-      ]
-    }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint && npm run format:check",
-    "lint": "eslint src --max-warnings=0",
-    "lint:fix": "eslint src --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "test": "vscode-test",
-    "test:unit": "mocha 'out/test/unit/**/*.test.js'",
-    "test:e2e": "vscode-test --config .vscode-test.e2e.mjs",
-    "test:e2e:playwright": "playwright test",
-    "test:e2e:playwright:docker": "docker compose -f docker-compose.test.yml run --rm playwright",
-    "test:e2e:playwright:docker:update": "docker compose -f docker-compose.test.yml run --rm -e PW_FLAGS=--update-snapshots playwright",
-    "test:package": "bash scripts/validate-package.sh",
-    "gs:fetch": "node scripts/fetch-gs.mjs",
-    "prepare": "husky || true",
-    "deploy": "vsce publish --no-dependencies",
-    "deploy:patch": "vsce publish patch --no-dependencies",
-    "deploy:minor": "vsce publish minor --no-dependencies",
-    "deploy:major": "vsce publish major --no-dependencies",
-    "deploy:openvsx": "ovsx publish --no-dependencies"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/jsdom": "^28.0.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
-    "@types/react": "^19.2.15",
-    "@types/react-dom": "^19.2.3",
-    "@types/vscode": "^1.98.0",
-    "@typescript-eslint/eslint-plugin": "^8.45.0",
-    "@typescript-eslint/parser": "^8.45.0",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.7.1",
-    "copy-webpack-plugin": "^12.0.2",
-    "eslint": "^9.36.0",
-    "eslint-config-prettier": "^10.1.8",
-    "husky": "^9.1.7",
-    "jsdom": "^28.1.0",
-    "lint-staged": "^17.0.7",
-    "mocha": "^11.0.1",
-    "ovsx": "^0.10.11",
-    "prettier": "3.6.2",
-    "ts-loader": "^9.5.4",
-    "typescript": "^5.9.3",
-    "webpack": "^5.102.0",
-    "webpack-cli": "^6.0.1"
-  },
-  "dependencies": {
-    "@vscode/codicons": "^0.0.41",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
-  },
-  "lint-staged": {
-    "src/**/*.{ts,tsx}": [
-      "eslint --max-warnings=0",
-      "prettier --write"
-    ]
-  }
+	"name": "git-spice",
+	"displayName": "Git Spice",
+	"description": "Manage stacked Git branches with ease. Visualize, navigate, and submit branch stacks directly from VS Code.",
+	"version": "0.0.4",
+	"publisher": "IRLAILLC",
+	"icon": "icon.png",
+	"license": "MIT",
+	"keywords": [
+		"git",
+		"git-spice",
+		"stacked diffs",
+		"branch management",
+		"scm",
+		"version control"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/irl-llc/git-spice-code-extension.git"
+	},
+	"bugs": {
+		"url": "https://github.com/irl-llc/git-spice-code-extension/issues"
+	},
+	"engines": {
+		"vscode": "^1.98.0"
+	},
+	"categories": [
+		"SCM Providers"
+	],
+	"activationEvents": [],
+	"main": "./dist/extension.js",
+	"files": [
+		"dist",
+		"media",
+		"icon.png",
+		"LICENSE"
+	],
+	"contributes": {
+		"configuration": {
+			"title": "Git Spice",
+			"properties": {
+				"git-spice.path": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Path to the git-spice executable. Leave empty to use `git-spice` from your `PATH` (or the `GIT_SPICE_BIN` environment variable, when set). Set this if your binary is named `gs` or lives at a custom location."
+				},
+				"git-spice.showRemoteForgeStatus": {
+					"type": "boolean",
+					"default": false,
+					"description": "Show remote forge status — change-request state (open/merged/closed) and PR comment counts (beta). Requires a git-spice build with forge support."
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "git-spice.refresh",
+				"title": "Refresh",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "git-spice.syncRepo",
+				"title": "Sync Repository",
+				"icon": "$(sync)"
+			},
+			{
+				"command": "git-spice.branchCreateFromCommitMessage",
+				"title": "Git Spice: Create Branch from Commit Message"
+			},
+			{
+				"command": "git-spice.up",
+				"title": "Git Spice: Navigate Up Stack"
+			},
+			{
+				"command": "git-spice.down",
+				"title": "Git Spice: Navigate Down Stack"
+			},
+			{
+				"command": "git-spice.trunk",
+				"title": "Git Spice: Navigate to Trunk"
+			},
+			{
+				"command": "git-spice.stackRestack",
+				"title": "Restack Stack",
+				"icon": "$(layers)"
+			},
+			{
+				"command": "git-spice.stackSubmit",
+				"title": "Submit Stack",
+				"icon": "$(cloud-upload)"
+			},
+			{
+				"command": "git-spice.branchCheckout",
+				"title": "Checkout",
+				"icon": "$(git-branch)"
+			},
+			{
+				"command": "git-spice.branchRename",
+				"title": "Rename...",
+				"icon": "$(tag)"
+			},
+			{
+				"command": "git-spice.branchMove",
+				"title": "Move onto...",
+				"icon": "$(move)"
+			},
+			{
+				"command": "git-spice.branchMoveWithChildren",
+				"title": "Move with children onto...",
+				"icon": "$(type-hierarchy)"
+			},
+			{
+				"command": "git-spice.branchEdit",
+				"title": "Edit",
+				"icon": "$(edit)"
+			},
+			{
+				"command": "git-spice.branchRestack",
+				"title": "Restack",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "git-spice.branchSubmit",
+				"title": "Submit",
+				"icon": "$(cloud-upload)"
+			},
+			{
+				"command": "git-spice.branchFold",
+				"title": "Fold",
+				"icon": "$(fold)"
+			},
+			{
+				"command": "git-spice.branchSquash",
+				"title": "Squash",
+				"icon": "$(fold-down)"
+			},
+			{
+				"command": "git-spice.branchUntrack",
+				"title": "Untrack",
+				"icon": "$(eye-closed)"
+			},
+			{
+				"command": "git-spice.branchDelete",
+				"title": "Delete",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "git-spice.commitCopySha",
+				"title": "Copy SHA",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "git-spice.commitSplit",
+				"title": "Split Branch",
+				"icon": "$(split-horizontal)"
+			},
+			{
+				"command": "git-spice.copyBranchName",
+				"title": "Copy Branch Name",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "git-spice.enableRemoteForgeStatus",
+				"title": "Show Remote Forge Status (Beta)"
+			},
+			{
+				"command": "git-spice.disableRemoteForgeStatus",
+				"title": "Hide Remote Forge Status (Beta)"
+			},
+			{
+				"command": "git-spice.openInEditor",
+				"title": "Open in Editor",
+				"category": "Git Spice",
+				"icon": "$(open-preview)"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "git-spice.branchCreateFromCommitMessage",
+				"key": "cmd+shift+enter",
+				"mac": "cmd+shift+enter",
+				"win": "ctrl+shift+enter",
+				"linux": "ctrl+shift+enter",
+				"when": "focusedView == 'workbench.scm' && inputFocus"
+			}
+		],
+		"views": {
+			"scm": [
+				{
+					"id": "gitSpice.branches",
+					"name": "Git Spice",
+					"type": "webview"
+				}
+			]
+		},
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "git-spice.enableRemoteForgeStatus",
+					"when": "!gitSpice.showRemoteForgeStatus"
+				},
+				{
+					"command": "git-spice.disableRemoteForgeStatus",
+					"when": "gitSpice.showRemoteForgeStatus"
+				}
+			],
+			"view/title": [
+				{
+					"command": "git-spice.refresh",
+					"when": "view == gitSpice.branches",
+					"group": "navigation@1"
+				},
+				{
+					"command": "git-spice.openInEditor",
+					"when": "view == gitSpice.branches",
+					"group": "navigation@2"
+				},
+				{
+					"command": "git-spice.enableRemoteForgeStatus",
+					"when": "view == gitSpice.branches && !gitSpice.showRemoteForgeStatus",
+					"group": "2_options@1"
+				},
+				{
+					"command": "git-spice.disableRemoteForgeStatus",
+					"when": "view == gitSpice.branches && gitSpice.showRemoteForgeStatus",
+					"group": "2_options@1"
+				}
+			],
+			"webview/context": [
+				{
+					"command": "git-spice.branchCheckout",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "1_branch@1"
+				},
+				{
+					"command": "git-spice.copyBranchName",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "1_branch@2"
+				},
+				{
+					"command": "git-spice.branchRename",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "1_branch@3"
+				},
+				{
+					"command": "git-spice.branchMove",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "2_move@1"
+				},
+				{
+					"command": "git-spice.branchMoveWithChildren",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "2_move@2"
+				},
+				{
+					"command": "git-spice.branchEdit",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch' && webviewBranchIsCurrent == true",
+					"group": "3_actions@1"
+				},
+				{
+					"command": "git-spice.branchRestack",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch' && webviewBranchNeedsRestack == true",
+					"group": "3_actions@2"
+				},
+				{
+					"command": "git-spice.branchSubmit",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "3_actions@3"
+				},
+				{
+					"command": "git-spice.branchFold",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "4_modify@1"
+				},
+				{
+					"command": "git-spice.branchSquash",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "4_modify@2"
+				},
+				{
+					"command": "git-spice.branchUntrack",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "5_danger@1"
+				},
+				{
+					"command": "git-spice.branchDelete",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "5_danger@2"
+				},
+				{
+					"command": "git-spice.commitCopySha",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'commit'",
+					"group": "1_commit@1"
+				},
+				{
+					"command": "git-spice.commitSplit",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'commit'",
+					"group": "1_commit@2"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package",
+		"compile": "webpack",
+		"watch": "webpack --watch",
+		"package": "webpack --mode production --devtool hidden-source-map",
+		"compile-tests": "tsc -p . --outDir out",
+		"watch-tests": "tsc -p . -w --outDir out",
+		"pretest": "npm run compile-tests && npm run compile && npm run lint && npm run format:check",
+		"lint": "eslint src --max-warnings=0",
+		"lint:fix": "eslint src --fix",
+		"format": "prettier --write \"src/**/*.{ts,tsx}\"",
+		"format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+		"test": "vscode-test",
+		"test:unit": "mocha 'out/test/unit/**/*.test.js'",
+		"test:e2e": "vscode-test --config .vscode-test.e2e.mjs",
+		"test:e2e:playwright": "playwright test",
+		"test:e2e:playwright:docker": "docker compose -f docker-compose.test.yml run --rm playwright",
+		"test:e2e:playwright:docker:update": "docker compose -f docker-compose.test.yml run --rm -e PW_FLAGS=--update-snapshots playwright",
+		"test:package": "bash scripts/validate-package.sh",
+		"gs:fetch": "node scripts/fetch-gs.mjs",
+		"prepare": "husky || true",
+		"deploy": "vsce publish --no-dependencies",
+		"deploy:patch": "vsce publish patch --no-dependencies",
+		"deploy:minor": "vsce publish minor --no-dependencies",
+		"deploy:major": "vsce publish major --no-dependencies",
+		"deploy:openvsx": "ovsx publish --no-dependencies"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.60.0",
+		"@testing-library/dom": "^10.4.1",
+		"@testing-library/react": "^16.3.2",
+		"@testing-library/user-event": "^14.6.1",
+		"@types/jsdom": "^28.0.0",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "22.x",
+		"@types/react": "^19.2.15",
+		"@types/react-dom": "^19.2.3",
+		"@types/vscode": "^1.98.0",
+		"@typescript-eslint/eslint-plugin": "^8.45.0",
+		"@typescript-eslint/parser": "^8.45.0",
+		"@vscode/test-cli": "^0.0.11",
+		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.7.1",
+		"copy-webpack-plugin": "^12.0.2",
+		"eslint": "^9.36.0",
+		"eslint-config-prettier": "^10.1.8",
+		"husky": "^9.1.7",
+		"jsdom": "^28.1.0",
+		"lint-staged": "^17.0.7",
+		"mocha": "^11.0.1",
+		"ovsx": "^0.10.11",
+		"prettier": "3.6.2",
+		"ts-loader": "^9.5.4",
+		"typescript": "^5.9.3",
+		"webpack": "^5.102.0",
+		"webpack-cli": "^6.0.1"
+	},
+	"dependencies": {
+		"@vscode/codicons": "^0.0.41",
+		"react": "^19.2.6",
+		"react-dom": "^19.2.6"
+	},
+	"lint-staged": {
+		"src/**/*.{ts,tsx}": [
+			"eslint --max-warnings=0",
+			"prettier --write"
+		]
+	}
 }

@@ -283,35 +283,35 @@ function registerBranchCreateCommand(context: vscode.ExtensionContext, provider:
 }
 
 /**
- * Mirrors the `git-spice.showCommentProgress` setting into the
- * `gitSpice.showCommentProgress` context key, which the view/title menu's
+ * Mirrors the `git-spice.showRemoteForgeStatus` setting into the
+ * `gitSpice.showRemoteForgeStatus` context key, which the view/title menu's
  * `when` clauses use to swap between the "Show…" (enable) and "Hide…"
  * (disable) commands. VS Code's package.json `menus` schema has no
  * `toggled`/checkmark support, and `$(icon)` codicons are stripped from
  * overflow-menu titles — so the on/off state is conveyed by swapping the
  * command's verb label, gated by this context key.
  */
-function syncCommentProgressContext(): void {
-	const enabled = vscode.workspace.getConfiguration('git-spice').get<boolean>('showCommentProgress', false);
-	void vscode.commands.executeCommand('setContext', 'gitSpice.showCommentProgress', enabled);
+function syncRemoteForgeStatusContext(): void {
+	const enabled = vscode.workspace.getConfiguration('git-spice').get<boolean>('showRemoteForgeStatus', false);
+	void vscode.commands.executeCommand('setContext', 'gitSpice.showRemoteForgeStatus', enabled);
 }
 
-/** Persists the comment-progress setting (Global scope). */
-async function setCommentProgress(enabled: boolean): Promise<void> {
+/** Persists the remote-forge-status setting (Global scope). */
+async function setRemoteForgeStatus(enabled: boolean): Promise<void> {
 	try {
 		await vscode.workspace
 			.getConfiguration('git-spice')
-			.update('showCommentProgress', enabled, vscode.ConfigurationTarget.Global);
+			.update('showRemoteForgeStatus', enabled, vscode.ConfigurationTarget.Global);
 	} catch (err) {
 		void vscode.window.showErrorMessage(
-			`Failed to update comment progress setting: ${err instanceof Error ? err.message : String(err)}`,
+			`Failed to update remote forge status setting: ${err instanceof Error ? err.message : String(err)}`,
 		);
 	}
 }
 
 /** Registers workspace and configuration change listeners. */
 function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: StackViewProvider): void {
-	syncCommentProgressContext();
+	syncRemoteForgeStatusContext();
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeWorkspaceFolders(() => {
 			provider.setWorkspaceFolder(vscode.workspace.workspaceFolders?.[0]);
@@ -319,14 +319,14 @@ function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: 
 		}),
 		// Two commands rather than one toggle: package.json `menus` has no
 		// `toggled`/checkmark support, so we swap which command (Show… vs
-		// Hide…) appears via `when` on the gitSpice.showCommentProgress
+		// Hide…) appears via `when` on the gitSpice.showRemoteForgeStatus
 		// context key.
-		vscode.commands.registerCommand('git-spice.enableCommentProgress', () => setCommentProgress(true)),
-		vscode.commands.registerCommand('git-spice.disableCommentProgress', () => setCommentProgress(false)),
+		vscode.commands.registerCommand('git-spice.enableRemoteForgeStatus', () => setRemoteForgeStatus(true)),
+		vscode.commands.registerCommand('git-spice.disableRemoteForgeStatus', () => setRemoteForgeStatus(false)),
 		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration('git-spice.showCommentProgress')) {
-				syncCommentProgressContext();
-				// force: re-fetch comment counts now that the toggle changed.
+			if (e.affectsConfiguration('git-spice.showRemoteForgeStatus')) {
+				syncRemoteForgeStatusContext();
+				// force: re-fetch forge status now that the toggle changed.
 				void provider.refresh(true);
 			}
 		}),

@@ -1,143 +1,150 @@
 :root {
-  color-scheme: light dark;
+	color-scheme: light dark;
 }
 
 body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--vscode-font-family);
-  font-size: 0.85rem;
-  color: var(--vscode-foreground);
-  background-color: transparent;
+	margin: 0;
+	padding: 0;
+	font-family: var(--vscode-font-family);
+	font-size: 0.85rem;
+	color: var(--vscode-foreground);
+	background-color: transparent;
 }
 
 button {
-  font: inherit;
+	font: inherit;
 }
 
 /* removed toolbar and info header */
 
 .error {
-  padding: 0.4rem 0.6rem;
-  color: var(--vscode-errorForeground);
-  font-size: 0.8rem;
+	padding: 0.4rem 0.6rem;
+	color: var(--vscode-errorForeground);
+	font-size: 0.8rem;
 }
 
 .hidden {
-  display: none !important;
+	display: none !important;
 }
 
 .stack-list {
-  list-style: none;
-  margin: 0;
-  padding: 0.6rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0; /* No gap - SVG lanes must connect seamlessly */
-  position: relative;
+	list-style: none;
+	margin: 0;
+	padding: 0.6rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0; /* No gap - SVG lanes must connect seamlessly */
+	position: relative;
 }
 
 .stack-item {
-  border: none;
-  background: transparent;
-  animation: item-enter 0.2s ease-out;
-  position: relative;
-  transition: transform 0.25s ease-out;
-  overflow: visible;
-  /* No margin - SVG needs to span full row height for seamless lane connections */
-  margin: 0;
-  padding: 0;
+	border: none;
+	background: transparent;
+	animation: item-enter 0.2s ease-out;
+	position: relative;
+	transition: transform 0.25s ease-out;
+	overflow: visible;
+	/* No margin - SVG needs to span full row height for seamless lane connections */
+	margin: 0;
+	padding: 0;
 }
 
 @keyframes item-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	from {
+		opacity: 0;
+		transform: translateY(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .stack-item.item-enter {
-  opacity: 0;
-  transform: translateY(-8px);
+	opacity: 0;
+	transform: translateY(-8px);
 }
 
 .stack-item.item-exit {
-  animation: item-exit 0.2s ease-out forwards;
+	animation: item-exit 0.2s ease-out forwards;
 }
 
 @keyframes item-exit {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 500px;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-    max-height: 0;
-    margin: 0;
-    padding: 0;
-  }
+	from {
+		opacity: 1;
+		transform: translateY(0);
+		max-height: 500px;
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-8px);
+		max-height: 0;
+		margin: 0;
+		padding: 0;
+	}
 }
 
 .branch-card {
-  border: 1px solid var(--vscode-treeIndentGuidesStroke);
-  border-radius: 6px;
-  padding: 0.35rem 0.5rem;
-  /* Left margin creates space for tree area; vertical margin for card separation */
-  margin-left: calc(var(--tree-graph-width, 30px) + var(--tree-graph-padding));
-  margin-top: 0.2rem;
-  margin-bottom: 0.2rem;
-  margin-right: 0;
-  background: var(--vscode-editor-background);
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+	border: 1px solid var(--vscode-treeIndentGuidesStroke);
+	border-radius: 6px;
+	padding: 0.35rem 0.5rem;
+	/* Left margin creates space for tree area; vertical margin for card separation */
+	margin-left: calc(var(--tree-graph-width, 30px) + var(--tree-graph-padding));
+	margin-top: 0.2rem;
+	margin-bottom: 0.2rem;
+	margin-right: 0;
+	background: var(--vscode-editor-background);
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	transition:
+		border-color 0.25s ease,
+		box-shadow 0.25s ease;
 }
 
 /* First card doesn't need top margin */
 .stack-item:first-child .branch-card {
-  margin-top: 0;
+	margin-top: 0;
 }
 
 /* Last card doesn't need bottom margin */
 .stack-item:last-child .branch-card {
-  margin-bottom: 0;
+	margin-bottom: 0;
 }
 
 /* Shared collapse/expand for card sub-sections (commits, summary) */
 .branch-card .expandable-section {
-  display: flex;
-  flex-direction: column;
-  margin-top: 0;
-  border-top: 0 solid var(--vscode-treeIndentGuidesStroke);
-  padding-top: 0;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-height 0.2s ease-out, opacity 0.2s ease-out, margin-top 0.2s ease-out, padding-top 0.2s ease-out, border-top-width 0.2s ease-out;
+	display: flex;
+	flex-direction: column;
+	margin-top: 0;
+	border-top: 0 solid var(--vscode-treeIndentGuidesStroke);
+	padding-top: 0;
+	max-height: 0;
+	opacity: 0;
+	overflow: hidden;
+	transition:
+		max-height 0.2s ease-out,
+		opacity 0.2s ease-out,
+		margin-top 0.2s ease-out,
+		padding-top 0.2s ease-out,
+		border-top-width 0.2s ease-out;
 }
 
 .branch-card.expanded .expandable-section {
-  margin-top: 0.3rem;
-  border-top-width: 1px;
-  padding-top: 0.35rem;
-  max-height: 999rem;
-  opacity: 1;
+	margin-top: 0.3rem;
+	border-top-width: 1px;
+	padding-top: 0.35rem;
+	max-height: 999rem;
+	opacity: 1;
 }
 
 .branch-card .branch-commits {
-  gap: 0.3rem;
+	gap: 0.3rem;
 }
 
 .branch-card.is-current {
-  border-color: var(--vscode-foreground);
-  box-shadow: 0 0 0 1px var(--vscode-foreground);
+	border-color: var(--vscode-foreground);
+	box-shadow: 0 0 0 1px var(--vscode-foreground);
 }
 
 .branch-card.item-updated,
@@ -146,367 +153,396 @@ button {
 .tag.item-updated,
 .branch-pr-link.item-updated,
 .branch-meta span.item-updated {
-  animation: element-flash 0.3s ease-out;
+	animation: element-flash 0.3s ease-out;
 }
 
 @keyframes element-flash {
-  0% {
-    background-color: transparent;
-    box-shadow: none;
-  }
-  50% {
-    background-color: var(--vscode-list-hoverBackground);
-    box-shadow: 0 0 0 1px var(--vscode-focusBorder);
-  }
-  100% {
-    background-color: transparent;
-    box-shadow: none;
-  }
+	0% {
+		background-color: transparent;
+		box-shadow: none;
+	}
+	50% {
+		background-color: var(--vscode-list-hoverBackground);
+		box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+	}
+	100% {
+		background-color: transparent;
+		box-shadow: none;
+	}
 }
 
 .branch-card.needs-restack {
-  border-color: var(--vscode-problemsWarningIcon-foreground);
+	border-color: var(--vscode-problemsWarningIcon-foreground);
 }
 
 /* Integration-branch card: rendered atop the stack. */
 .branch-card.integration-card {
-  border-color: var(--vscode-textLink-foreground);
+	border-color: var(--vscode-textLink-foreground);
 }
 
 .branch-card.integration-card.needs-rebuild {
-  border-color: var(--vscode-problemsWarningIcon-foreground);
+	border-color: var(--vscode-problemsWarningIcon-foreground);
 }
 
 .integration-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
 }
 
 .integration-icon {
-  font-size: 0.85rem;
-  color: var(--vscode-textLink-foreground);
+	font-size: 0.85rem;
+	color: var(--vscode-textLink-foreground);
 }
 
 .branch-card.integration-card.needs-rebuild .integration-icon {
-  color: var(--vscode-problemsWarningIcon-foreground);
+	color: var(--vscode-problemsWarningIcon-foreground);
 }
 
 .branch-card.dragging {
-  opacity: 0.6;
+	opacity: 0.6;
 }
 
 .branch-card.drag-over::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px dashed var(--vscode-focusBorder);
-  border-radius: 6px;
-  pointer-events: none;
+	content: '';
+	position: absolute;
+	inset: 0;
+	border: 2px dashed var(--vscode-focusBorder);
+	border-radius: 6px;
+	pointer-events: none;
 }
 
 .branch-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0;
-  margin: 0;
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0;
+	margin: 0;
 }
 
 .branch-name {
-  font-weight: 600;
-  font-size: 0.8rem;
-  word-break: break-word;
+	font-weight: 600;
+	font-size: 0.8rem;
+	word-break: break-word;
 }
 
 .branch-tags {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 0.2rem;
-  flex-wrap: wrap;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 0.2rem;
+	flex-wrap: wrap;
 }
 
 .current-branch-icon {
-  color: var(--vscode-foreground);
-  font-size: 1rem;
+	color: var(--vscode-foreground);
+	font-size: 1rem;
 }
 
 .tag {
-  font-size: 0.5rem;
-  padding: 0.05rem 0.28rem;
-  border-radius: 999px;
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+	font-size: 0.5rem;
+	padding: 0.05rem 0.28rem;
+	border-radius: 999px;
+	background-color: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
 }
 
 .tag-primary {
-  background-color: var(--vscode-foreground);
-  color: var(--vscode-editor-background);
+	background-color: var(--vscode-foreground);
+	color: var(--vscode-editor-background);
 }
 
 .tag-warning {
-  background-color: var(--vscode-problemsWarningIcon-foreground);
-  color: var(--vscode-editor-background);
+	background-color: var(--vscode-problemsWarningIcon-foreground);
+	color: var(--vscode-editor-background);
 }
 
 .tag-accent {
-  background-color: var(--vscode-textLink-foreground);
-  color: var(--vscode-editor-background);
+	background-color: var(--vscode-textLink-foreground);
+	color: var(--vscode-editor-background);
+}
+
+/* Change-request (PR/MR) status badge: icon + label, colored per state. */
+.tag-cr {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.18rem;
+	text-transform: none;
+	letter-spacing: 0;
+	color: var(--vscode-editor-background);
+}
+
+.tag-cr .codicon {
+	font-size: 0.7rem;
+	line-height: 1;
+}
+
+.tag-cr-open {
+	background-color: var(--vscode-charts-green, #3fb950);
+}
+
+.tag-cr-merged {
+	background-color: var(--vscode-charts-purple, #a371f7);
+}
+
+.tag-cr-closed {
+	background-color: var(--vscode-charts-red, #f85149);
 }
 
 .branch-meta {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-  font-size: 0.65rem;
-  color: var(--vscode-descriptionForeground);
-  padding: 0;
-  margin: 0;
+	display: flex;
+	gap: 0.45rem;
+	flex-wrap: wrap;
+	font-size: 0.65rem;
+	color: var(--vscode-descriptionForeground);
+	padding: 0;
+	margin: 0;
 }
 
 .branch-pr-link {
-  border: none;
-  background: transparent;
-  color: var(--vscode-textLink-foreground);
-  cursor: pointer;
-  padding: 0;
-  font-size: 0.7rem;
+	border: none;
+	background: transparent;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	padding: 0;
+	font-size: 0.7rem;
 }
 
 .branch-pr-link:hover {
-  text-decoration: underline;
+	text-decoration: underline;
 }
 
 .branch-submit-btn,
 .branch-action-btn {
-  border: none;
-  background: transparent;
-  color: var(--vscode-icon-foreground);
-  cursor: pointer;
-  padding: 0.1rem;
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.7;
-  transition: opacity 0.15s ease, color 0.15s ease;
+	border: none;
+	background: transparent;
+	color: var(--vscode-icon-foreground);
+	cursor: pointer;
+	padding: 0.1rem;
+	font-size: 0.85rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.7;
+	transition:
+		opacity 0.15s ease,
+		color 0.15s ease;
 }
 
 .branch-submit-btn:hover,
 .branch-action-btn:hover {
-  opacity: 1;
-  color: var(--vscode-textLink-foreground);
+	opacity: 1;
+	color: var(--vscode-textLink-foreground);
 }
 
 .branch-toggle {
-  border: none;
-  background: transparent;
-  color: var(--vscode-icon-foreground);
-  cursor: pointer;
-  padding: 0;
-  height: 1rem;
-  width: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+	border: none;
+	background: transparent;
+	color: var(--vscode-icon-foreground);
+	cursor: pointer;
+	padding: 0;
+	height: 1rem;
+	width: 1rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
 }
 
 .branch-toggle:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
 
 .branch-toggle-spacer {
-  width: 1rem;
-  height: 1rem;
+	width: 1rem;
+	height: 1rem;
 }
 
 .commit-wrapper {
-  animation: item-enter 0.2s ease-out;
+	animation: item-enter 0.2s ease-out;
 }
 
 .commit-wrapper.item-enter {
-  opacity: 0;
-  transform: translateX(-8px);
+	opacity: 0;
+	transform: translateX(-8px);
 }
 
 .commit-wrapper.item-exit {
-  animation: commit-exit 0.2s ease-out forwards;
+	animation: commit-exit 0.2s ease-out forwards;
 }
 
 @keyframes commit-exit {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
+	from {
+		opacity: 1;
+		transform: translateX(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateX(-8px);
+	}
 }
 
 .commit-item {
-  font-size: 0.7rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: var(--vscode-descriptionForeground);
-  border: none;
-  background: transparent;
-  text-align: left;
-  padding: 0.15rem 0;
-  cursor: pointer;
-  width: 100%;
+	font-size: 0.7rem;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	color: var(--vscode-descriptionForeground);
+	border: none;
+	background: transparent;
+	text-align: left;
+	padding: 0.15rem 0;
+	cursor: pointer;
+	width: 100%;
 }
 
 .commit-item:hover {
-  color: var(--vscode-textLink-foreground);
+	color: var(--vscode-textLink-foreground);
 }
 
 .commit-subject {
-  flex: 1;
-  word-break: break-word;
+	flex: 1;
+	word-break: break-word;
 }
 
 .commit-subject.item-updated {
-  animation: element-flash 0.3s ease-out;
+	animation: element-flash 0.3s ease-out;
 }
 
 .commit-sha {
-  font-family: var(--vscode-editor-font-family, monospace);
-  opacity: 0.8;
+	font-family: var(--vscode-editor-font-family, monospace);
+	opacity: 0.8;
 }
 
 .commit-sha.item-updated {
-  animation: element-flash 0.3s ease-out;
+	animation: element-flash 0.3s ease-out;
 }
 
 .branch-more {
-  align-self: flex-start;
-  border: none;
-  background: transparent;
-  color: var(--vscode-textLink-foreground);
-  cursor: pointer;
-  font-size: 0.7rem;
-  padding: 0;
+	align-self: flex-start;
+	border: none;
+	background: transparent;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	font-size: 0.7rem;
+	padding: 0;
 }
 
 .branch-more:hover {
-  text-decoration: underline;
+	text-decoration: underline;
 }
 
 .empty {
-  padding: 0.9rem 0.6rem;
-  color: var(--vscode-descriptionForeground);
-  font-size: 0.85rem;
+	padding: 0.9rem 0.6rem;
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.85rem;
 }
 
 /* Refresh-in-flight indicator: thin top banner with a spinning icon. */
 .refresh-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
-  color: var(--vscode-descriptionForeground);
-  font-size: 0.8rem;
-  border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-treeIndentGuidesStroke));
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.35rem 0.6rem;
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.8rem;
+	border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-treeIndentGuidesStroke));
 }
 
 .refresh-indicator .codicon-loading {
-  animation: refresh-spin 1s linear infinite;
+	animation: refresh-spin 1s linear infinite;
 }
 
 @keyframes refresh-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 /* Context Menu Styles */
 .context-menu {
-  position: fixed;
-  background: var(--vscode-menu-background);
-  border: 1px solid var(--vscode-menu-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  padding: 0.25rem 0;
-  min-width: 160px;
-  z-index: 1000;
-  font-size: 0.8rem;
-  color: var(--vscode-menu-foreground);
-  animation: context-menu-enter 0.15s ease-out;
+	position: fixed;
+	background: var(--vscode-menu-background);
+	border: 1px solid var(--vscode-menu-border);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	padding: 0.25rem 0;
+	min-width: 160px;
+	z-index: 1000;
+	font-size: 0.8rem;
+	color: var(--vscode-menu-foreground);
+	animation: context-menu-enter 0.15s ease-out;
 }
 
 @keyframes context-menu-enter {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+	from {
+		opacity: 0;
+		transform: scale(0.95) translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
 }
 
 .context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  cursor: pointer;
-  transition: background-color 0.1s ease;
-  border: none;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  box-sizing: border-box;
-  overflow: hidden;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.4rem 0.6rem;
+	cursor: pointer;
+	transition: background-color 0.1s ease;
+	border: none;
+	background: transparent;
+	width: 100%;
+	text-align: left;
+	font: inherit;
+	color: inherit;
+	box-sizing: border-box;
+	overflow: hidden;
 }
 
 .context-menu-item:hover {
-  background: var(--vscode-menu-selectionBackground);
-  color: var(--vscode-menu-selectionForeground);
+	background: var(--vscode-menu-selectionBackground);
+	color: var(--vscode-menu-selectionForeground);
 }
 
 .context-menu-item:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
 }
 
 .context-menu-item .codicon {
-  font-size: 0.9rem;
-  width: 1rem;
-  text-align: center;
-  color: var(--vscode-icon-foreground);
+	font-size: 0.9rem;
+	width: 1rem;
+	text-align: center;
+	color: var(--vscode-icon-foreground);
 }
 
 .context-menu-item:hover .codicon {
-  color: var(--vscode-menu-selectionForeground);
+	color: var(--vscode-menu-selectionForeground);
 }
 
 .context-menu-item span {
-  flex: 1;
-  font-weight: 500;
+	flex: 1;
+	font-weight: 500;
 }
 
 .context-menu-item.disabled {
-  opacity: 0.5;
-  pointer-events: none;
-  cursor: not-allowed;
+	opacity: 0.5;
+	pointer-events: none;
+	cursor: not-allowed;
 }
 
 .context-menu-item.disabled .codicon {
-  opacity: 0.5;
+	opacity: 0.5;
 }
 
 /* ==========================================================================
@@ -514,116 +550,118 @@ button {
    ========================================================================== */
 
 :root {
-  /* Match VSCode's scmHistory.ts dimensions */
-  --tree-lane-width: 11px; /* SWIMLANE_WIDTH */
-  --tree-node-radius: 4px; /* CIRCLE_RADIUS */
-  --tree-node-stroke: 2px; /* CIRCLE_STROKE_WIDTH */
-  --tree-curve-radius: 5px; /* SWIMLANE_CURVE_RADIUS */
-  --tree-node-y: 16px; /* Y position for node (aligns with card title center) */
-  --tree-node-gap: 7px; /* Gap between line endpoints and node edge */
+	/* Match VSCode's scmHistory.ts dimensions */
+	--tree-lane-width: 11px; /* SWIMLANE_WIDTH */
+	--tree-node-radius: 4px; /* CIRCLE_RADIUS */
+	--tree-node-stroke: 2px; /* CIRCLE_STROKE_WIDTH */
+	--tree-curve-radius: 5px; /* SWIMLANE_CURVE_RADIUS */
+	--tree-node-y: 16px; /* Y position for node (aligns with card title center) */
+	--tree-node-gap: 7px; /* Gap between line endpoints and node edge */
 
-  /* Colors */
-  --tree-line-color: var(--vscode-treeIndentGuidesStroke, #888);
-  --tree-line-restack-color: var(--vscode-problemsWarningIcon-foreground, #cca700);
-  --tree-node-color: var(--vscode-descriptionForeground, #888);
-  --tree-node-current-color: var(--vscode-textLink-foreground, #3794ff);
+	/* Colors */
+	--tree-line-color: var(--vscode-treeIndentGuidesStroke, #888);
+	--tree-line-restack-color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+	--tree-node-color: var(--vscode-descriptionForeground, #888);
+	--tree-node-current-color: var(--vscode-textLink-foreground, #3794ff);
 
-  /* Layout */
-  --tree-connector-width: 1.5px;
-  --tree-graph-padding: 2px;
-  --tree-graph-width: 30px; /* Default fallback; dynamically set based on lane count */
+	/* Layout */
+	--tree-connector-width: 1.5px;
+	--tree-graph-padding: 2px;
+	--tree-graph-width: 30px; /* Default fallback; dynamically set based on lane count */
 }
 
 /* Stack list contains items - tree area handled by card margin */
 .stack-list {
-  position: relative;
-  /* Edge padding - tree area is created by card margin-left */
-  padding-left: 0.6rem;
-  padding-right: 0.6rem;
-  padding-top: 0.6rem;
-  padding-bottom: 0.6rem;
+	position: relative;
+	/* Edge padding - tree area is created by card margin-left */
+	padding-left: 0.6rem;
+	padding-right: 0.6rem;
+	padding-top: 0.6rem;
+	padding-bottom: 0.6rem;
 }
 
 /* Per-row tree fragment SVG - positioned at left edge of stack-item wrapper */
 .tree-fragment-svg {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-  overflow: visible;
+	position: absolute;
+	left: 0;
+	top: 0;
+	height: 100%;
+	pointer-events: none;
+	z-index: 1;
+	overflow: visible;
 }
 
 .tree-fragment-svg line,
 .tree-fragment-svg path {
-  stroke-linecap: round;
+	stroke-linecap: round;
 }
 
 .tree-fragment-svg circle {
-  transition: fill 0.15s ease, stroke 0.15s ease;
+	transition:
+		fill 0.15s ease,
+		stroke 0.15s ease;
 }
 
 /* Stack item positions the graph node */
 .stack-item {
-  position: relative;
+	position: relative;
 }
 
 /* Graph node (dot) positioned based on lane */
 .stack-item .tree-node {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  /* Diameter = 2 * radius */
-  width: calc(var(--tree-node-radius) * 2);
-  height: calc(var(--tree-node-radius) * 2);
-  border-radius: 50%;
-  background: var(--tree-node-color);
-  z-index: 2;
-  /* Left position set dynamically via style attribute */
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	/* Diameter = 2 * radius */
+	width: calc(var(--tree-node-radius) * 2);
+	height: calc(var(--tree-node-radius) * 2);
+	border-radius: 50%;
+	background: var(--tree-node-color);
+	z-index: 2;
+	/* Left position set dynamically via style attribute */
 }
 
 /* Current branch: hollow circle with stroke (matching VSCode graph view) */
 .stack-item .tree-node.current {
-  /* Current node is slightly larger: radius + stroke on each side */
-  width: calc((var(--tree-node-radius) + var(--tree-node-stroke)) * 2);
-  height: calc((var(--tree-node-radius) + var(--tree-node-stroke)) * 2);
-  background: var(--vscode-editor-background, #1e1e1e);
-  border: var(--tree-node-stroke) solid var(--tree-node-current-color);
-  box-sizing: border-box;
+	/* Current node is slightly larger: radius + stroke on each side */
+	width: calc((var(--tree-node-radius) + var(--tree-node-stroke)) * 2);
+	height: calc((var(--tree-node-radius) + var(--tree-node-stroke)) * 2);
+	background: var(--vscode-editor-background, #1e1e1e);
+	border: var(--tree-node-stroke) solid var(--tree-node-current-color);
+	box-sizing: border-box;
 }
 
 /* Branch card - positioned relative for tree fragment SVG */
 .branch-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
+	position: relative;
+	display: flex;
+	flex-direction: column;
 }
 
 /* Hide the old tree-connectors div (no longer needed inside card) */
 .tree-connectors {
-  display: none;
+	display: none;
 }
 
 /* Branch content area */
 .branch-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
 }
 
 /* Ensure header styling */
 .branch-content .branch-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.25rem;
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 0.25rem;
 }
 
 /* Commits container */
 .branch-content .branch-commits {
-  margin-left: 0;
+	margin-left: 0;
 }
 
 /* ==========================================================================
@@ -632,163 +670,165 @@ button {
 
 /* Commit container holds commit row and file list */
 .commit-container {
-  display: flex;
-  flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 /* Commit toggle chevron */
 .commit-toggle {
-  flex-shrink: 0;
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--vscode-icon-foreground);
-  opacity: 0.7;
-  transition: opacity 0.15s ease;
+	flex-shrink: 0;
+	width: 1rem;
+	height: 1rem;
+	padding: 0;
+	border: none;
+	background: transparent;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	color: var(--vscode-icon-foreground);
+	opacity: 0.7;
+	transition: opacity 0.15s ease;
 }
 
 .commit-toggle:hover {
-  opacity: 1;
+	opacity: 1;
 }
 
 .commit-toggle:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
 
 /* File list container */
 .commit-files {
-  padding: 0.25rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+	padding: 0.25rem 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
 }
 
 .commit-files.hidden {
-  display: none;
+	display: none;
 }
 
 .commit-files-loading,
 .commit-files-empty {
-  font-size: 0.65rem;
-  color: var(--vscode-descriptionForeground);
-  padding: 0.15rem 0;
+	font-size: 0.65rem;
+	color: var(--vscode-descriptionForeground);
+	padding: 0.15rem 0;
 }
 
 /* Individual file row (Git Graph style) */
 .file-change {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.1rem 0.25rem;
-  cursor: pointer;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  min-width: 0; /* Allow flex children to shrink properly */
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.1rem 0.25rem;
+	cursor: pointer;
+	border-radius: 3px;
+	font-size: 0.7rem;
+	min-width: 0; /* Allow flex children to shrink properly */
 }
 
 .file-change:hover {
-  background: var(--vscode-list-hoverBackground);
+	background: var(--vscode-list-hoverBackground);
 }
 
 /* File icon */
 .file-icon {
-  flex-shrink: 0;
-  font-size: 0.85rem;
-  color: var(--vscode-icon-foreground);
-  opacity: 0.8;
+	flex-shrink: 0;
+	font-size: 0.85rem;
+	color: var(--vscode-icon-foreground);
+	opacity: 0.8;
 }
 
 /* File name - bold, truncatable */
 .file-name {
-  flex: 0 1 auto; /* Can shrink but starts at content size */
-  min-width: 3ch; /* Minimum visible characters */
-  font-weight: 500;
-  color: var(--vscode-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+	flex: 0 1 auto; /* Can shrink but starts at content size */
+	min-width: 3ch; /* Minimum visible characters */
+	font-weight: 500;
+	color: var(--vscode-foreground);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Folder path - muted, flexible, shrinks first */
 .file-folder {
-  flex: 1 1 0; /* Grows and shrinks, base size 0 */
-  min-width: 0; /* Allow shrinking to nothing */
-  color: var(--vscode-descriptionForeground);
-  font-size: 0.65rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+	flex: 1 1 0; /* Grows and shrinks, base size 0 */
+	min-width: 0; /* Allow shrinking to nothing */
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.65rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Status indicator */
 .file-status {
-  flex-shrink: 0;
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-weight: bold;
-  font-size: 0.65rem;
-  min-width: 1ch;
-  text-align: center;
+	flex-shrink: 0;
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-weight: bold;
+	font-size: 0.65rem;
+	min-width: 1ch;
+	text-align: center;
 }
 
 /* Status colors matching Git decoration */
 .file-status.status-a {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+	color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
 }
 
 .file-status.status-m {
-  color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
+	color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
 
 .file-status.status-d {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+	color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
 }
 
 .file-status.status-r {
-  color: var(--vscode-gitDecoration-renamedResourceForeground, #58a6ff);
+	color: var(--vscode-gitDecoration-renamedResourceForeground, #58a6ff);
 }
 
 .file-status.status-c {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+	color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
 }
 
 .file-status.status-t {
-  color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
+	color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
 }
 
 /* File action buttons (open, stage, unstage, discard) - collapse width when hidden */
 .open-file-btn,
 .file-action-btn {
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
-  padding: 0.1rem;
-  cursor: pointer;
-  color: var(--vscode-icon-foreground);
-  width: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: width 0.15s ease, opacity 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+	flex: 0 0 auto;
+	border: none;
+	background: transparent;
+	padding: 0.1rem;
+	cursor: pointer;
+	color: var(--vscode-icon-foreground);
+	width: 0;
+	overflow: hidden;
+	opacity: 0;
+	transition:
+		width 0.15s ease,
+		opacity 0.15s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .file-change:hover .open-file-btn,
 .file-change:hover .file-action-btn {
-  width: 1rem;
-  opacity: 0.7;
+	width: 1rem;
+	opacity: 0.7;
 }
 
 .open-file-btn:hover,
 .file-action-btn:hover {
-  opacity: 1 !important;
+	opacity: 1 !important;
 }
 
 /* ==========================================================================
@@ -796,81 +836,81 @@ button {
    ========================================================================== */
 
 .branch-summary-header {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.7rem;
-  color: var(--vscode-descriptionForeground);
-  cursor: pointer;
-  padding: 0.15rem 0;
-  user-select: none;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	font-size: 0.7rem;
+	color: var(--vscode-descriptionForeground);
+	cursor: pointer;
+	padding: 0.15rem 0;
+	user-select: none;
 }
 
 .branch-summary-header:hover {
-  color: var(--vscode-foreground);
+	color: var(--vscode-foreground);
 }
 
 .branch-summary-toggle {
-  flex-shrink: 0;
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--vscode-icon-foreground);
-  opacity: 0.7;
-  transition: opacity 0.15s ease;
+	flex-shrink: 0;
+	width: 1rem;
+	height: 1rem;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--vscode-icon-foreground);
+	opacity: 0.7;
+	transition: opacity 0.15s ease;
 }
 
 .branch-summary-toggle:hover {
-  opacity: 1;
+	opacity: 1;
 }
 
 .branch-summary-toggle:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
 
 .branch-summary-label-button {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
 }
 
 .branch-summary-label-button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
 
 .branch-summary-label {
-  font-weight: 500;
+	font-weight: 500;
 }
 
 .branch-summary-files {
-  padding: 0.25rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  max-height: none;
+	padding: 0.25rem 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	max-height: none;
 }
 
 .branch-summary-files.hidden {
-  display: none;
+	display: none;
 }
 
 .branch-summary-loading,
 .branch-summary-empty {
-  font-size: 0.65rem;
-  color: var(--vscode-descriptionForeground);
-  padding: 0.15rem 0;
+	font-size: 0.65rem;
+	color: var(--vscode-descriptionForeground);
+	padding: 0.15rem 0;
 }
 
 /* ============================================
@@ -879,51 +919,51 @@ button {
 
 /* Untracked card - dashed red border */
 .branch-card.untracked {
-  border-style: dashed;
-  border-color: var(--vscode-errorForeground);
+	border-style: dashed;
+	border-color: var(--vscode-errorForeground);
 }
 
 /* Full-width cards: no tree lane indent for untracked and treeless uncommitted */
 .untracked-item .branch-card,
 .stack-item.treeless .branch-card {
-  margin-left: 0;
+	margin-left: 0;
 }
 
 .tag-error {
-  background-color: var(--vscode-errorForeground);
-  color: var(--vscode-editor-background);
+	background-color: var(--vscode-errorForeground);
+	color: var(--vscode-editor-background);
 }
 
 /* Branch name row with current icon */
 .branch-name-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
 }
 
 /* Hint text and track button */
 .untracked-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  color: var(--vscode-descriptionForeground);
-  padding-top: 0.3rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.7rem;
+	color: var(--vscode-descriptionForeground);
+	padding-top: 0.3rem;
 }
 
 .untracked-track-btn {
-  padding: 0.15rem 0.5rem;
-  font-size: 0.65rem;
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: 2px;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  cursor: pointer;
-  white-space: nowrap;
+	padding: 0.15rem 0.5rem;
+	font-size: 0.65rem;
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: 2px;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	cursor: pointer;
+	white-space: nowrap;
 }
 
 .untracked-track-btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
+	background: var(--vscode-button-secondaryHoverBackground);
 }
 
 /* ============================================
@@ -932,158 +972,158 @@ button {
 
 /* Uncommitted card - dashed blue border */
 .branch-card.uncommitted {
-  border-style: dashed;
-  border-color: var(--vscode-textLink-foreground);
+	border-style: dashed;
+	border-color: var(--vscode-textLink-foreground);
 }
 
 /* Uncommitted tree node - hollow dashed blue circle */
 .stack-item .tree-node.uncommitted {
-  background: var(--vscode-editor-background);
-  border: var(--tree-node-stroke) dashed var(--vscode-textLink-foreground);
+	background: var(--vscode-editor-background);
+	border: var(--tree-node-stroke) dashed var(--vscode-textLink-foreground);
 }
 
 /* Uncommitted sections container */
 .uncommitted-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding-top: 0.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding-top: 0.25rem;
 }
 
 /* Collapsible changes section */
 .changes-section {
-  display: flex;
-  flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 .changes-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.7rem;
-  color: var(--vscode-descriptionForeground);
-  cursor: pointer;
-  padding: 0.2rem 0;
-  user-select: none;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	font-size: 0.7rem;
+	color: var(--vscode-descriptionForeground);
+	cursor: pointer;
+	padding: 0.2rem 0;
+	user-select: none;
 }
 
 .changes-section-header:hover {
-  color: var(--vscode-foreground);
+	color: var(--vscode-foreground);
 }
 
 .changes-section-header .section-toggle {
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--vscode-icon-foreground);
-  opacity: 0.7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.15s ease;
+	width: 1rem;
+	height: 1rem;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	color: var(--vscode-icon-foreground);
+	opacity: 0.7;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: opacity 0.15s ease;
 }
 
 .changes-section-header .section-toggle:hover {
-  opacity: 1;
+	opacity: 1;
 }
 
 .changes-section-header .section-toggle:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
 
 .changes-section-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding-left: 0.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	padding-left: 0.25rem;
 }
 
 .changes-section-content.collapsed {
-  display: none;
+	display: none;
 }
 
 /* Commit form */
 .commit-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin-top: 0.5rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.35));
 }
 
 .commit-message-input {
-  width: 100%;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--vscode-input-border, transparent);
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border-radius: 3px;
-  font-size: 0.75rem;
-  font-family: inherit;
-  box-sizing: border-box;
+	width: 100%;
+	padding: 0.35rem 0.5rem;
+	border: 1px solid var(--vscode-input-border, transparent);
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border-radius: 3px;
+	font-size: 0.75rem;
+	font-family: inherit;
+	box-sizing: border-box;
 }
 
 .commit-message-input:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-  border-color: var(--vscode-focusBorder);
+	outline: 1px solid var(--vscode-focusBorder);
+	border-color: var(--vscode-focusBorder);
 }
 
 .commit-message-input::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+	color: var(--vscode-input-placeholderForeground);
 }
 
 /* Commit action buttons */
 .commit-actions {
-  display: flex;
-  gap: 0.5rem;
+	display: flex;
+	gap: 0.5rem;
 }
 
 .commit-btn {
-  flex: 1;
-  padding: 0.35rem 0.5rem;
-  border: none;
-  border-radius: 3px;
-  font-size: 0.7rem;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
+	flex: 1;
+	padding: 0.35rem 0.5rem;
+	border: none;
+	border-radius: 3px;
+	font-size: 0.7rem;
+	font-family: inherit;
+	cursor: pointer;
+	transition: opacity 0.15s ease;
 }
 
 .commit-btn:hover {
-  opacity: 0.9;
+	opacity: 0.9;
 }
 
 .commit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .commit-btn-primary {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
 }
 
 .commit-btn-primary:hover:not(:disabled) {
-  background: var(--vscode-button-hoverBackground);
+	background: var(--vscode-button-hoverBackground);
 }
 
 .commit-btn-secondary {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
 }
 
 .commit-btn-secondary:hover:not(:disabled) {
-  background: var(--vscode-button-secondaryHoverBackground);
+	background: var(--vscode-button-secondaryHoverBackground);
 }
 
 /* Untracked file status */
 .file-status.status-u {
-  color: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
+	color: var(--vscode-gitDecoration-untrackedResourceForeground, #73c991);
 }
 
 /* ==========================================================================
@@ -1091,27 +1131,27 @@ button {
    ========================================================================== */
 
 .comments-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  font-size: 0.65rem;
-  color: var(--vscode-descriptionForeground);
+	display: flex;
+	align-items: center;
+	gap: 0.15rem;
+	font-size: 0.65rem;
+	color: var(--vscode-descriptionForeground);
 }
 
 .comments-indicator .codicon {
-  font-size: 0.8rem;
+	font-size: 0.8rem;
 }
 
 .comments-indicator.all-resolved .codicon {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+	color: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
 }
 
 .comments-indicator.has-unresolved .codicon {
-  color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+	color: var(--vscode-problemsWarningIcon-foreground, #cca700);
 }
 
 .comments-indicator.item-updated {
-  animation: element-flash 0.3s ease-out;
+	animation: element-flash 0.3s ease-out;
 }
 
 /* ==========================================================================
@@ -1119,104 +1159,105 @@ button {
    ========================================================================== */
 
 .repo-section {
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
 }
 
 .repo-section:last-child {
-  border-bottom: none;
+	border-bottom: none;
 }
 
 .repo-header {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.6rem;
-  font-weight: 600;
-  font-size: 0.75rem;
-  cursor: pointer;
-  user-select: none;
-  color: var(--vscode-sideBarSectionHeader-foreground);
-  background: var(--vscode-sideBarSectionHeader-background);
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.3rem 0.6rem;
+	font-weight: 600;
+	font-size: 0.75rem;
+	cursor: pointer;
+	user-select: none;
+	color: var(--vscode-sideBarSectionHeader-foreground);
+	background: var(--vscode-sideBarSectionHeader-background);
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
 }
 
 .repo-header:hover {
-  background: var(--vscode-list-hoverBackground);
+	background: var(--vscode-list-hoverBackground);
 }
 
 .repo-name {
-  flex: 1;
+	flex: 1;
 }
 
 .repo-toggle {
-  opacity: 0.7;
-  transition: opacity 0.15s ease;
+	opacity: 0.7;
+	transition: opacity 0.15s ease;
 }
 
 .repo-header:hover .repo-toggle {
-  opacity: 1;
+	opacity: 1;
 }
 
 /* Collapsed state hides the branch list */
 .repo-section:not(.expanded) .repo-branch-list,
-.repo-section:not(.expanded) [data-role="repo-error"],
-.repo-section:not(.expanded) [data-role="repo-empty"] {
-  display: none;
+.repo-section:not(.expanded) [data-role='repo-error'],
+.repo-section:not(.expanded) [data-role='repo-empty'] {
+	display: none;
 }
 
 /* Per-repo toolbar */
 .repo-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  margin-right: 0.3rem;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: auto;
+	margin-right: 0.3rem;
 }
 
 .repo-action-btn {
-  border: none;
-  background-color: transparent;
-  color: var(--vscode-icon-foreground);
-  cursor: pointer;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 3px;
-  opacity: 0.7;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+	border: none;
+	background-color: transparent;
+	color: var(--vscode-icon-foreground);
+	cursor: pointer;
+	padding: 2px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 3px;
+	opacity: 0.7;
+	transition:
+		opacity 0.15s ease,
+		background-color 0.15s ease;
 }
 
 .repo-action-btn:hover {
-  opacity: 1;
-  background-color: var(--vscode-toolbar-hoverBackground);
+	opacity: 1;
+	background-color: var(--vscode-toolbar-hoverBackground);
 }
 
 .repo-action-btn:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
 }
 
 .repo-action-btn .codicon {
-  font-size: 0.85rem;
+	font-size: 0.85rem;
 }
 
 /* Single-repo mode: show toolbar only, hide repo identity and toggle */
 .repo-section.single-repo .repo-header > .codicon-repo,
 .repo-section.single-repo .repo-header > .repo-name,
 .repo-section.single-repo .repo-header > .repo-toggle {
-  display: none;
+	display: none;
 }
 
 .repo-section.single-repo .repo-header {
-  background: transparent;
-  border-bottom: none;
-  justify-content: flex-end;
-  padding: 2px 0.6rem;
+	background: transparent;
+	border-bottom: none;
+	justify-content: flex-end;
+	padding: 2px 0.6rem;
 }
 
 /* Single-repo mode: remove section border */
 .repo-section.single-repo {
-  border-bottom: none;
+	border-bottom: none;
 }
-
