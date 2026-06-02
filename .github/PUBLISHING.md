@@ -170,9 +170,19 @@ Reference: https://code.visualstudio.com/api/working-with-extensions/publishing-
 
 ### 2. Open VSX Namespace
 
-- Go to https://open-vsx.org
-- Sign in and create (or confirm) a namespace for your publisher
-- Ensure the extension namespace/name maps correctly (`IRLAILLC.git-spice`)
+The publisher namespace must exist on Open VSX **before** the first publish, or
+the release job's Open VSX step fails with `npm error 404 Not Found - PUT ... -
+Unknown namespace: IRLAILLC` (this was the cause of the v0.0.4 release failure).
+
+- Go to https://open-vsx.org, sign in, and create (or confirm) a namespace for
+  your publisher, **or** create it from the CLI once you have an `OVSX_PAT`:
+
+  ```bash
+  npx ovsx create-namespace IRLAILLC -p "$OVSX_PAT"
+  ```
+
+- This is a one-time action; the namespace persists across releases.
+- Ensure the extension namespace/name maps correctly (`IRLAILLC.git-spice`).
 
 ### 3. VS Code Marketplace Personal Access Token (PAT)
 
