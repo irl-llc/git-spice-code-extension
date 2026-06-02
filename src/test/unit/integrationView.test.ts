@@ -70,6 +70,25 @@ describe('integration view model', () => {
 		assert.strictEqual(byName('main')?.outOfIntegration, false, 'trunk is the base, never X-marked');
 	});
 
+	it('clears the out-of-integration X when a leaf is added to the tip list (tip-add semantics)', () => {
+		// State-level assertion for the context-menu "Add to integration build"
+		// action: the only thing that changes is the integration tip list, and the
+		// leaf's X marker must flip off once it is a tip. (Replaces a Playwright
+		// capture whose end state was visually identical to `integration-built`.)
+		const branches = [
+			createBranch('main'),
+			createBranch('feat-a', { down: { name: 'main' } }),
+			createBranch('feat-b', { down: { name: 'feat-a' } }), // the leaf being added
+		];
+		const tip = (name: string): IntegrationState['tips'][number] => ({ name, status: 'current', storedHash: name });
+		const before = buildRepoDisplayState(repoInput(branches, integrationState({ tips: [tip('feat-a')] })));
+		const after = buildRepoDisplayState(
+			repoInput(branches, integrationState({ tips: [tip('feat-a'), tip('feat-b')] })),
+		);
+		assert.strictEqual(branchView(before, 'feat-b').outOfIntegration, true, 'excluded leaf is X-marked');
+		assert.strictEqual(branchView(after, 'feat-b').outOfIntegration, false, 'X clears once the leaf is a tip');
+	});
+
 	it('renders the integration node atop lane 0 with an integration style', () => {
 		const state = integrationState();
 		const result = buildRepoDisplayState(repoInput([createBranch('main')], state));
