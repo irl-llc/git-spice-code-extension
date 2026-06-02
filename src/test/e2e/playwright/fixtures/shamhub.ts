@@ -10,13 +10,17 @@
  * `seedComment` to post resolvable PR comments after submit.
  */
 
-import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import type { Readable, Writable } from 'node:stream';
 import { createInterface } from 'node:readline';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const REPO_ROOT = resolve(__dirname, '../../../../..');
 const SHAMHUB_BIN = process.env.SHAMHUB_BIN ?? resolve(REPO_ROOT, '.gs/bin/shamhub-server');
+const GS_BIN = process.env.GIT_SPICE_BIN ?? resolve(REPO_ROOT, '.gs/bin/gs');
+const TRUNK = 'main';
 
 /** Environment variables that point `gs` (and git) at this shamhub instance. */
 export interface ShamhubEnv {
@@ -112,4 +116,109 @@ function closeChild(child: ChildProcessByStdio<Writable, Readable, Readable>): P
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: () => string): Promise<T> {
 	return Promise.race([promise, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(message())), ms))]);
+}
+
+/** Options for seeding a submitted stack against a fresh shamhub instance. */
+export interface SeedStackOptions {
+	/** Branch names to create on top of trunk, bottom-to-top. */
+	branches: string[];
+	/** Trunk branch name. Defaults to `main`. */
+	trunk?: string;
+	/** Pass `--fill` to `gs stack submit` so CR bodies are auto-filled. Default true. */
+	submit?: boolean;
+}
+
+/** A running shamhub + a local repo with a submitted stack, ready for VS Code. */
+export interface ShamhubStack {
+	shamhub: ShamhubServer;
+	/** Filesystem path to the seeded git repo. */
+	repoPath: string;
+	/** Env that points VS Code, `gs`, and git at this shamhub instance. */
+	env: Record<string, string>;
+	/** Removes the temp repo and home dirs. Call shamhub.close() separately. */
+	cleanup(): void;
+}
+
+/** Bound git/gs runners plus a file writer, all scoped to one repo + env. */
+interface RepoRunners {
+	git(...args: string[]): void;
+	gs(...args: string[]): void;
+	write(rel: string, content: string): void;
+}
+
+/**
+ * Starts shamhub and seeds a submitted stack: `gs repo init` -> add remote ->
+ * push trunk -> `gs auth login` -> create each branch -> `gs stack submit`.
+ * Mirrors git-spice's own testscripts so every spec is a few lines.
+ */
+export async function seedShamhubStack(options: SeedStackOptions): Promise<ShamhubStack> {
+	const shamhub = await startShamhub();
+	const repoPath = mkdtempSync(join(tmpdir(), 'gs-shamhub-'));
+	const home = mkdtempSync(join(tmpdir(), 'gs-shamhub-home-'));
+	try {
+		const env = buildStackEnv(home, shamhub.env);
+		seedStackRepo(createRepoRunners(repoPath, env), shamhub.repoUrl, options);
+		return { shamhub, repoPath, env, cleanup: () => cleanupDirs(repoPath, home) };
+	} catch (error) {
+		// Setup threw partway through: don't leak the shamhub child or temp dirs.
+		await shamhub.close();
+		cleanupDirs(repoPath, home);
+		throw error;
+	}
+}
+
+/** init -> push trunk -> create branches -> submit, against an already-started shamhub. */
+function seedStackRepo(runners: RepoRunners, repoUrl: string, options: SeedStackOptions): void {
+	const trunk = options.trunk ?? TRUNK;
+	initAndPushTrunk(runners, repoUrl, trunk);
+	for (const name of options.branches) createSubmittableBranch(runners, name);
+	if (options.submit ?? true) runners.gs('stack', 'submit', '--fill');
+}
+
+/** Env pointing VS Code, `gs`, and git at the shared shamhub home + forge. */
+function buildStackEnv(home: string, shamhubEnv: ShamhubEnv): Record<string, string> {
+	return {
+		...shamhubEnv,
+		HOME: home,
+		XDG_CONFIG_HOME: join(home, '.config'),
+		GIT_SPICE_BIN: GS_BIN,
+	};
+}
+
+/** Binds git/gs/write helpers to one repo + env (env merged onto process.env). */
+function createRepoRunners(repoPath: string, env: Record<string, string>): RepoRunners {
+	const execEnv = { ...process.env, ...env };
+	return {
+		git: (...a) => void execFileSync('git', ['-C', repoPath, ...a], { env: execEnv }),
+		gs: (...a) => void execFileSync(GS_BIN, a, { cwd: repoPath, env: execEnv }),
+		write: (rel, content) => {
+			const abs = join(repoPath, rel);
+			mkdirSync(dirname(abs), { recursive: true });
+			writeFileSync(abs, content);
+		},
+	};
+}
+
+/** git init -> trunk commit -> gs repo init -> add shamhub remote -> push -> auth. */
+function initAndPushTrunk(runners: RepoRunners, repoUrl: string, trunk: string): void {
+	const { git, gs } = runners;
+	git('init', '-q', '-b', trunk);
+	git('config', 'user.email', 'e2e@example.com');
+	git('config', 'user.name', 'E2E Bot');
+	git('commit', '-q', '--allow-empty', '-m', 'Initial commit');
+	gs('repo', 'init', '--trunk', trunk);
+	git('remote', 'add', 'origin', repoUrl);
+	git('push', '-q', 'origin', trunk);
+	gs('auth', 'login');
+}
+
+/** Writes a one-file commit and creates a tracked branch ready for submit. */
+function createSubmittableBranch(runners: RepoRunners, name: string): void {
+	runners.write(`${name}.txt`, `${name}\n`);
+	runners.git('add', '.');
+	runners.gs('branch', 'create', '-m', name, '--no-prompt', '--no-verify', name);
+}
+
+function cleanupDirs(...dirs: string[]): void {
+	for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 }
