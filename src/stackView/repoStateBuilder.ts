@@ -35,7 +35,7 @@ export async function fetchRepoState(repo: DiscoveredRepo, withComments = false)
 		fetchWorkingCopyChanges(cwd),
 		fetchCurrentBranchName(cwd),
 	]);
-	return buildRepoState(repo.rootUri, repo.name, branchResult, uncommitted, currentBranch);
+	return buildRepoState({ rootUri: repo.rootUri, name: repo.name, result: branchResult, uncommitted, currentBranch });
 }
 
 /** Fetches branch + working-copy data for a single workspace folder. */
@@ -46,7 +46,7 @@ export async function fetchFolderState(folder: vscode.WorkspaceFolder, withComme
 		fetchWorkingCopyChanges(cwd),
 		fetchCurrentBranchName(cwd),
 	]);
-	return buildRepoState(folder.uri, folder.name, branchResult, uncommitted, currentBranch);
+	return buildRepoState({ rootUri: folder.uri, name: folder.name, result: branchResult, uncommitted, currentBranch });
 }
 
 /** Converts DiscoveredRepo to a WorkspaceFolder shape for git-spice CLI. */
@@ -59,33 +59,22 @@ function hasCurrentBranch(branches: GitSpiceBranch[]): boolean {
 	return branches.some((b) => b.current === true);
 }
 
+/** Inputs for assembling a RepoState from fetch results. */
+interface BuildRepoStateInput {
+	rootUri: vscode.Uri;
+	name: string;
+	result: BranchResult;
+	uncommitted: UncommittedState;
+	currentBranch?: string;
+}
+
 /** Builds a RepoState from URI, name, and fetch results. */
-function buildRepoState(
-	rootUri: vscode.Uri,
-	name: string,
-	result: BranchResult,
-	uncommitted: UncommittedState,
-	currentBranch?: string,
-): RepoState {
+function buildRepoState(input: BuildRepoStateInput): RepoState {
+	const { rootUri, name, result, uncommitted, currentBranch } = input;
+	const base = { rootPath: rootUri.fsPath, name, rootUri, uncommitted };
 	if ('error' in result) {
-		return {
-			rootPath: rootUri.fsPath,
-			name,
-			rootUri,
-			branches: [],
-			uncommitted,
-			error: result.error,
-			untrackedBranch: currentBranch,
-		};
+		return { ...base, branches: [], error: result.error, untrackedBranch: currentBranch };
 	}
 	const untracked = currentBranch && !hasCurrentBranch(result.value) ? currentBranch : undefined;
-	return {
-		rootPath: rootUri.fsPath,
-		name,
-		rootUri,
-		branches: result.value,
-		uncommitted,
-		error: undefined,
-		untrackedBranch: untracked,
-	};
+	return { ...base, branches: result.value, error: undefined, untrackedBranch: untracked };
 }

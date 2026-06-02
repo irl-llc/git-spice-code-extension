@@ -11,7 +11,38 @@
 
 import type { Frame } from '@playwright/test';
 
-/** Resolves once all web fonts in the frame are loaded. */
+/**
+ * Font family used by VS Code Codicons. Glyphs from this family (chevrons,
+ * file icons, the cloud submit affordance) only render once the font is
+ * actually loaded; the webview requests it lazily the first time a codicon
+ * paints.
+ */
+const CODICON_FONT_FAMILY = 'codicon';
+
+/**
+ * Resolves once the frame's web fonts — including the lazily-loaded codicon
+ * icon font — are loaded and painted.
+ *
+ * `document.fonts.ready` alone is insufficient: it resolves immediately when
+ * no font load is pending, which is the common case at the instant we check
+ * (React may not have painted any codicon glyph yet, so the codicon font has
+ * not been requested). We therefore explicitly `load()` the codicon family to
+ * force the request, then await `ready` so all in-flight loads settle. Without
+ * this, snapshots race the codicon swap and intermittently capture rows that
+ * are ~9px shorter with every chevron/icon missing.
+ */
 export async function waitForFontsReady(frame: Frame): Promise<void> {
-	await frame.evaluate(() => document.fonts?.ready);
+	await frame.evaluate(async (fontFamily) => {
+		const fonts = document.fonts;
+		if (!fonts) return;
+		// Trigger the lazy codicon font request if it has not started; ignore
+		// failures so a missing font never hangs the suite (the screenshot
+		// diff will still surface a genuinely absent font).
+		try {
+			await fonts.load(`16px "${fontFamily}"`);
+		} catch {
+			// best-effort: fall through to ready below
+		}
+		await fonts.ready;
+	}, CODICON_FONT_FAMILY);
 }

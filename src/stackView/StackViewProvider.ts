@@ -17,6 +17,14 @@ import type { WebviewMessage } from './webviewTypes';
 import { renderWebviewHtml } from './webviewHtml';
 import { routeMessage, type MessageHandlerContext, type ExecFunctionMap, type ExecFunction } from './messageRouter';
 import { FileWatcherManager } from './fileWatcher';
+import {
+	buildBranchHandlerDeps,
+	buildCommitHandlerDeps,
+	buildDiffHandlerDeps,
+	buildWorkingCopyHandlerDeps,
+	buildBranchFileHandlerDeps,
+	type HandlerDepsHost,
+} from './handlerDeps';
 
 import {
 	handleBranchContextMenu,
@@ -29,28 +37,20 @@ import {
 	handleUpstackMovePrompt,
 	handleUpstackMove,
 	handleCopyBranchName,
-	type BranchHandlerDeps,
 } from './handlers/branchHandlers';
 import {
 	handleCommitCopySha,
 	handleCommitFixup,
 	handleCommitSplit,
 	handleGetCommitFiles,
-	type CommitHandlerDeps,
 } from './handlers/commitHandlers';
 import {
 	handleOpenCommitDiff,
 	handleOpenFileDiff,
 	handleOpenCurrentFile,
 	handleOpenWorkingCopyDiff,
-	type DiffHandlerDeps,
 } from './handlers/diffHandlers';
-import {
-	handleGetBranchFiles,
-	handleOpenBranchDiff,
-	handleOpenBranchFileDiff,
-	type BranchFileHandlerDeps,
-} from './handlers/branchFileHandlers';
+import { handleGetBranchFiles, handleOpenBranchDiff, handleOpenBranchFileDiff } from './handlers/branchFileHandlers';
 import { handleSync } from './handlers/syncHandler';
 import {
 	executeBranchCommand,
@@ -65,10 +65,9 @@ import {
 	handleDiscardFile,
 	handleCommitChanges,
 	handleCreateBranch,
-	type WorkingCopyHandlerDeps,
 } from './handlers/workingCopyHandlers';
 
-export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext {
+export class StackViewProvider implements vscode.WebviewViewProvider, MessageHandlerContext, HandlerDepsHost {
 	private readonly hosts = new Set<vscode.Webview>();
 	private readonly repoStates = new Map<string, RepoState>();
 	private readonly fileWatcher: FileWatcherManager;
@@ -134,7 +133,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	/** Broadcasts a message to every attached webview. */
-	private broadcast(message: unknown): void {
+	broadcast(message: unknown): void {
 		for (const webview of this.hosts) {
 			void webview.postMessage(message);
 		}
@@ -279,13 +278,13 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	 * Resolves to a specific repo by ID, or falls back to the active repo.
 	 * The active repo is the one with the current branch checked out.
 	 */
-	private resolveRepoState(repoId?: string): RepoState | undefined {
+	resolveRepoState(repoId?: string): RepoState | undefined {
 		if (repoId) return this.repoStates.get(repoId);
 		return this.findActiveRepoState();
 	}
 
 	/** Returns the workspace folder for a resolved repo state. */
-	private resolveWorkspaceFolder(repoId?: string): vscode.WorkspaceFolder | undefined {
+	resolveWorkspaceFolder(repoId?: string): vscode.WorkspaceFolder | undefined {
 		const state = this.resolveRepoState(repoId);
 		if (state) return { uri: state.rootUri, name: state.name, index: 0 };
 		return this.fallbackFolder;
@@ -300,56 +299,11 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		return sorted[0];
 	}
 
-	// --- Handler Dependency Factories ---
-
-	private getBranchHandlerDeps(repoId?: string): BranchHandlerDeps {
-		const state = this.resolveRepoState(repoId);
-		return {
-			workspaceFolder: this.resolveWorkspaceFolder(repoId),
-			branches: state?.branches ?? [],
-			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
-			handleBranchCommandInternal: (cmd, branch, fn) => this.handleBranchCommandInternal(repoId, cmd, branch, fn),
-			postMessageToWebview: (message) => {
-				this.broadcast(message);
-			},
-		};
-	}
-
-	private getCommitHandlerDeps(repoId?: string): CommitHandlerDeps {
-		return {
-			workspaceFolder: this.resolveWorkspaceFolder(repoId),
-			runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => this.refresh()),
-			refresh: () => this.refresh(),
-			postCommitFilesToWebview: (sha, files) => this.broadcast({ type: 'commitFiles', repoId, sha, files }),
-		};
-	}
-
-	private getDiffHandlerDeps(repoId?: string): DiffHandlerDeps {
-		return { workspaceFolder: this.resolveWorkspaceFolder(repoId) };
-	}
-
-	private getWorkingCopyHandlerDeps(repoId?: string): WorkingCopyHandlerDeps {
-		return {
-			workspaceFolder: this.resolveWorkspaceFolder(repoId),
-			uncommitted: this.resolveRepoState(repoId)?.uncommitted,
-			refresh: () => this.refresh(),
-		};
-	}
-
-	private getBranchFileHandlerDeps(repoId?: string): BranchFileHandlerDeps {
-		const state = this.resolveRepoState(repoId);
-		return {
-			workspaceFolder: this.resolveWorkspaceFolder(repoId),
-			branches: state?.branches ?? [],
-			postBranchFilesToWebview: (branchName, files) =>
-				this.broadcast({ type: 'branchFiles', repoId, branchName, files }),
-		};
-	}
-
 	// --- Public Handler Methods (Exposed for Message Router) ---
+	// Handler-dependency objects are assembled by build*HandlerDeps (handlerDeps.ts).
 
 	async handleBranchContextMenu(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleBranchContextMenu(branchName, this.getBranchHandlerDeps(repoId));
+		await handleBranchContextMenu(branchName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	async handleCopyBranchName(_repoId: string | undefined, branchName: string): Promise<void> {
@@ -357,35 +311,35 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async handleBranchTrack(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleBranchTrack(branchName, this.getBranchHandlerDeps(repoId));
+		await handleBranchTrack(branchName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	public async handleBranchDelete(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleBranchDelete(branchName, this.getBranchHandlerDeps(repoId));
+		await handleBranchDelete(branchName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	public async handleBranchRenamePrompt(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleBranchRenamePrompt(branchName, this.getBranchHandlerDeps(repoId));
+		await handleBranchRenamePrompt(branchName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	async handleBranchRename(repoId: string | undefined, branchName: string, newName: string): Promise<void> {
-		await handleBranchRename(branchName, newName, this.getBranchHandlerDeps(repoId));
+		await handleBranchRename(branchName, newName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	public async handleBranchMovePrompt(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleBranchMovePrompt(branchName, this.getBranchHandlerDeps(repoId));
+		await handleBranchMovePrompt(branchName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	async handleBranchMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void> {
-		await handleBranchMove(branchName, newParent, this.getBranchHandlerDeps(repoId));
+		await handleBranchMove(branchName, newParent, buildBranchHandlerDeps(this, repoId));
 	}
 
 	public async handleUpstackMovePrompt(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleUpstackMovePrompt(branchName, this.getBranchHandlerDeps(repoId));
+		await handleUpstackMovePrompt(branchName, buildBranchHandlerDeps(this, repoId));
 	}
 
 	async handleUpstackMove(repoId: string | undefined, branchName: string, newParent: string): Promise<void> {
-		await handleUpstackMove(branchName, newParent, this.getBranchHandlerDeps(repoId));
+		await handleUpstackMove(branchName, newParent, buildBranchHandlerDeps(this, repoId));
 	}
 
 	public async handleCommitCopySha(_repoId: string | undefined, sha: string): Promise<void> {
@@ -393,23 +347,23 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async handleCommitFixup(repoId: string | undefined, sha: string): Promise<void> {
-		await handleCommitFixup(sha, this.getCommitHandlerDeps(repoId));
+		await handleCommitFixup(sha, buildCommitHandlerDeps(this, repoId));
 	}
 
 	public async handleCommitSplit(repoId: string | undefined, sha: string, branchName: string): Promise<void> {
-		await handleCommitSplit(sha, branchName, this.getCommitHandlerDeps(repoId));
+		await handleCommitSplit(sha, branchName, buildCommitHandlerDeps(this, repoId));
 	}
 
 	async handleGetCommitFiles(repoId: string | undefined, sha: string): Promise<void> {
-		await handleGetCommitFiles(sha, this.getCommitHandlerDeps(repoId));
+		await handleGetCommitFiles(sha, buildCommitHandlerDeps(this, repoId));
 	}
 
 	async handleGetBranchFiles(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleGetBranchFiles(branchName, this.getBranchFileHandlerDeps(repoId));
+		await handleGetBranchFiles(branchName, buildBranchFileHandlerDeps(this, repoId));
 	}
 
 	async handleOpenBranchDiff(repoId: string | undefined, branchName: string): Promise<void> {
-		await handleOpenBranchDiff(branchName, this.getBranchFileHandlerDeps(repoId));
+		await handleOpenBranchDiff(branchName, buildBranchFileHandlerDeps(this, repoId));
 	}
 
 	async handleOpenBranchFileDiff(
@@ -418,7 +372,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		filePath: string,
 		status?: string,
 	): Promise<void> {
-		await handleOpenBranchFileDiff(branchName, filePath, this.getBranchFileHandlerDeps(repoId), status);
+		await handleOpenBranchFileDiff(branchName, filePath, buildBranchFileHandlerDeps(this, repoId), status);
 	}
 
 	handleOpenExternal(_repoId: string | undefined, url: string): void {
@@ -430,15 +384,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	}
 
 	async handleOpenCommitDiff(repoId: string | undefined, sha: string): Promise<void> {
-		await handleOpenCommitDiff(sha, this.getDiffHandlerDeps(repoId));
+		await handleOpenCommitDiff(sha, buildDiffHandlerDeps(this, repoId));
 	}
 
 	async handleOpenFileDiff(repoId: string | undefined, sha: string, filePath: string): Promise<void> {
-		await handleOpenFileDiff(sha, filePath, this.getDiffHandlerDeps(repoId));
+		await handleOpenFileDiff(sha, filePath, buildDiffHandlerDeps(this, repoId));
 	}
 
 	async handleOpenCurrentFile(repoId: string | undefined, filePath: string): Promise<void> {
-		await handleOpenCurrentFile(filePath, this.getDiffHandlerDeps(repoId));
+		await handleOpenCurrentFile(filePath, buildDiffHandlerDeps(this, repoId));
 	}
 
 	async handleOpenWorkingCopyDiff(
@@ -447,27 +401,27 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		staged: boolean,
 		status?: string,
 	): Promise<void> {
-		await handleOpenWorkingCopyDiff(filePath, staged, this.getDiffHandlerDeps(repoId), status);
+		await handleOpenWorkingCopyDiff(filePath, staged, buildDiffHandlerDeps(this, repoId), status);
 	}
 
 	async handleStageFile(repoId: string | undefined, filePath: string): Promise<void> {
-		await handleStageFile(filePath, this.getWorkingCopyHandlerDeps(repoId));
+		await handleStageFile(filePath, buildWorkingCopyHandlerDeps(this, repoId));
 	}
 
 	async handleUnstageFile(repoId: string | undefined, filePath: string): Promise<void> {
-		await handleUnstageFile(filePath, this.getWorkingCopyHandlerDeps(repoId));
+		await handleUnstageFile(filePath, buildWorkingCopyHandlerDeps(this, repoId));
 	}
 
 	async handleDiscardFile(repoId: string | undefined, filePath: string): Promise<void> {
-		await handleDiscardFile(filePath, this.getWorkingCopyHandlerDeps(repoId));
+		await handleDiscardFile(filePath, buildWorkingCopyHandlerDeps(this, repoId));
 	}
 
 	async handleCommitChanges(repoId: string | undefined, message: string): Promise<void> {
-		await handleCommitChanges(message, this.getWorkingCopyHandlerDeps(repoId));
+		await handleCommitChanges(message, buildWorkingCopyHandlerDeps(this, repoId));
 	}
 
 	async handleCreateBranch(repoId: string | undefined, message: string): Promise<void> {
-		await handleCreateBranch(message, this.getWorkingCopyHandlerDeps(repoId));
+		await handleCreateBranch(message, buildWorkingCopyHandlerDeps(this, repoId));
 	}
 
 	// --- Repo Toolbar Handlers ---

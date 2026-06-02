@@ -107,19 +107,26 @@ async function executeBranchSplit(
 	deps: CommitHandlerDeps,
 ): Promise<void> {
 	const title = `Splitting branch ${branchName} at ${sha.substring(0, 8)}`;
-	await vscode.window.withProgress(
-		{ location: vscode.ProgressLocation.Notification, title, cancellable: false },
-		async () => {
-			try {
-				const result = await execBranchSplit(deps.workspaceFolder!, branchName, sha, newBranchName);
-				showBranchSplitResult(result, branchName, sha, newBranchName);
-				await deps.refresh();
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
-			}
-		},
+	await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, () =>
+		runBranchSplit(branchName, sha, newBranchName, deps),
 	);
+}
+
+/** Runs the split command and surfaces its result, catching unexpected errors. */
+async function runBranchSplit(
+	branchName: string,
+	sha: string,
+	newBranchName: string,
+	deps: CommitHandlerDeps,
+): Promise<void> {
+	try {
+		const result = await execBranchSplit(deps.workspaceFolder!, branchName, sha, newBranchName);
+		showBranchSplitResult(result, branchName, sha, newBranchName);
+		await deps.refresh();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		void vscode.window.showErrorMessage(`Unexpected error during branch split: ${message}`);
+	}
 }
 
 /** Fetches files changed in a commit and sends to webview. */

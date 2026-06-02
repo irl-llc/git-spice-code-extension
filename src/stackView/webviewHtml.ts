@@ -20,15 +20,19 @@ export function getNonce(): string {
  * @param extensionUri - The extension root URI for resolving resources
  * @returns The rendered HTML string
  */
-export async function renderWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): Promise<string> {
-	const nonce = getNonce();
-	const csp = [
+function buildCsp(webview: vscode.Webview, nonce: string): string {
+	return [
 		`default-src 'none'`,
 		`img-src ${webview.cspSource} https:`,
 		`style-src ${webview.cspSource}`,
 		`script-src 'nonce-${nonce}'`,
 		`font-src ${webview.cspSource}`,
 	].join('; ');
+}
+
+export async function renderWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): Promise<string> {
+	const nonce = getNonce();
+	const csp = buildCsp(webview, nonce);
 
 	const mediaUri = (name: string): string =>
 		webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', name)).toString();

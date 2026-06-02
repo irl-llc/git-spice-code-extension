@@ -75,29 +75,31 @@ function registerNavigationCommand(
 	);
 }
 
+/** Navigation command configs (up, down, trunk). */
+const NAVIGATION_COMMANDS: NavigationCommandConfig[] = [
+	{
+		commandId: 'git-spice.up',
+		execFn: execUp,
+		successMessage: 'Navigated up the stack',
+		errorPrefix: 'Failed to navigate up',
+	},
+	{
+		commandId: 'git-spice.down',
+		execFn: execDown,
+		successMessage: 'Navigated down the stack',
+		errorPrefix: 'Failed to navigate down',
+	},
+	{
+		commandId: 'git-spice.trunk',
+		execFn: execTrunk,
+		successMessage: 'Navigated to trunk',
+		errorPrefix: 'Failed to navigate to trunk',
+	},
+];
+
 /** Registers navigation commands (up, down, trunk). */
 function registerNavigationCommands(context: vscode.ExtensionContext, provider: StackViewProvider): void {
-	const commands: NavigationCommandConfig[] = [
-		{
-			commandId: 'git-spice.up',
-			execFn: execUp,
-			successMessage: 'Navigated up the stack',
-			errorPrefix: 'Failed to navigate up',
-		},
-		{
-			commandId: 'git-spice.down',
-			execFn: execDown,
-			successMessage: 'Navigated down the stack',
-			errorPrefix: 'Failed to navigate down',
-		},
-		{
-			commandId: 'git-spice.trunk',
-			execFn: execTrunk,
-			successMessage: 'Navigated to trunk',
-			errorPrefix: 'Failed to navigate to trunk',
-		},
-	];
-	commands.forEach((config) => registerNavigationCommand(context, config, provider));
+	NAVIGATION_COMMANDS.forEach((config) => registerNavigationCommand(context, config, provider));
 }
 
 /** Branch command definition for context menu registration. */

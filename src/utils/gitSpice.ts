@@ -397,62 +397,70 @@ interface SyncProcessState {
 	isResolved: boolean;
 }
 
+/** Wiring needed to drive a repo sync subprocess to completion. */
+interface SyncProcessContext {
+	state: SyncProcessState;
+	childProcess: ReturnType<typeof spawn>;
+	promptCallback: (branchName: string) => Promise<boolean>;
+	resolveOnce: (result: RepoSyncResult) => void;
+	timeout: NodeJS.Timeout;
+}
+
 /** Creates handlers for the repo sync process events. */
-function createSyncProcessHandlers(
-	state: SyncProcessState,
-	process: ReturnType<typeof spawn>,
-	promptCallback: (branchName: string) => Promise<boolean>,
-	resolveOnce: (result: RepoSyncResult) => void,
-	timeout: NodeJS.Timeout,
-): void {
+function createSyncProcessHandlers(ctx: SyncProcessContext): void {
 	// stdio: ['pipe', 'pipe', 'pipe'] guarantees these are non-null
-	process.stdout!.on('data', (data: Buffer) => {
-		state.outputBuffer += data.toString();
-		// Check accumulated buffer to handle prompts split across chunks.
-		// Consume the matched portion so repeated data events don't re-trigger.
-		const branchName = extractBranchFromPrompt(state.outputBuffer);
-		if (branchName) {
-			state.outputBuffer = state.outputBuffer.replace(/Delete branch '[^']+'\? \[y\/N\]/i, '');
-			handleBranchDeletePrompt(branchName, process, state.deletedBranches, promptCallback);
-		}
+	ctx.childProcess.stdout!.on('data', (data: Buffer) => handleSyncStdout(ctx, data));
+	ctx.childProcess.stderr!.on('data', (data: Buffer) => {
+		ctx.state.errorBuffer += data.toString();
 	});
+	ctx.childProcess.on('close', (code) => handleSyncClose(ctx, code));
+	ctx.childProcess.on('error', (error) => {
+		clearTimeout(ctx.timeout);
+		ctx.resolveOnce({ error: `Failed to execute gs repo sync: ${toErrorMessage(error)}` });
+	});
+}
 
-	process.stderr!.on('data', (data: Buffer) => {
-		state.errorBuffer += data.toString();
-	});
+/** Accumulates stdout and responds to any branch-deletion prompt it contains. */
+function handleSyncStdout(ctx: SyncProcessContext, data: Buffer): void {
+	const { state, childProcess, promptCallback } = ctx;
+	state.outputBuffer += data.toString();
+	// Check accumulated buffer to handle prompts split across chunks.
+	// Consume the matched portion so repeated data events don't re-trigger.
+	const branchName = extractBranchFromPrompt(state.outputBuffer);
+	if (branchName) {
+		state.outputBuffer = state.outputBuffer.replace(/Delete branch '[^']+'\? \[y\/N\]/i, '');
+		handleBranchDeletePrompt(branchName, childProcess, state.deletedBranches, promptCallback);
+	}
+}
 
-	process.on('close', (code) => {
-		clearTimeout(timeout);
-		if (code === 0) {
-			resolveOnce({
-				value: { deletedBranches: state.deletedBranches, syncedBranches: parseSyncedBranchCount(state.outputBuffer) },
-			});
-		} else {
-			const errorMessage = state.errorBuffer.trim() || state.outputBuffer.trim() || `Process exited with code ${code}`;
-			resolveOnce({ error: `Repository sync failed: ${errorMessage}` });
-		}
-	});
-
-	process.on('error', (error) => {
-		clearTimeout(timeout);
-		resolveOnce({ error: `Failed to execute gs repo sync: ${toErrorMessage(error)}` });
-	});
+/** Resolves the sync promise from the subprocess exit code and buffers. */
+function handleSyncClose(ctx: SyncProcessContext, code: number | null): void {
+	const { state, resolveOnce, timeout } = ctx;
+	clearTimeout(timeout);
+	if (code === 0) {
+		resolveOnce({
+			value: { deletedBranches: state.deletedBranches, syncedBranches: parseSyncedBranchCount(state.outputBuffer) },
+		});
+		return;
+	}
+	const errorMessage = state.errorBuffer.trim() || state.outputBuffer.trim() || `Process exited with code ${code}`;
+	resolveOnce({ error: `Repository sync failed: ${errorMessage}` });
 }
 
 /** Handles a branch deletion prompt by asking the user. */
 function handleBranchDeletePrompt(
 	branchName: string,
-	process: ReturnType<typeof spawn>,
+	childProcess: ReturnType<typeof spawn>,
 	deletedBranches: string[],
 	promptCallback: (branchName: string) => Promise<boolean>,
 ): void {
 	void (async () => {
 		try {
 			const shouldDelete = await promptCallback(branchName);
-			process.stdin!.write(shouldDelete ? 'y\n' : 'n\n');
+			childProcess.stdin!.write(shouldDelete ? 'y\n' : 'n\n');
 			if (shouldDelete) deletedBranches.push(branchName);
 		} catch {
-			process.stdin!.write('n\n');
+			childProcess.stdin!.write('n\n');
 		}
 	})();
 }
@@ -464,26 +472,39 @@ export async function execRepoSync(
 ): Promise<RepoSyncResult> {
 	const cwd = getWorkspaceFolderPath(folder);
 	if (!cwd) return { error: 'Invalid workspace folder provided' };
+	return new Promise<RepoSyncResult>((resolve) => startSyncProcess(cwd, promptCallback, resolve));
+}
 
-	return new Promise<RepoSyncResult>((resolve) => {
-		const state: SyncProcessState = { deletedBranches: [], outputBuffer: '', errorBuffer: '', isResolved: false };
-		const resolveOnce = (result: RepoSyncResult): void => {
-			if (!state.isResolved) {
-				state.isResolved = true;
-				resolve(result);
-			}
-		};
+/** Builds a `resolveOnce` guard that resolves the sync promise at most once. */
+function makeResolveOnce(
+	state: SyncProcessState,
+	resolve: (result: RepoSyncResult) => void,
+): (result: RepoSyncResult) => void {
+	return (result: RepoSyncResult): void => {
+		if (state.isResolved) return;
+		state.isResolved = true;
+		resolve(result);
+	};
+}
 
-		const process = spawn(getGitSpiceBinary(), ['repo', 'sync'], {
-			cwd,
-			stdio: ['pipe', 'pipe', 'pipe'],
-			env: NO_OPTIONAL_LOCKS_ENV,
-		});
-		const timeout = setTimeout(() => {
-			process.kill();
-			resolveOnce({ error: 'Repository sync timed out after 30 seconds' });
-		}, GIT_SPICE_TIMEOUT_MS);
+/** Spawns `gs repo sync`, wires its handlers, and arms the timeout. */
+function startSyncProcess(
+	cwd: string,
+	promptCallback: (branchName: string) => Promise<boolean>,
+	resolve: (result: RepoSyncResult) => void,
+): void {
+	const state: SyncProcessState = { deletedBranches: [], outputBuffer: '', errorBuffer: '', isResolved: false };
+	const resolveOnce = makeResolveOnce(state, resolve);
 
-		createSyncProcessHandlers(state, process, promptCallback, resolveOnce, timeout);
+	const childProcess = spawn(getGitSpiceBinary(), ['repo', 'sync'], {
+		cwd,
+		stdio: ['pipe', 'pipe', 'pipe'],
+		env: NO_OPTIONAL_LOCKS_ENV,
 	});
+	const timeout = setTimeout(() => {
+		childProcess.kill();
+		resolveOnce({ error: 'Repository sync timed out after 30 seconds' });
+	}, GIT_SPICE_TIMEOUT_MS);
+
+	createSyncProcessHandlers({ state, childProcess, promptCallback, resolveOnce, timeout });
 }
