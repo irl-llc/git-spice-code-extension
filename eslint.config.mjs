@@ -58,6 +58,18 @@ export default [
             }],
         },
     },
+    // Test files: BDD suites are intentionally deeply nested
+    // (describe/it/assert) and long. Relax the structural size rules that
+    // this idiom inherently trips, while keeping the substantive checks
+    // (max-depth, max-params, complexity) so test helpers stay honest.
+    {
+        files: ["src/test/**/*.{ts,tsx}"],
+        rules: {
+            "max-nested-callbacks": "off",
+            "max-lines-per-function": "off",
+            "max-lines": "off",
+        },
+    },
     // Prettier compatibility - disables rules that conflict with Prettier
     eslintConfigPrettier,
 ];
