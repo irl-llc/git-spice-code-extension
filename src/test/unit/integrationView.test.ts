@@ -49,14 +49,19 @@ describe('integration view model', () => {
 		assert.strictEqual(result.branches[0].outOfIntegration, undefined);
 	});
 
-	it('marks branches not in the tip list as out of integration', () => {
+	it('marks non-tip non-trunk branches out of integration, but never the trunk', () => {
 		const state = integrationState({ tips: [{ name: 'feat-a', status: 'current', storedHash: 'a' }] });
-		const branches = [createBranch('feat-a'), createBranch('feat-b')];
+		// main is trunk (no `down`); feat-a is a tip; feat-b is a non-tip stacked branch.
+		const branches = [
+			createBranch('main'),
+			createBranch('feat-a', { down: { name: 'main' } }),
+			createBranch('feat-b', { down: { name: 'feat-a' } }),
+		];
 		const result = buildRepoDisplayState(repoInput(branches, state));
-		const a = result.branches.find((b) => b.name === 'feat-a');
-		const b = result.branches.find((b) => b.name === 'feat-b');
-		assert.strictEqual(a?.outOfIntegration, false);
-		assert.strictEqual(b?.outOfIntegration, true);
+		const byName = (n: string) => result.branches.find((b) => b.name === n);
+		assert.strictEqual(byName('feat-a')?.outOfIntegration, false, 'tip is in the integration');
+		assert.strictEqual(byName('feat-b')?.outOfIntegration, true, 'non-tip non-trunk branch is out');
+		assert.strictEqual(byName('main')?.outOfIntegration, false, 'trunk is the base, never X-marked');
 	});
 
 	it('renders the integration node atop lane 0 with an integration style', () => {
@@ -67,22 +72,39 @@ describe('integration view model', () => {
 		assert.strictEqual(fragment?.nodeLane, 0);
 	});
 
-	it('forks the integration node to every top-of-stack lane', () => {
-		const state = integrationState();
-		// Two independent roots → two top-of-stack lanes; integration forks up to them.
-		const branches = [createBranch('main'), createBranch('other')];
+	it('forks the integration node down to each integration tip lane (mirror of trunk)', () => {
+		const state = integrationState({
+			tips: [
+				{ name: 'feat-a', status: 'current', storedHash: 'a' },
+				{ name: 'feat-b', status: 'current', storedHash: 'b' },
+			],
+		});
+		// Two sibling stacks off trunk → the two tips land on different lanes.
+		const branches = [
+			createBranch('main'),
+			createBranch('feat-a', { down: { name: 'main' } }),
+			createBranch('feat-b', { down: { name: 'main' } }),
+		];
 		const result = buildRepoDisplayState(repoInput(branches, state));
 		const fragment = result.integration!.treeFragment;
-		const topLanes = result.branches.map((b) => b.tree.lane).sort((a, b) => a - b);
-		// Every top lane continues below the integration node...
-		for (const lane of topLanes) {
-			assert.strictEqual(fragment.lanes[lane].continuesBelow, true, `lane ${lane} should continue below`);
+		const tipLanes = result.branches
+			.filter((b) => b.name === 'feat-a' || b.name === 'feat-b')
+			.map((b) => b.tree.lane)
+			.sort((a, b) => a - b);
+		// Each tip lane continues below the integration node (its swimlane converges up)...
+		for (const lane of tipLanes) {
+			assert.strictEqual(fragment.lanes[lane].continuesBelow, true, `tip lane ${lane} should continue below`);
 		}
-		// ...and every top lane except the node's own (0) is a fork connector.
+		// ...and each tip lane except the node's own (0) is a fork connector down to that tip.
 		assert.deepStrictEqual(
 			fragment.childForkLanes.map((c) => c.lane).sort((a, b) => a - b),
-			topLanes.filter((lane) => lane !== 0),
+			tipLanes.filter((lane) => lane !== 0),
 		);
+		// A non-tip branch's lane must NOT be a fork target.
+		const nonTip = createBranch('feat-c', { down: { name: 'feat-a' } });
+		const r2 = buildRepoDisplayState(repoInput([...branches, nonTip], state));
+		const cLane = r2.branches.find((b) => b.name === 'feat-c')!.tree.lane;
+		assert.ok(!r2.integration!.treeFragment.childForkLanes.some((c) => c.lane === cLane && cLane !== tipLanes[0]));
 	});
 
 	it('flags the integration node as needing rebuild when state is stale', () => {

@@ -70,39 +70,41 @@ export function toIntegrationViewModel(
 		name: state.name,
 		needsRebuild: state.needsRebuild,
 		tipNames: state.tips.map((tip) => tip.name),
-		treeFragment: buildIntegrationFragment(ordered, state.needsRebuild),
+		treeFragment: buildIntegrationFragment(
+			ordered,
+			state.needsRebuild,
+			state.tips.map((tip) => tip.name),
+		),
 	};
 }
 
 /**
- * Builds the tree fragment for the integration node: a node at lane 0 whose
- * fork connectors fan down to every top-of-stack lane, so all swimlanes
- * converge up into the integration build.
+ * Builds the tree fragment for the integration node — the mirror image of the
+ * trunk row. Where the trunk node (at the bottom) fans its connectors UP to the
+ * lane of each root branch, the integration node (at the top) fans its
+ * connectors DOWN to the lane of each integration TIP, so every tip's swimlane
+ * converges into the integration build. Tips that share a lane (a linear stack
+ * of tips) share the single spine; tips on sibling lanes each get their own
+ * fork connector, exactly like sibling stacks branching off trunk.
  */
-function buildIntegrationFragment(ordered: BranchWithTree[], needsRebuild: boolean): TreeFragmentData {
+function buildIntegrationFragment(
+	ordered: BranchWithTree[],
+	needsRebuild: boolean,
+	tipNames: string[],
+): TreeFragmentData {
 	const maxLane = ordered.reduce((max, item) => Math.max(max, item.tree.lane), 0);
-	const topLanes = collectTopRowLanes(ordered);
+	const tipNameSet = new Set(tipNames);
+	const tipLanes = new Set(ordered.filter((item) => tipNameSet.has(item.branch.name)).map((item) => item.tree.lane));
 	const lanes: TreeFragmentData['lanes'] = [];
 	for (let lane = 0; lane <= maxLane; lane++) {
-		const continuesBelow = topLanes.has(lane);
+		const continuesBelow = tipLanes.has(lane);
 		lanes.push({ continuesFromAbove: false, continuesBelow, hasNode: lane === 0, needsRestack: false });
 	}
-	const childForkLanes = [...topLanes]
+	const childForkLanes = [...tipLanes]
 		.filter((lane) => lane !== 0)
 		.sort((a, b) => a - b)
 		.map((lane) => ({ lane, needsRestack: false, isUncommitted: false }));
 	return { lanes, maxLane, nodeLane: 0, childForkLanes, nodeStyle: 'integration', nodeNeedsRestack: needsRebuild };
-}
-
-/** Collects the lanes occupied by branches whose parent is not in the stack (stack tops). */
-function collectTopRowLanes(ordered: BranchWithTree[]): Set<number> {
-	const names = new Set(ordered.map((item) => item.branch.name));
-	const lanes = new Set<number>();
-	for (const item of ordered) {
-		const parent = item.tree.parentName;
-		if (!parent || !names.has(parent)) lanes.add(item.tree.lane);
-	}
-	return lanes;
 }
 
 /** Returns uncommitted state only if it contains changes, otherwise undefined. */
@@ -124,11 +126,15 @@ function mapToBranchViewModels(
 
 /**
  * Determines whether a branch should show the out-of-integration "X" marker:
- * only when an integration branch is configured and this branch is not a tip.
+ * only when an integration branch is configured, the branch is not a tip, AND
+ * it is not the trunk. Trunk is the base of every branch — it is never a
+ * candidate to be an integration tip, so it must render as the normal
+ * connected base node, not as an X-marked/disconnected tip (issue #39 review).
  */
-function computeOutOfIntegration(branchName: string, tipSet?: Set<string>): boolean | undefined {
+function computeOutOfIntegration(branch: GitSpiceBranch, tipSet?: Set<string>): boolean | undefined {
 	if (!tipSet) return undefined;
-	return !tipSet.has(branchName);
+	if (!branch.down) return false; // trunk has no base → exempt from the marker
+	return !tipSet.has(branch.name);
 }
 
 /** Context passed during tree traversal */
@@ -375,7 +381,7 @@ function createBranchViewModel(
 		treeFragment,
 		change: branch.change ? toChangeViewModel(branch.change) : undefined,
 		commits: mapCommitsToViewModel(branch.commits),
-		outOfIntegration: computeOutOfIntegration(branch.name, tipSet),
+		outOfIntegration: computeOutOfIntegration(branch, tipSet),
 	};
 }
 
