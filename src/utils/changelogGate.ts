@@ -40,6 +40,7 @@ const NON_RELEASE_FILES = [
 	'LICENSE',
 	// Test-image infra (the Playwright/snapshot Docker harness).
 	'Dockerfile',
+	'.dockerignore',
 	'docker-compose.test.yml',
 ];
 
