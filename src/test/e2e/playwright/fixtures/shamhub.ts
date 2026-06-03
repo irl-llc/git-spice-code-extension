@@ -168,12 +168,7 @@ export interface ShamhubStack {
 }
 
 /** Runs `gs branch comment add` in the seeded repo to post an inline comment. */
-function postInlineComment(
-	runners: RepoRunners,
-	branch: string,
-	anchor: string | undefined,
-	body: string,
-): void {
+function postInlineComment(runners: RepoRunners, branch: string, anchor: string | undefined, body: string): void {
 	const head = ['branch', 'comment', 'add', '--branch', branch];
 	const tail = anchor === undefined ? ['--pr', '-m', body] : [anchor, '-m', body];
 	runners.gs(...head, ...tail);
@@ -232,12 +227,23 @@ function buildStackEnv(home: string, shamhubEnv: ShamhubEnv): Record<string, str
 	};
 }
 
+/** Runs a binary, failing fast (with captured output) instead of hanging. */
+function runOrThrow(bin: string, args: string[], opts: { cwd?: string; env: NodeJS.ProcessEnv }): void {
+	try {
+		execFileSync(bin, args, { ...opts, timeout: 30_000 });
+	} catch (e) {
+		const err = e as { signal?: string; stderr?: Buffer; stdout?: Buffer };
+		const out = `${err.stderr?.toString() ?? ''}${err.stdout?.toString() ?? ''}`.trim();
+		throw new Error(`${bin} ${args.join(' ')} failed${err.signal ? ` (${err.signal})` : ''}: ${out}`);
+	}
+}
+
 /** Binds git/gs/write helpers to one repo + env (env merged onto process.env). */
 function createRepoRunners(repoPath: string, env: Record<string, string>): RepoRunners {
 	const execEnv = { ...process.env, ...env };
 	return {
-		git: (...a) => void execFileSync('git', ['-C', repoPath, ...a], { env: execEnv }),
-		gs: (...a) => void execFileSync(GS_BIN, a, { cwd: repoPath, env: execEnv }),
+		git: (...a) => runOrThrow('git', ['-C', repoPath, ...a], { env: execEnv }),
+		gs: (...a) => runOrThrow(GS_BIN, [...a], { cwd: repoPath, env: execEnv }),
 		write: (rel, content) => {
 			const abs = join(repoPath, rel);
 			mkdirSync(dirname(abs), { recursive: true });
