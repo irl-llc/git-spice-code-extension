@@ -14,10 +14,12 @@
 //	    SHAMHUB_URL=<url>
 //	    REPO_URL=<git remote url for alice/example>
 //	    READY
-//	stdin commands (one per line):
+//	stdin commands (one per line); each prints "OK" or "ERR <msg>":
 //	    comment <change#> <resolved|unresolved> <body...>
-//	        -> seeds a resolvable PR comment; prints "OK" or "ERR <msg>"
-//	    quit  -> closes the server and exits
+//	        -> seeds a resolvable PR comment
+//	    merge <change#>   -> marks the change merged (its CR status becomes "merged")
+//	    close <change#>   -> rejects the change without merging (status "closed")
+//	    quit              -> closes the server and exits
 //
 // A fixed user ("alice") and repo ("alice/example") are provisioned on start.
 package main
@@ -70,11 +72,24 @@ func main() {
 	}
 }
 
-// handle executes one seed command and returns the reply line. The body is
-// optional (anything after the state), so a trailing space is not required.
+// handle dispatches one seed command to its handler and returns the reply line.
 func handle(sh *shamhub.ShamHub, line string) string {
 	fields := strings.SplitN(line, " ", 4)
-	if len(fields) < 3 || fields[0] != "comment" {
+	switch fields[0] {
+	case "comment":
+		return handleComment(sh, fields)
+	case "merge":
+		return handleMerge(sh, fields)
+	case "close":
+		return handleClose(sh, fields)
+	default:
+		return "ERR unknown command: " + fields[0]
+	}
+}
+
+// handleComment seeds a resolvable PR comment. The body (fields[3]) is optional.
+func handleComment(sh *shamhub.ShamHub, fields []string) string {
+	if len(fields) < 3 {
 		return "ERR usage: comment <change#> <resolved|unresolved> [body]"
 	}
 	change, err := strconv.Atoi(fields[1])
@@ -93,6 +108,43 @@ func handle(sh *shamhub.ShamHub, line string) string {
 		Resolvable: true,
 		Resolved:   fields[2] == "resolved",
 	}); err != nil {
+		return "ERR " + err.Error()
+	}
+	return "OK"
+}
+
+// changeNumber parses the change number from a "<cmd> <change#>" command,
+// returning the number or an "ERR ..." reply (with the second value non-empty).
+func changeNumber(fields []string, usage string) (int, string) {
+	if len(fields) < 2 {
+		return 0, "ERR usage: " + usage
+	}
+	n, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return 0, "ERR invalid change number: " + fields[1]
+	}
+	return n, ""
+}
+
+// handleMerge marks a change merged (its CR status becomes "merged").
+func handleMerge(sh *shamhub.ShamHub, fields []string) string {
+	n, errMsg := changeNumber(fields, "merge <change#>")
+	if errMsg != "" {
+		return errMsg
+	}
+	if err := sh.MergeChange(shamhub.MergeChangeRequest{Owner: owner, Repo: repo, Number: n}); err != nil {
+		return "ERR " + err.Error()
+	}
+	return "OK"
+}
+
+// handleClose rejects a change without merging (its CR status becomes "closed").
+func handleClose(sh *shamhub.ShamHub, fields []string) string {
+	n, errMsg := changeNumber(fields, "close <change#>")
+	if errMsg != "" {
+		return errMsg
+	}
+	if err := sh.RejectChange(shamhub.RejectChangeRequest{Owner: owner, Repo: repo, Number: n}); err != nil {
 		return "ERR " + err.Error()
 	}
 	return "OK"

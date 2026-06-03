@@ -27,6 +27,21 @@ async function enableRemoteForgeStatus(workbench: Page): Promise<void> {
 	await workbench.keyboard.press('Enter');
 }
 
+/** Seeds a feat1/feat2 stack, then merges #1 and closes #2 via shamhub. */
+async function seedMergedClosedScenario(): Promise<ShamhubStack> {
+	const stack = await seedShamhubStack({ branches: ['feat1', 'feat2'] });
+	try {
+		await stack.shamhub.mergeChange(1); // feat1 (#1) -> merged
+		await stack.shamhub.closeChange(2); // feat2 (#2) -> closed
+		return stack;
+	} catch (error) {
+		// Seeding threw after startup: tear down so beforeAll doesn't leak it.
+		await stack.shamhub.close();
+		stack.cleanup();
+		throw error;
+	}
+}
+
 test.describe('CR status badges (shamhub)', () => {
 	let scenario: ShamhubStack;
 	let vscode: VSCodeInstance;
@@ -61,5 +76,37 @@ test.describe('CR status badges (shamhub)', () => {
 		await expect(webview.locator('.tag-cr-open')).toHaveCount(2);
 		await expect(webview.locator('.tag-cr', { hasText: 'Open' }).first()).toBeVisible();
 		await expect(repoContainer).toHaveScreenshot('cr-status-open.png');
+	});
+});
+
+test.describe('CR status badges: merged + closed (shamhub)', () => {
+	let scenario: ShamhubStack;
+	let vscode: VSCodeInstance;
+
+	test.beforeAll(async () => {
+		scenario = await seedMergedClosedScenario();
+		vscode = await launchVSCode(scenario.repoPath, scenario.env);
+	});
+
+	test.afterAll(async () => {
+		await vscode?.close();
+		await scenario?.shamhub.close();
+		scenario?.cleanup();
+	});
+
+	test('renders merged and closed CR status badges fetched from the forge', async () => {
+		const workbench = vscode.workbench;
+		const webview = await openGitSpiceEditor(workbench);
+		const repoContainer = webview.locator('#repoContainer');
+		await webview.locator('.stack-item').first().waitFor({ state: 'visible', timeout: 60_000 });
+
+		// feat1's CR was merged (#1) and feat2's was closed (#2) before launch, so
+		// enabling forge status surfaces a "Merged" and a "Closed" badge.
+		await enableRemoteForgeStatus(workbench);
+		await expect(webview.locator('.tag-cr-merged')).toHaveCount(1);
+		await expect(webview.locator('.tag-cr-closed')).toHaveCount(1);
+		await expect(webview.locator('.tag-cr', { hasText: 'Merged' })).toBeVisible();
+		await expect(webview.locator('.tag-cr', { hasText: 'Closed' })).toBeVisible();
+		await expect(repoContainer).toHaveScreenshot('cr-status-merged-closed.png');
 	});
 });

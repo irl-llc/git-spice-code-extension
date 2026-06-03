@@ -38,6 +38,10 @@ export interface ShamhubServer {
 	env: ShamhubEnv;
 	/** Posts a resolvable comment on a change; `resolved` drives the counts. */
 	seedComment(change: number, resolved: boolean, body: string): Promise<void>;
+	/** Marks a change merged (its CR status becomes "merged"). */
+	mergeChange(change: number): Promise<void>;
+	/** Rejects a change without merging (its CR status becomes "closed"). */
+	closeChange(change: number): Promise<void>;
 	close(): Promise<void>;
 }
 
@@ -84,6 +88,8 @@ export async function startShamhub(): Promise<ShamhubServer> {
 			GIT_SPICE_SECRET_BACKEND: 'file',
 		},
 		seedComment: (change, resolved, body) => seedComment({ child, pendingReplies }, change, resolved, body),
+		mergeChange: (change) => sendCommand({ child, pendingReplies }, `merge ${change}`),
+		closeChange: (change) => sendCommand({ child, pendingReplies }, `close ${change}`),
 		close: () => closeChild(child),
 	};
 }
@@ -94,13 +100,18 @@ interface ShamhubChannel {
 	pendingReplies: Array<(line: string) => void>;
 }
 
-function seedComment(channel: ShamhubChannel, change: number, resolved: boolean, body: string): Promise<void> {
+/** Writes one line-protocol command and resolves when the server replies OK. */
+function sendCommand(channel: ShamhubChannel, command: string): Promise<void> {
 	return new Promise<void>((res, rej) => {
 		channel.pendingReplies.push((line) =>
-			line.startsWith('OK') ? res() : rej(new Error(`seed comment failed: ${line}`)),
+			line.startsWith('OK') ? res() : rej(new Error(`shamhub '${command.split(' ')[0]}' failed: ${line}`)),
 		);
-		channel.child.stdin.write(`comment ${change} ${resolved ? 'resolved' : 'unresolved'} ${body}\n`);
+		channel.child.stdin.write(`${command}\n`);
 	});
+}
+
+function seedComment(channel: ShamhubChannel, change: number, resolved: boolean, body: string): Promise<void> {
+	return sendCommand(channel, `comment ${change} ${resolved ? 'resolved' : 'unresolved'} ${body}`);
 }
 
 function closeChild(child: ChildProcessByStdio<Writable, Readable, Readable>): Promise<void> {
