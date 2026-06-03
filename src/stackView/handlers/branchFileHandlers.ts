@@ -129,20 +129,25 @@ export async function handleOpenBranchFileDiff(
 	}
 }
 
-/** Builds diff URIs for a branch file, handling added/deleted statuses. */
+/**
+ * Builds diff URIs for a branch file, handling added/deleted statuses. The
+ * right side carries the git-spice branch marker so the forge CommentController
+ * can attach inline comments to this branch's Change Request (issue #40).
+ */
 function buildBranchFileDiffUris(
 	fileUri: vscode.Uri,
 	mergeBase: string,
 	branchName: string,
 	status?: string,
 ): { left: vscode.Uri; right: vscode.Uri } {
+	const marker = { branchName };
 	if (status === 'A') {
-		return { left: buildGitUri(fileUri, EMPTY_TREE_SHA), right: buildGitUri(fileUri, branchName) };
+		return { left: buildGitUri(fileUri, EMPTY_TREE_SHA), right: buildGitUri(fileUri, branchName, marker) };
 	}
 	if (status === 'D') {
 		return { left: buildGitUri(fileUri, mergeBase), right: buildGitUri(fileUri, EMPTY_TREE_SHA) };
 	}
-	return { left: buildGitUri(fileUri, mergeBase), right: buildGitUri(fileUri, branchName) };
+	return { left: buildGitUri(fileUri, mergeBase), right: buildGitUri(fileUri, branchName, marker) };
 }
 
 /** Identifies a single branch file to diff against its merge-base. */

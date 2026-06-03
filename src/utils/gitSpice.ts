@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 
 import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_PROBE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
-import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
+import { parseGitSpiceBranches, parseInlineComments, type GitSpiceBranch, type InlineComment } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
 import { resolveWorkingTreeRoot } from './git';
 import { resolveGitSpiceBinary } from './gitSpiceBinary';
@@ -33,6 +33,7 @@ type GitSpiceArgs = ReadonlyArray<string>;
 
 export type BranchLoadResult = { value: GitSpiceBranch[] } | { error: string };
 export type BranchCommandResult = { value: void } | { error: string };
+export type InlineCommentLoadResult = { value: InlineComment[] } | { error: string };
 
 /** Minimal folder shape required by execGitSpice. WorkspaceFolder satisfies this. */
 export type FolderUri = { uri: vscode.Uri };
@@ -107,6 +108,33 @@ export async function execGitSpice(folder: FolderUri, withForgeStatus = false): 
 			env: NO_OPTIONAL_LOCKS_ENV,
 		});
 		return { value: parseGitSpiceBranches(stdout) };
+	} catch (error) {
+		return { error: formatError(context, toErrorMessage(error)) };
+	}
+}
+
+/**
+ * Loads per-comment inline comments for a single branch via
+ * `gs branch comment list --branch <name> --json` (NDJSON). This queries the
+ * forge over the network, so callers gate it the same way they gate `-c -S`
+ * (only when `showRemoteForgeStatus` is on, and never on high-frequency local
+ * refreshes). Returns an error string on any failure so a single branch's
+ * comment fetch never takes down the whole refresh.
+ */
+export async function execBranchCommentList(folder: FolderUri, branchName: string): Promise<InlineCommentLoadResult> {
+	const context = 'List comments';
+	const cwd = getWorkspaceFolderPath(folder);
+	if (!cwd) {
+		return { error: formatError(context, 'Workspace folder path is unavailable') };
+	}
+	const args = ['branch', 'comment', 'list', '--branch', branchName, '--json'];
+	try {
+		const { stdout } = await execFileAsync(getGitSpiceBinary(), args, {
+			cwd,
+			timeout: GIT_SPICE_TIMEOUT_MS,
+			env: NO_OPTIONAL_LOCKS_ENV,
+		});
+		return { value: parseInlineComments(stdout) };
 	} catch (error) {
 		return { error: formatError(context, toErrorMessage(error)) };
 	}

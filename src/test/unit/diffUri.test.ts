@@ -5,7 +5,14 @@
 
 import * as assert from 'assert';
 
-import { EMPTY_TREE_SHA, buildGitUri, buildCommitDiffUris, buildWorkingCopyDiffUris } from '../../utils/diffUri';
+import {
+	EMPTY_TREE_SHA,
+	GIT_SPICE_DIFF_MARKER,
+	buildGitUri,
+	buildCommitDiffUris,
+	buildWorkingCopyDiffUris,
+	parseGitSpiceDiffUri,
+} from '../../utils/diffUri';
 
 /** Creates a mock Uri for testing. */
 function createMockUri(fsPath: string): ReturnType<typeof buildGitUri> {
@@ -223,6 +230,60 @@ describe('diffUri', () => {
 
 			assert.strictEqual(leftQuery.ref, 'HEAD');
 			assert.strictEqual(rightQuery.ref, '~');
+		});
+	});
+
+	describe('git-spice diff marker', () => {
+		// parseGitSpiceDiffUri only reads scheme + query, so a plain object suffices.
+		const asUri = (scheme: string, query: string): ReturnType<typeof buildGitUri> =>
+			({ scheme, query }) as unknown as ReturnType<typeof buildGitUri>;
+
+		it('should embed the branch marker in the query when provided', () => {
+			const fileUri = createMockUri('/repo/file.ts');
+			const result = buildGitUri(fileUri, 'feat-x', { branchName: 'feat-x' });
+			const query = JSON.parse(result.query);
+
+			assert.strictEqual(query.ref, 'feat-x');
+			assert.strictEqual(query[GIT_SPICE_DIFF_MARKER], 'feat-x');
+		});
+
+		it('should omit the marker when no marker is given', () => {
+			const fileUri = createMockUri('/repo/file.ts');
+			const result = buildGitUri(fileUri, 'HEAD');
+			const query = JSON.parse(result.query);
+
+			assert.strictEqual(query[GIT_SPICE_DIFF_MARKER], undefined);
+		});
+
+		it('should round-trip the branch name through parseGitSpiceDiffUri', () => {
+			const fileUri = createMockUri('/repo/file.ts');
+			const result = buildGitUri(fileUri, 'feat-y', { branchName: 'feat-y' });
+			const marker = parseGitSpiceDiffUri(asUri('git', result.query));
+
+			assert.deepStrictEqual(marker, { branchName: 'feat-y' });
+		});
+
+		it('should return undefined for a git URI without the marker', () => {
+			const fileUri = createMockUri('/repo/file.ts');
+			const result = buildGitUri(fileUri, 'HEAD');
+
+			assert.strictEqual(parseGitSpiceDiffUri(asUri('git', result.query)), undefined);
+		});
+
+		it('should return undefined for a non-git scheme even with a marker', () => {
+			const query = JSON.stringify({ path: '/repo/file.ts', ref: 'x', [GIT_SPICE_DIFF_MARKER]: 'feat-z' });
+
+			assert.strictEqual(parseGitSpiceDiffUri(asUri('pr', query)), undefined);
+		});
+
+		it('should return undefined for an unparseable query', () => {
+			assert.strictEqual(parseGitSpiceDiffUri(asUri('git', 'not json')), undefined);
+		});
+
+		it('should return undefined when the marker is an empty string', () => {
+			const query = JSON.stringify({ ref: 'x', [GIT_SPICE_DIFF_MARKER]: '' });
+
+			assert.strictEqual(parseGitSpiceDiffUri(asUri('git', query)), undefined);
 		});
 	});
 });
