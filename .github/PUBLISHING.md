@@ -7,7 +7,7 @@ This repository is configured for **automatic publishing** to both the VS Code M
 ### How It Works
 
 1. **CI runs on every push/PR** - Validates code quality, runs tests
-2. **Publishing happens automatically on release** - When you create a GitHub release with a tag, the extension is published to both registries
+2. **Publishing happens automatically on release** - When you create a GitHub release, `ci.yml` calls the reusable [`publish.yml`](workflows/publish.yml) workflow (after the build job passes) to publish to both registries. The scheduled auto-release job publishes through that same reusable workflow from within its own run (see issue #29 note below).
 
 ### Default path: scheduled auto-release (Changie)
 
@@ -30,8 +30,23 @@ by hand — you add a change fragment to your PR (see
   makes no release, avoiding release noise for users.
 - **What it does:** runs `changie batch <level>` + `changie merge` to fold
   fragments into `CHANGELOG.md`, bumps `package.json`, commits, tags
-  `v<version>`, and creates a GitHub Release — which triggers the publish steps
-  below exactly like a hand-created release.
+  `v<version>`, and creates a GitHub Release. It then **publishes within the
+  same workflow run** by calling the shared reusable workflow
+  ([`.github/workflows/publish.yml`](workflows/publish.yml)).
+
+> **Why the auto-release job publishes itself (issue #29):** GitHub deliberately
+> does **not** trigger new workflow runs from events (tag push / Release)
+> created with the default `GITHUB_TOKEN`. The scheduled job creates its Release
+> with that token, so the `on: release` publish path in `ci.yml` never fired for
+> auto releases — this is why `v0.1.0` was tagged but never reached the
+> Marketplace/Open VSX. The fix chains a `publish` job in the auto-release run
+> (gated on the `released` output of `scripts/auto-release.mjs`) that checks out
+> the freshly created tag. No new repo secret is required; it reuses the
+> existing `VSCE_PAT`/`OVSX_PAT` secrets.
+
+Both the scheduled job and a human-created GitHub Release publish through the
+**same reusable workflow** ([`publish.yml`](workflows/publish.yml)), so the
+publish logic lives in exactly one place.
 
 The manual options below remain available for one-off or emergency releases.
 
@@ -291,14 +306,20 @@ Both approaches create git commits and tags automatically. The vsce method also 
 - **Insufficient Scopes**: Verify PAT has "Marketplace (Manage)" scope
 - **Secret Not Set**: Ensure `VSCE_PAT` secret exists in GitHub Settings → Secrets
 
-**CI passes but publish step is skipped:**
+**CI passes but the publish job is skipped:**
 
-- Ensure you created a **GitHub release** (not just pushed code)
-- Verify the tag starts with `v` (e.g., `v0.0.2`)
-- Check the Actions log to see which condition failed:
-  - `success()` - Did all tests pass?
-  - `startsWith(github.ref, 'refs/tags/')` - Is this a tag push?
-  - `matrix.node-version == '22.x'` - Running on correct Node version?
+- Ensure you created a **GitHub release** (not just pushed code/a tag). The
+  `publish` job in `ci.yml` is gated on `github.event_name == 'release'`.
+- For a hand-created Release, the `publish` job runs only after the `build` job
+  succeeds — check the build job for failures.
+- For a scheduled/manual auto-release, the publish job is gated on the
+  `released` output of `scripts/auto-release.mjs` — if there were no pending
+  change fragments (or it was a `dry_run`), nothing is released and publish is
+  correctly skipped.
+- **A tag/Release alone never re-triggers publish.** GitHub does not start
+  workflow runs from events created with the default `GITHUB_TOKEN`, which is
+  why the auto-release job chains its own publish job rather than relying on
+  `on: release` (issue #29).
 
 **Version conflict error:**
 
