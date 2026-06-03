@@ -123,5 +123,40 @@ describe('changelogGate', () => {
 			);
 			assert.strictEqual(decision.kind, 'skip');
 		});
+
+		it('skips test-only changes under src/test/', () => {
+			const decision = evaluateChangelogGate(
+				input({
+					changedPaths: ['src/test/unit/foo.test.ts', 'src/test/e2e/playwright/bar.spec.ts'],
+					addedPaths: [],
+				}),
+			);
+			assert.strictEqual(decision.kind, 'skip');
+		});
+
+		it('skips build/dev tooling under scripts/ and the test-image Dockerfile', () => {
+			const decision = evaluateChangelogGate(
+				input({
+					changedPaths: [
+						'scripts/fetch-gs.mjs',
+						'scripts/shamhub-server/main.go',
+						'Dockerfile',
+						'docker-compose.test.yml',
+					],
+					addedPaths: [],
+				}),
+			);
+			assert.strictEqual(decision.kind, 'skip');
+		});
+
+		it('still requires a fragment when src/ (non-test) ships alongside test changes', () => {
+			const decision = evaluateChangelogGate(
+				input({
+					changedPaths: ['src/test/unit/foo.test.ts', 'src/stackView/state.ts'],
+					addedPaths: [],
+				}),
+			);
+			assert.strictEqual(decision.kind, 'fail');
+		});
 	});
 });

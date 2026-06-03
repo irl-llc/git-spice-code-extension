@@ -21,10 +21,27 @@ export const SKIP_LABEL = 'skip-changelog';
  * doubt the gate requires a fragment, and the `skip-changelog` label is the
  * documented escape hatch.
  */
-const NON_RELEASE_PREFIXES = ['docs/', '.github/', '.changes/', '.vscode/'];
+const NON_RELEASE_PREFIXES = [
+	'docs/',
+	'.github/',
+	'.changes/',
+	'.vscode/',
+	// Tests and build/dev tooling never ship to users, so they never warrant a
+	// changelog entry (no more manual `skip-changelog` labels on test/CI PRs).
+	'src/test/',
+	'scripts/',
+];
 
 /** Exact repo-relative paths that never warrant a release. */
-const NON_RELEASE_FILES = ['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'LICENSE'];
+const NON_RELEASE_FILES = [
+	'README.md',
+	'CHANGELOG.md',
+	'CONTRIBUTING.md',
+	'LICENSE',
+	// Test-image infra (the Playwright/snapshot Docker harness).
+	'Dockerfile',
+	'docker-compose.test.yml',
+];
 
 /**
  * File basenames that never warrant a release, matched at ANY directory depth
