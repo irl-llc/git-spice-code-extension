@@ -1,0 +1,2 @@
+kind: Fixed
+body: 'Fixed a refresh storm where a multi-step git operation (e.g. `gs stack submit`) triggered continuous stack-view refreshes for the whole command. Watcher-driven refreshes now defer while a git operation is in progress and are rate-limited to a minimum interval, collapsing the burst into bounded refreshes.'

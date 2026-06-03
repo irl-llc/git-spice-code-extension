@@ -9,6 +9,14 @@ export const NONCE_LENGTH = 32;
 /** Delay in ms before triggering refresh after file system changes. */
 export const FILE_WATCHER_DEBOUNCE_MS = 300;
 
+/**
+ * Minimum spacing (ms) between watcher-driven refreshes. A multi-step git
+ * operation (e.g. `gs stack submit`) rewrites refs/index dozens of times over
+ * its run; without a floor that would fire a refresh every debounce window.
+ * Bursts within this interval coalesce into a single trailing refresh.
+ */
+export const MIN_REFRESH_INTERVAL_MS = 1500;
+
 /** Delay in ms after branch creation to allow SCM view to update. */
 export const POST_COMMIT_REFRESH_DELAY_MS = 100;
 

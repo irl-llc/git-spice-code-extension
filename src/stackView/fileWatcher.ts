@@ -3,13 +3,24 @@
  * Supports watching multiple repositories simultaneously.
  */
 
-import { relative as pathRelative, isAbsolute as pathIsAbsolute } from 'node:path';
+import { existsSync } from 'node:fs';
+import { relative as pathRelative, isAbsolute as pathIsAbsolute, join as pathJoin } from 'node:path';
 
 import * as vscode from 'vscode';
 
-import { FILE_WATCHER_DEBOUNCE_MS } from '../constants';
+import { FILE_WATCHER_DEBOUNCE_MS, MIN_REFRESH_INTERVAL_MS } from '../constants';
 import type { DiscoveredRepo } from '../repoDiscovery';
 import { filterIgnoredPaths, resolveGitDirs } from '../utils/git';
+import { decideRefresh } from './refreshThrottle';
+
+/**
+ * Marker paths under a repo's `.git` that indicate an in-progress multi-step
+ * operation (rebase/merge/cherry-pick) or an index lock. While any exists we
+ * defer refreshes so a `gs stack submit` storm collapses to one trailing
+ * refresh. (Worktree `.git` files won't match these; they fall back to the
+ * min-interval throttle, which still bounds the rate.)
+ */
+const GIT_OP_MARKERS = ['index.lock', 'rebase-merge', 'rebase-apply', 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD'];
 
 /** Watchers for a single repository. */
 interface RepoWatchers extends vscode.Disposable {
@@ -34,6 +45,8 @@ export class FileWatcherManager implements vscode.Disposable {
 	private pendingPaths = new Map<string, Set<string>>();
 	/** A git-internal event occurred — refresh unconditionally on next flush. */
 	private gitEventPending = false;
+	/** Timestamp (ms) of the last fired refresh, for min-interval throttling. */
+	private lastRefreshAt = 0;
 
 	constructor(private readonly onRefreshNeeded: () => void) {}
 
@@ -166,26 +179,59 @@ export class FileWatcherManager implements vscode.Disposable {
 	}
 
 	/**
-	 * Refreshes if a git-internal event occurred, or if any accumulated
-	 * workspace path survives `git check-ignore` (i.e. is not gitignored).
+	 * Flush boundary, bounded by the throttle: while a git operation is in
+	 * progress (or the min-interval since the last refresh hasn't elapsed) the
+	 * pending events are kept and the timer re-armed; otherwise the refresh is
+	 * evaluated. This collapses a `gs stack submit` event storm — which rewrites
+	 * refs/index dozens of times — into bounded refreshes (issue #71).
 	 */
 	private async flush(): Promise<void> {
+		if (!this.gitEventPending && this.pendingPaths.size === 0) return;
+		const decision = decideRefresh({
+			now: Date.now(),
+			lastRefreshAt: this.lastRefreshAt,
+			minIntervalMs: MIN_REFRESH_INTERVAL_MS,
+			gitOpInProgress: this.gitOperationInProgress(),
+			gitOpRecheckMs: MIN_REFRESH_INTERVAL_MS,
+		});
+		if (!decision.refresh) {
+			// Keep the pending flags and re-evaluate after the deferral.
+			this.refreshTimer = setTimeout(() => void this.flush(), decision.deferMs);
+			return;
+		}
+		await this.runRefreshIfNeeded();
+	}
+
+	/**
+	 * Consumes pending events and refreshes if any warrants it: git-internal
+	 * events always refresh; workspace paths must survive `git check-ignore`
+	 * (gitignored build output/logs cannot affect the stack).
+	 */
+	private async runRefreshIfNeeded(): Promise<void> {
 		const gitPending = this.gitEventPending;
 		this.gitEventPending = false;
 		const pending = this.pendingPaths;
 		this.pendingPaths = new Map();
 
-		if (gitPending) {
-			this.onRefreshNeeded();
-			return;
-		}
+		if (gitPending) return this.fireRefresh();
 		for (const [root, paths] of pending) {
 			const fresh = await filterIgnoredPaths(root, [...paths]);
-			if (fresh.length > 0) {
-				this.onRefreshNeeded();
-				return;
-			}
+			if (fresh.length > 0) return this.fireRefresh();
 		}
+	}
+
+	/** Records the refresh time (for throttling) and notifies the provider. */
+	private fireRefresh(): void {
+		this.lastRefreshAt = Date.now();
+		this.onRefreshNeeded();
+	}
+
+	/** True if any tracked repo has an in-progress git operation or index lock. */
+	private gitOperationInProgress(): boolean {
+		for (const root of this.repoWatchers.keys()) {
+			if (GIT_OP_MARKERS.some((marker) => existsSync(pathJoin(root, '.git', marker)))) return true;
+		}
+		return false;
 	}
 
 	/** Disposes all watchers and timers. */
