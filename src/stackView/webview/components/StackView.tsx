@@ -194,7 +194,7 @@ export function StackView({ postMessage, subscribeMessages }: StackViewProps): J
 	const treeColors = useReadTreeColors();
 
 	useEffect(() => {
-		return subscribeMessages((message) => {
+		const unsubscribe = subscribeMessages((message) => {
 			if (message.type === 'refreshing') dispatchRef.current({ type: 'refreshing' });
 			else if (message.type === 'state') dispatchRef.current({ type: 'setDisplay', payload: message.payload });
 			else if (message.type === 'commitFiles')
@@ -207,7 +207,13 @@ export function StackView({ postMessage, subscribeMessages }: StackViewProps): J
 					files: message.files,
 				});
 		});
-	}, [subscribeMessages]);
+		// Announce readiness only now that the listener is attached. Posting
+		// 'ready' earlier (e.g. from the bootstrap right after render()) races
+		// this effect: the host's state push can arrive before we subscribe and
+		// be dropped, leaving the view blank (issue #67).
+		postMessage({ type: 'ready' });
+		return unsubscribe;
+	}, [subscribeMessages, postMessage]);
 
 	const repos = state.display?.repositories ?? [];
 	const isSingle = repos.length === 1;

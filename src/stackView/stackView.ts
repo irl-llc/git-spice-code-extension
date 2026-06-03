@@ -4,7 +4,8 @@
  * Mounts the StackView React tree into the webview's #repoContainer
  * and bridges acquireVsCodeApi to it. All UI behavior lives in
  * components/StackView.tsx; this file only handles the bootstrap
- * (DOM mount, message subscription, posting 'ready').
+ * (DOM mount, message bridge). StackView itself posts 'ready' from its
+ * subscribe effect, once its message listener is attached (issue #67).
  */
 
 import { createElement } from 'react';
@@ -40,5 +41,4 @@ function bootstrap(): void {
 
 	const root = createRoot(container);
 	root.render(createElement(StackView, { postMessage: post, subscribeMessages: subscribe }));
-	post({ type: 'ready' });
 }
