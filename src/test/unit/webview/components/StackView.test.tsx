@@ -80,3 +80,19 @@ describe('StackView refresh indicator', () => {
 		assert.ok(indicator(h.container), 'indicator should re-appear on the next refresh');
 	});
 });
+
+describe('StackView initial-state handshake (issue #67)', () => {
+	beforeEach(installJsdomGlobals);
+	afterEach(cleanup);
+
+	it('posts `ready` from the subscribe effect, so the listener is attached first', () => {
+		const h = renderStackView();
+		// `ready` is posted by the subscribe effect (after the message listener
+		// is attached), not synchronously at bootstrap before it — otherwise the
+		// host's state reply could land before we subscribe and be dropped.
+		assert.deepStrictEqual(h.messages, [{ type: 'ready' }]);
+		// The listener is live, so the host's state reply renders.
+		h.emit({ type: 'state', payload: { repositories: [] } });
+		assert.ok(h.container.querySelector('.empty'), 'state reply renders once the listener is attached');
+	});
+});

@@ -1,0 +1,2 @@
+kind: Fixed
+body: 'Fixed the stack view occasionally loading blank: the webview now announces readiness only after its message listener is attached, so the extension''s initial state push can no longer be dropped by a render-timing race.'
