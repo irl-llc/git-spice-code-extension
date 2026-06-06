@@ -27,6 +27,26 @@ async function enableRemoteForgeStatus(workbench: Page): Promise<void> {
 	await workbench.keyboard.press('Enter');
 }
 
+/**
+ * Tears down a launched scenario, guarding each step so a failure in one does
+ * not skip the others — Playwright abandons the rest of an afterAll once a
+ * statement throws, which would otherwise leak the temp dirs `cleanup()` removes.
+ */
+async function teardownScenario(
+	vscode: VSCodeInstance | undefined,
+	scenario: ShamhubStack | undefined,
+): Promise<void> {
+	try {
+		await vscode?.close();
+	} finally {
+		try {
+			await scenario?.shamhub.close();
+		} finally {
+			scenario?.cleanup();
+		}
+	}
+}
+
 /** Seeds a feat1/feat2 stack, then merges #1 and closes #2 via shamhub. */
 async function seedMergedClosedScenario(): Promise<ShamhubStack> {
 	const stack = await seedShamhubStack({ branches: ['feat1', 'feat2'] });
@@ -36,8 +56,7 @@ async function seedMergedClosedScenario(): Promise<ShamhubStack> {
 		return stack;
 	} catch (error) {
 		// Seeding threw after startup: tear down so beforeAll doesn't leak it.
-		await stack.shamhub.close();
-		stack.cleanup();
+		await teardownScenario(undefined, stack);
 		throw error;
 	}
 }
@@ -52,9 +71,7 @@ test.describe('CR status badges (shamhub)', () => {
 	});
 
 	test.afterAll(async () => {
-		await vscode?.close();
-		await scenario?.shamhub.close();
-		scenario?.cleanup();
+		await teardownScenario(vscode, scenario);
 	});
 
 	test('renders open CR status badges fetched from the forge', async () => {
@@ -89,9 +106,7 @@ test.describe('CR status badges: merged + closed (shamhub)', () => {
 	});
 
 	test.afterAll(async () => {
-		await vscode?.close();
-		await scenario?.shamhub.close();
-		scenario?.cleanup();
+		await teardownScenario(vscode, scenario);
 	});
 
 	test('renders merged and closed CR status badges fetched from the forge', async () => {
