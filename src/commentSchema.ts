@@ -117,9 +117,9 @@ function readScope(value: unknown): InlineCommentScope | undefined {
 }
 
 function readSide(value: unknown): InlineCommentSide | undefined {
-	if (value === 'LEFT' || value === 'left') return 'left';
-	if (value === 'RIGHT' || value === 'right') return 'right';
-	return undefined;
+	if (typeof value !== 'string') return undefined;
+	const lower = value.toLowerCase();
+	return lower === 'left' || lower === 'right' ? lower : undefined;
 }
 
 function readStatus(value: unknown): InlineCommentStatus | undefined {
@@ -130,7 +130,7 @@ function readRange(value: unknown): InlineCommentRange | undefined {
 	if (!isRecord(value)) return undefined;
 	const start = readNumber(value.start);
 	const end = readNumber(value.end);
-	if (start === undefined || end === undefined) return undefined;
+	if (start === undefined || end === undefined || start > end) return undefined;
 	return { start, end };
 }
 
@@ -147,5 +147,6 @@ function readBoolean(value: unknown): boolean | undefined {
 }
 
 function readNumber(value: unknown): number | undefined {
-	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+	// Line/range values are non-negative integers; reject floats and negatives.
+	return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }

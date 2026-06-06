@@ -59,6 +59,24 @@ describe('commentSchema', () => {
 			assert.strictEqual(result[1].side, 'right');
 		});
 
+		it('normalizes a mixed-case diff side', () => {
+			const line = JSON.stringify({ kind: 'forge', id: '1', scope: 'line', body: 'b', side: 'Left' });
+			assert.strictEqual(parseInlineComments(line)[0].side, 'left');
+		});
+
+		it('drops an inverted range (start > end) but keeps the comment', () => {
+			const line = JSON.stringify({ kind: 'forge', id: '1', scope: 'line', body: 'b', range: { start: 9, end: 2 } });
+			const [comment] = parseInlineComments(line);
+			assert.strictEqual(comment.range, undefined);
+		});
+
+		it('rejects negative and non-integer line/range values', () => {
+			const line = JSON.stringify({ kind: 'forge', id: '1', scope: 'line', body: 'b', line: -3 });
+			const float = JSON.stringify({ kind: 'forge', id: '2', scope: 'line', body: 'b', line: 4.5 });
+			assert.strictEqual(parseInlineComments(line)[0].line, undefined);
+			assert.strictEqual(parseInlineComments(float)[0].line, undefined);
+		});
+
 		it('parses a minimal comment, omitting absent optionals', () => {
 			const line = JSON.stringify({ kind: 'staged', id: 'sc-1', scope: 'pr', body: 'top-level note' });
 			const [comment] = parseInlineComments(line);
