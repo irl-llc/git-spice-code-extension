@@ -98,3 +98,49 @@ function writeFiles(write: (p: string, c: string) => void, files: Record<string,
 		write(path, content);
 	}
 }
+
+/** A bare repository plus a linked worktree checked out and gs-initialized (issue #68). */
+export interface BareRepoWorktree {
+	/** Path to the bare repository (`*.git`). */
+	barePath: string;
+	/** Path to the linked worktree working directory — open this as the workspace. */
+	worktreePath: string;
+	cleanup(): void;
+	git(...args: string[]): string;
+	gs(...args: string[]): string;
+}
+
+/**
+ * Creates a bare repo with an initial trunk commit, adds a linked worktree, and
+ * runs `gs repo init` inside the worktree. Opening {@link BareRepoWorktree.worktreePath}
+ * as the VS Code workspace reproduces issue #68's environment.
+ */
+export function createBareRepoWorktree(trunk: string): BareRepoWorktree {
+	const root = mkdtempSync(join(tmpdir(), 'gs-e2e-wt-'));
+	const barePath = join(root, 'repo.git');
+	const seed = join(root, 'seed');
+	const worktreePath = join(root, 'worktree');
+
+	const runGit = (cwd: string, ...args: string[]): string =>
+		execFileSync('git', ['-c', 'safe.bareRepository=all', '-C', cwd, ...args], { encoding: 'utf8' });
+
+	execFileSync('git', ['init', '--bare', '-b', trunk, barePath], { encoding: 'utf8' });
+	execFileSync('git', ['clone', barePath, seed], { encoding: 'utf8' });
+	runGit(seed, 'config', 'user.email', 'e2e@example.com');
+	runGit(seed, 'config', 'user.name', 'E2E Bot');
+	runGit(seed, 'commit', '--allow-empty', '-q', '-m', 'initial');
+	runGit(seed, 'push', '-q', 'origin', trunk);
+	runGit(barePath, 'worktree', 'add', worktreePath, trunk);
+
+	const git = (...args: string[]): string => runGit(worktreePath, ...args);
+	const gs = (...args: string[]): string => execFileSync(GS_BIN, args, { cwd: worktreePath, encoding: 'utf8' });
+	gs('repo', 'init', '--trunk', trunk);
+
+	return {
+		barePath,
+		worktreePath,
+		git,
+		gs,
+		cleanup: () => rmSync(root, { recursive: true, force: true }),
+	};
+}

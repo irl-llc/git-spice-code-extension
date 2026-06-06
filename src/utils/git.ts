@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { normalize as pathNormalize } from 'node:path';
+import { normalize as pathNormalize, isAbsolute as pathIsAbsolute } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -28,6 +28,72 @@ export interface GitExecResult {
  */
 export async function execGit(cwd: string, args: string[]): Promise<GitExecResult> {
 	return execFileAsync('git', args, { cwd, env: NO_OPTIONAL_LOCKS_ENV });
+}
+
+/**
+ * Resolves the real working-tree root for `candidatePath`.
+ *
+ * The VS Code Git extension can hand us a `rootUri` that, for a *linked
+ * worktree of a bare repository*, resolves into the bare repo's git-dir
+ * rather than the worktree's checked-out working directory. Running `gs`/`git`
+ * with that path as cwd makes git treat the invocation as happening in a bare
+ * repo and fail with `exit 128` (e.g. `git remote` →
+ * `cannot use bare repository`), even though the CLI works fine inside the
+ * worktree.
+ *
+ * `git -C <candidate> rev-parse --show-toplevel` reports the working-tree root
+ * exactly as the CLI sees it from that directory, transparently following a
+ * `.git` *file* into a worktree gitdir. We run gs/git there so the extension
+ * behaves identically to the command line.
+ *
+ * Falls back to the original path when git cannot resolve a working tree
+ * (not a repo, or a bare git-dir with no work tree) so non-worktree repos and
+ * error reporting are unaffected.
+ *
+ * @param candidatePath - Path reported by repo discovery (the workspace folder)
+ * @returns The absolute working-tree root, or `candidatePath` on any failure
+ */
+export async function resolveWorkingTreeRoot(candidatePath: string): Promise<string> {
+	try {
+		const { stdout } = await execGit(candidatePath, ['rev-parse', '--show-toplevel']);
+		const toplevel = stdout.trim();
+		return toplevel.length > 0 ? toplevel : candidatePath;
+	} catch {
+		return candidatePath;
+	}
+}
+
+/** Absolute git directories for a working tree. */
+export interface GitDirs {
+	/** Per-worktree git-dir (holds HEAD, index). For a non-worktree repo this equals {@link commonDir}. */
+	gitDir: string;
+	/** Shared common dir (holds refs/heads, refs/spice/data). */
+	commonDir: string;
+}
+
+/**
+ * Resolves the per-worktree and common git directories for `cwd`.
+ *
+ * For a linked worktree these differ: HEAD/index live in the per-worktree
+ * git-dir (`…/worktrees/<name>`) while refs (including `refs/spice/data`) live
+ * in the shared common dir (the bare repo). Watching `<root>/.git` directly is
+ * wrong for a worktree because `.git` there is a *file*, not a directory — so
+ * branch/HEAD changes go unnoticed. Resolving the real dirs lets the watcher
+ * observe both.
+ *
+ * Returns null when `cwd` is not inside a git repository.
+ */
+export async function resolveGitDirs(cwd: string): Promise<GitDirs | null> {
+	try {
+		const { stdout } = await execGit(cwd, ['rev-parse', '--absolute-git-dir', '--git-common-dir']);
+		const [gitDir, commonDirRaw] = stdout.trim().split('\n');
+		if (!gitDir) return null;
+		// --git-common-dir may be relative to gitDir; only --absolute-git-dir is guaranteed absolute.
+		const commonDir = commonDirRaw && pathIsAbsolute(commonDirRaw) ? commonDirRaw : gitDir;
+		return { gitDir, commonDir };
+	} catch {
+		return null;
+	}
 }
 
 /**

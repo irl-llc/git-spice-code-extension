@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { BRANCH_CREATE_TIMEOUT_MS, GIT_SPICE_PROBE_TIMEOUT_MS, GIT_SPICE_TIMEOUT_MS } from '../constants';
 import { parseGitSpiceBranches, type GitSpiceBranch } from '../gitSpiceSchema';
 import { formatError, toErrorMessage } from './error';
+import { resolveWorkingTreeRoot } from './git';
 import { resolveGitSpiceBinary } from './gitSpiceBinary';
 import { parseIntegrationSupport } from './integrationSupport';
 
@@ -41,6 +42,20 @@ export function getWorkspaceFolderPath(folder: FolderUri): string | null {
 	return typeof fsPath === 'string' && fsPath.length > 0 ? fsPath : null;
 }
 
+/**
+ * Resolves the cwd to run gs/git in for `folder`: the real working-tree root.
+ *
+ * For a linked worktree of a bare repository the discovered folder path can
+ * resolve into the bare git-dir; running gs there fails with `exit 128`. We
+ * ask git for the working-tree root so gs runs exactly where the CLI would.
+ * Returns null when the folder has no usable path.
+ */
+export async function resolveGitSpiceCwd(folder: FolderUri): Promise<string | null> {
+	const fsPath = getWorkspaceFolderPath(folder);
+	if (!fsPath) return null;
+	return resolveWorkingTreeRoot(fsPath);
+}
+
 function normalizeNonEmpty(value: string, field: string): NormalizedString {
 	if (typeof value !== 'string') {
 		return { error: `${field} must be a string` };
@@ -58,7 +73,7 @@ async function runGitSpiceCommand(
 	context: string,
 	timeout: number = GIT_SPICE_TIMEOUT_MS,
 ): Promise<BranchCommandResult> {
-	const cwd = getWorkspaceFolderPath(folder);
+	const cwd = await resolveGitSpiceCwd(folder);
 	if (!cwd) {
 		return { error: formatError(context, 'Workspace folder path is unavailable') };
 	}
@@ -79,7 +94,7 @@ async function runGitSpiceCommand(
 export async function execGitSpice(folder: FolderUri, withForgeStatus = false): Promise<BranchLoadResult> {
 	const context = 'Load branches';
 	try {
-		const cwd = getWorkspaceFolderPath(folder);
+		const cwd = await resolveGitSpiceCwd(folder);
 		if (!cwd) {
 			return { error: formatError(context, 'Workspace folder path is unavailable') };
 		}
@@ -105,7 +120,7 @@ export async function execGitSpice(folder: FolderUri, withForgeStatus = false): 
  * cannot drive.
  */
 export async function execGitSpiceSupportsIntegration(folder: FolderUri): Promise<boolean> {
-	const cwd = getWorkspaceFolderPath(folder);
+	const cwd = await resolveGitSpiceCwd(folder);
 	if (!cwd) {
 		return false;
 	}
