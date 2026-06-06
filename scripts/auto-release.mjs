@@ -22,7 +22,7 @@
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
@@ -103,7 +103,7 @@ async function emitReleased(released, tag = '') {
 	if (!outputPath) {
 		return;
 	}
-	const { formatReleaseOutput } = await import(OUTPUT_MODULE);
+	const { formatReleaseOutput } = await import(pathToFileURL(OUTPUT_MODULE).href);
 	appendFileSync(outputPath, formatReleaseOutput({ released, tag }));
 }
 
@@ -111,7 +111,7 @@ async function main() {
 	if (!existsSync(BUMP_MODULE)) {
 		fail(`compiled bump module missing at ${BUMP_MODULE}; run \`npm run compile-tests\`.`);
 	}
-	const { deriveNextVersion } = await import(BUMP_MODULE);
+	const { deriveNextVersion } = await import(pathToFileURL(BUMP_MODULE).href);
 	const kinds = pendingKinds();
 	const { level, nextVersion } = deriveNextVersion(currentVersion(), kinds);
 	if (!nextVersion) {
