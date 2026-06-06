@@ -42,15 +42,21 @@ function stockHelpOutput(bin: string): string {
 /** Spins up a throwaway git + stock-gs repo with one tracked branch. */
 function seedStockRepo(bin: string): { path: string; cleanup: () => void } {
 	const path = mkdtempSync(join(tmpdir(), 'gs-stock-'));
-	const git = (...a: string[]): void => void execFileSync('git', ['-C', path, ...a], { encoding: 'utf8' });
-	git('init', '-q', '-b', 'main');
-	git('config', 'user.email', 'stock@example.com');
-	git('config', 'user.name', 'Stock Bot');
-	git('commit', '-q', '--allow-empty', '-m', 'root');
-	// `--no-prompt` keeps init non-interactive; stock gs only needs a trunk for a
-	// purely-local repo (remotes are prompted for push/pull ops we never run).
-	execFileSync(bin, ['repo', 'init', '--trunk', 'main', '--no-prompt'], { cwd: path, encoding: 'utf8' });
-	return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) };
+	const cleanup = (): void => rmSync(path, { recursive: true, force: true });
+	try {
+		const git = (...a: string[]): void => void execFileSync('git', ['-C', path, ...a], { encoding: 'utf8' });
+		git('init', '-q', '-b', 'main');
+		git('config', 'user.email', 'stock@example.com');
+		git('config', 'user.name', 'Stock Bot');
+		git('commit', '-q', '--allow-empty', '-m', 'root');
+		// `--no-prompt` keeps init non-interactive; stock gs only needs a trunk for a
+		// purely-local repo (remotes are prompted for push/pull ops we never run).
+		execFileSync(bin, ['repo', 'init', '--trunk', 'main', '--no-prompt'], { cwd: path, encoding: 'utf8' });
+		return { path, cleanup };
+	} catch (err) {
+		cleanup();
+		throw err;
+	}
 }
 
 const stockBin = resolveStockBinary();
