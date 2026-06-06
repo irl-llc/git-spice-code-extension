@@ -8,10 +8,10 @@ import { relative as pathRelative, isAbsolute as pathIsAbsolute, join as pathJoi
 
 import * as vscode from 'vscode';
 
-import { FILE_WATCHER_DEBOUNCE_MS, MIN_REFRESH_INTERVAL_MS } from '../constants';
+import { FILE_WATCHER_DEBOUNCE_MS, GIT_OP_RECHECK_MS, MIN_REFRESH_INTERVAL_MS } from '../constants';
 import type { DiscoveredRepo } from '../repoDiscovery';
 import { filterIgnoredPaths, resolveGitDirs } from '../utils/git';
-import { decideRefresh } from './refreshThrottle';
+import { decideRefresh, type ThrottleDecision } from './refreshThrottle';
 
 /**
  * Marker paths under a repo's `.git` that indicate an in-progress multi-step
@@ -47,6 +47,8 @@ export class FileWatcherManager implements vscode.Disposable {
 	private gitEventPending = false;
 	/** Timestamp (ms) of the last fired refresh, for min-interval throttling. */
 	private lastRefreshAt = 0;
+	/** True while a flush is awaiting its async ignore-filter — blocks re-entry. */
+	private flushInProgress = false;
 
 	constructor(private readonly onRefreshNeeded: () => void) {}
 
@@ -186,20 +188,45 @@ export class FileWatcherManager implements vscode.Disposable {
 	 * refs/index dozens of times — into bounded refreshes (issue #71).
 	 */
 	private async flush(): Promise<void> {
+		// A flush already awaiting its async ignore-filter must not run concurrently:
+		// a second pass would read a stale `lastRefreshAt` and bypass the throttle.
+		if (this.flushInProgress) {
+			this.deferFlush(FILE_WATCHER_DEBOUNCE_MS);
+			return;
+		}
 		if (!this.gitEventPending && this.pendingPaths.size === 0) return;
-		const decision = decideRefresh({
+		const decision = this.throttleDecision();
+		if (!decision.refresh) {
+			this.deferFlush(decision.deferMs); // keep pending flags; re-evaluate later
+			return;
+		}
+		await this.guardedRefresh();
+	}
+
+	/** Evaluates the throttle for the current pending state. */
+	private throttleDecision(): ThrottleDecision {
+		return decideRefresh({
 			now: Date.now(),
 			lastRefreshAt: this.lastRefreshAt,
 			minIntervalMs: MIN_REFRESH_INTERVAL_MS,
 			gitOpInProgress: this.gitOperationInProgress(),
-			gitOpRecheckMs: MIN_REFRESH_INTERVAL_MS,
+			gitOpRecheckMs: GIT_OP_RECHECK_MS,
 		});
-		if (!decision.refresh) {
-			// Keep the pending flags and re-evaluate after the deferral.
-			this.refreshTimer = setTimeout(() => void this.flush(), decision.deferMs);
-			return;
+	}
+
+	/** Runs the refresh under the re-entry guard so flushes never overlap. */
+	private async guardedRefresh(): Promise<void> {
+		this.flushInProgress = true;
+		try {
+			await this.runRefreshIfNeeded();
+		} finally {
+			this.flushInProgress = false;
 		}
-		await this.runRefreshIfNeeded();
+	}
+
+	/** Re-arms the flush timer after `ms`, keeping the pending flags. */
+	private deferFlush(ms: number): void {
+		this.refreshTimer = setTimeout(() => void this.flush(), ms);
 	}
 
 	/**
@@ -242,6 +269,7 @@ export class FileWatcherManager implements vscode.Disposable {
 		this.saveListener = undefined;
 		this.pendingPaths.clear();
 		this.gitEventPending = false;
+		this.flushInProgress = false;
 		if (this.refreshTimer) {
 			clearTimeout(this.refreshTimer);
 			this.refreshTimer = undefined;

@@ -17,6 +17,15 @@ export const FILE_WATCHER_DEBOUNCE_MS = 300;
  */
 export const MIN_REFRESH_INTERVAL_MS = 1500;
 
+/**
+ * How often (ms) to re-check whether an in-progress git operation has finished.
+ * Decoupled from {@link MIN_REFRESH_INTERVAL_MS}: the floor exists to coalesce a
+ * submit storm, but once the operation ends the user wants the view promptly, so
+ * polling for completion is kept short. (The post-op refresh still respects the
+ * floor — this only governs how quickly completion is noticed.)
+ */
+export const GIT_OP_RECHECK_MS = 250;
+
 /** Delay in ms after branch creation to allow SCM view to update. */
 export const POST_COMMIT_REFRESH_DELAY_MS = 100;
 
