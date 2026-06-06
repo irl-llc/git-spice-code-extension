@@ -302,6 +302,18 @@ button {
 	margin: 0;
 }
 
+/* Compact "needs restack" icon, replacing the wordy text badge. */
+.branch-restack-icon {
+	display: inline-flex;
+	align-items: center;
+	color: var(--vscode-problemsWarningIcon-foreground);
+}
+
+.branch-restack-icon .codicon {
+	font-size: 0.8rem;
+	line-height: 1;
+}
+
 .branch-pr-link {
 	border: none;
 	background: transparent;
@@ -309,6 +321,31 @@ button {
 	cursor: pointer;
 	padding: 0;
 	font-size: 0.7rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.15rem;
+}
+
+.branch-pr-link .codicon {
+	font-size: 0.8rem;
+	line-height: 1;
+}
+
+/* PR number is revealed only on hover/focus to reduce badge clutter. */
+.branch-pr-number {
+	max-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	opacity: 0;
+	transition:
+		max-width 0.15s ease,
+		opacity 0.15s ease;
+}
+
+.branch-pr-link:hover .branch-pr-number,
+.branch-pr-link:focus-visible .branch-pr-number {
+	max-width: 4rem;
+	opacity: 1;
 }
 
 .branch-pr-link:hover {

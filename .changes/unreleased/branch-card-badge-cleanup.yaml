@@ -1,0 +1,2 @@
+kind: Changed
+body: 'Reduced branch-card badge clutter: the "Restack" text badge is now a compact history icon with an accessible label, the PR number is revealed on hover/focus (the link stays clickable with an always-present aria-label), and the cloud-upload submit affordance is hidden on the trunk branch, which has no change of its own to submit.'

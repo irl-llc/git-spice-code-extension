@@ -533,6 +533,7 @@ function createBranchViewModel(
 		name: branch.name,
 		current: branch.current === true,
 		restack: needsRestack(branch),
+		isTrunk: !branch.down,
 		tree,
 		treeFragment,
 		change: branch.change ? toChangeViewModel(branch.change) : undefined,

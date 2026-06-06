@@ -8,6 +8,7 @@ describe('contextBuilder', () => {
 			name: 'feature-branch',
 			current: false,
 			restack: false,
+			isTrunk: false,
 			tree: {
 				depth: 1,
 				isLastChild: true,

@@ -132,12 +132,21 @@ interface BranchTagsProps {
 	postMessage: PostMessage;
 }
 
+/** Compact icon indicating the branch is out of sync with its base. */
+function RestackIndicator(): JSX.Element {
+	return (
+		<span className="branch-restack-icon" title="Needs restack" aria-label="Needs restack" role="img">
+			<i className="codicon codicon-history" aria-hidden="true" />
+		</span>
+	);
+}
+
 /** The read-only status pills shown before the action buttons. */
 function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
 	const comments = branch.change?.comments;
 	return (
 		<>
-			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
+			{branch.restack ? <RestackIndicator /> : null}
 			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
 			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}
 		</>
@@ -163,22 +172,27 @@ function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 					<i className="codicon codicon-fold-down" aria-hidden="true" />
 				</button>
 			) : null}
-			<button
-				type="button"
-				className="branch-submit-btn"
-				title={branch.change ? 'Submit branch and ancestors' : 'Create PR for branch and ancestors'}
-				aria-label={
-					branch.change ? `Submit ${branch.name} and ancestors` : `Create PR for ${branch.name} and ancestors`
-				}
-				onClick={(e) => {
-					e.stopPropagation();
-					postMessage({ type: 'branchSubmit', branchName: branch.name });
-				}}
-			>
-				<i className="codicon codicon-cloud-upload" aria-hidden="true" />
-			</button>
+			{branch.isTrunk ? null : <SubmitButton branch={branch} postMessage={postMessage} />}
 			{branch.change ? <PrLink branch={branch} postMessage={postMessage} /> : null}
 		</div>
+	);
+}
+
+/** The cloud-upload submit affordance (suppressed on trunk by the caller). */
+function SubmitButton({ branch, postMessage }: BranchTagsProps): JSX.Element {
+	return (
+		<button
+			type="button"
+			className="branch-submit-btn"
+			title={branch.change ? 'Submit branch and ancestors' : 'Create PR for branch and ancestors'}
+			aria-label={branch.change ? `Submit ${branch.name} and ancestors` : `Create PR for ${branch.name} and ancestors`}
+			onClick={(e) => {
+				e.stopPropagation();
+				postMessage({ type: 'branchSubmit', branchName: branch.name });
+			}}
+		>
+			<i className="codicon codicon-cloud-upload" aria-hidden="true" />
+		</button>
 	);
 }
 
@@ -200,7 +214,10 @@ function PrLink({ branch, postMessage }: BranchTagsProps): JSX.Element {
 					: undefined
 			}
 		>
-			{change.id}
+			<i className="codicon codicon-git-pull-request" aria-hidden="true" />
+			<span className="branch-pr-number" aria-hidden="true">
+				{change.id}
+			</span>
 		</button>
 	);
 }

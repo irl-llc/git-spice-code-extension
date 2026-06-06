@@ -46,6 +46,7 @@ function makeBranch(overrides?: Partial<BranchViewModel>): BranchViewModel {
 		name: 'feat-a',
 		current: false,
 		restack: false,
+		isTrunk: false,
 		commits: [{ sha: 'abc123', shortSha: 'abc', subject: 'first' }],
 		tree: makeTreePosition(),
 		treeFragment: makeTreeFragment(),
@@ -158,28 +159,33 @@ describe('BranchCard', () => {
 	});
 
 	describe('tags', () => {
-		it('shows the Restack tag when branch.restack is true', () => {
+		it('shows the restack icon (not text) when branch.restack is true', () => {
 			const h = harness();
-			render(
+			const { container } = render(
 				<BranchCard
 					branch={makeBranch({ restack: true })}
 					postMessage={h.postMessage}
 					setArticleClass={h.setArticleClass}
 				/>,
 			);
-			assert.ok(screen.getByText('Restack'));
+			// No wordy text badge — an accessible icon indicator instead.
+			assert.strictEqual(screen.queryByText('Restack'), null);
+			const icon = container.querySelector('.branch-restack-icon');
+			assert.ok(icon, 'restack icon present');
+			assert.strictEqual(icon?.getAttribute('aria-label'), 'Needs restack');
+			assert.ok(icon?.querySelector('.codicon-history'), 'uses the history codicon');
 		});
 
-		it('does not render the Restack tag when branch.restack is false', () => {
+		it('does not render the restack icon when branch.restack is false', () => {
 			const h = harness();
-			render(
+			const { container } = render(
 				<BranchCard
 					branch={makeBranch({ restack: false })}
 					postMessage={h.postMessage}
 					setArticleClass={h.setArticleClass}
 				/>,
 			);
-			assert.strictEqual(screen.queryByText('Restack'), null);
+			assert.strictEqual(container.querySelector('.branch-restack-icon'), null);
 		});
 
 		it('renders a squash button only when the branch has multiple commits', () => {
@@ -260,6 +266,38 @@ describe('BranchCard', () => {
 			);
 			fireEvent.click(screen.getByRole('button', { name: /open pr #42 for feat-a/i }));
 			assert.deepStrictEqual(h.messages, [{ type: 'openChange', url: 'https://github.com/x/y/pull/42' }]);
+		});
+
+		it('PR link keeps an accessible label while the number text is hover-revealed (aria-hidden)', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#42', url: 'https://github.com/x/y/pull/42' } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			// aria-label is always present so screen readers announce the PR.
+			const link = screen.getByRole('button', { name: /open pr #42 for feat-a/i });
+			assert.ok(link, 'PR link exposes an aria-label');
+			// The visible number text is decorative (revealed on hover via CSS).
+			const number = container.querySelector('.branch-pr-number');
+			assert.ok(number, 'PR number span present');
+			assert.strictEqual(number?.textContent, '#42');
+			assert.strictEqual(number?.getAttribute('aria-hidden'), 'true');
+		});
+
+		it('suppresses the submit button on the trunk branch', () => {
+			const h = harness();
+			render(
+				<BranchCard
+					branch={makeBranch({ name: 'main', isTrunk: true })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			assert.strictEqual(screen.queryByRole('button', { name: /create pr for main/i }), null);
+			assert.strictEqual(screen.queryByRole('button', { name: /submit main/i }), null);
 		});
 
 		it('PR link is disabled when no URL is available', () => {

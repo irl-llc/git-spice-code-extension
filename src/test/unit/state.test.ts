@@ -216,6 +216,19 @@ describe('state', () => {
 			assert.strictEqual(main?.restack, true);
 		});
 
+		it('should mark the branch without a base as trunk', () => {
+			const branches: GitSpiceBranch[] = [
+				createBranch('main'),
+				createBranch('feature', { down: { name: 'main' } }),
+			];
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
+
+			const main = result.branches.find((b) => b.name === 'main');
+			const feature = result.branches.find((b) => b.name === 'feature');
+			assert.strictEqual(main?.isTrunk, true);
+			assert.strictEqual(feature?.isTrunk, false);
+		});
+
 		it('should include change info when present', () => {
 			const branches: GitSpiceBranch[] = [
 				createBranch('feature', {

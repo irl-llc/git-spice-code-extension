@@ -141,6 +141,11 @@ export type BranchViewModel = {
 	name: string;
 	current: boolean;
 	restack: boolean;
+	/**
+	 * True when this is the trunk branch (no base). Trunk has no change of its
+	 * own to submit, so the submit affordance is suppressed for it.
+	 */
+	isTrunk: boolean;
 	change?: BranchChangeViewModel;
 	commits?: BranchCommitViewModel[];
 	tree: TreePosition;
