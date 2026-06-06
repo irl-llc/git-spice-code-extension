@@ -323,7 +323,6 @@ button {
 	font-size: 0.7rem;
 	display: inline-flex;
 	align-items: center;
-	gap: 0.15rem;
 }
 
 .branch-pr-link .codicon {
@@ -331,21 +330,35 @@ button {
 	line-height: 1;
 }
 
-/* PR number is revealed only on hover/focus to reduce badge clutter. */
+/*
+ * PR number is revealed only on hover/focus to reduce badge clutter. The
+ * spacing rides on the number's own margin-left (not a static container gap),
+ * so a hidden number leaves no phantom gap next to the icon.
+ */
 .branch-pr-number {
 	max-width: 0;
 	overflow: hidden;
 	white-space: nowrap;
 	opacity: 0;
+	margin-left: 0;
 	transition:
 		max-width 0.15s ease,
+		margin-left 0.15s ease,
 		opacity 0.15s ease;
 }
 
 .branch-pr-link:hover .branch-pr-number,
-.branch-pr-link:focus-visible .branch-pr-number {
-	max-width: 4rem;
+.branch-pr-link:focus-visible .branch-pr-number,
+.branch-pr-link:disabled .branch-pr-number {
+	max-width: 10rem;
+	margin-left: 0.15rem;
 	opacity: 1;
+}
+
+/* No URL → not clickable, but keep the PR number statically visible. */
+.branch-pr-link:disabled {
+	cursor: default;
+	opacity: 0.6;
 }
 
 .branch-pr-link:hover {
