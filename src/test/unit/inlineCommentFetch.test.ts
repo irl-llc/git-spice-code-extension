@@ -40,9 +40,7 @@ describe('fetchInlineComments', () => {
 
 	it('omits branches whose fetch errored, keeping the successful ones', async () => {
 		const fetch: InlineCommentFetcher = (_f, name) =>
-			name === 'bad'
-				? Promise.resolve({ error: 'boom' })
-				: Promise.resolve({ value: [lineComment('1', name)] });
+			name === 'bad' ? Promise.resolve({ error: 'boom' }) : Promise.resolve({ value: [lineComment('1', name)] });
 
 		const pairs = await fetchInlineComments(fetch, [
 			{ folder, branches: [branch('good', 'CR-1'), branch('bad', 'CR-2')] },
