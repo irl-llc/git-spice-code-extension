@@ -15,11 +15,13 @@
  * using the pure {@link mapCommentsToThreads} helper.
  */
 
+import * as nodePath from 'node:path';
+
 import * as vscode from 'vscode';
 
-import { parseGitSpiceDiffUri } from '../utils/diffUri';
-import { mapCommentsToThreads } from './commentThreadMapping';
-import type { DisplayState } from './types';
+import { buildGitUri, parseGitSpiceDiffUri } from '../utils/diffUri';
+import { distinctFilePaths, mapCommentsToThreads } from './commentThreadMapping';
+import type { BranchViewModel, DisplayState } from './types';
 import type { InlineComment } from '../gitSpiceSchema';
 
 /** Looks up a branch's inline comments across all repos in the display state. */
@@ -54,24 +56,42 @@ export class ForgeCommentController implements vscode.Disposable {
 		this.controller = vscode.comments.createCommentController('gitSpice.forgeComments', 'Git Spice forge comments');
 		this.disposables.push(
 			this.controller,
-			vscode.window.onDidChangeVisibleTextEditors(() => this.renderVisibleEditors()),
+			vscode.window.onDidChangeVisibleTextEditors(() => this.render()),
 		);
 	}
 
-	/** Replaces the cached state and re-renders threads on all visible diffs. */
+	/** Replaces the cached state and re-renders threads for all known diffs. */
 	update(state: DisplayState): void {
 		this.state = state;
-		this.renderVisibleEditors();
+		this.render();
 	}
 
-	/** Re-renders comment threads for every currently visible git-spice diff. */
-	private renderVisibleEditors(): void {
+	/**
+	 * Renders comment threads for every git-spice diff we can target: the marked
+	 * diffs reconstructed from state (so threads exist even before — or inside a
+	 * multi-file changes view where — the inner editor is "visible"), plus any
+	 * currently visible marked diff (covers PR-scope-only branches).
+	 */
+	private render(): void {
 		const active = new Set<string>();
-		for (const editor of vscode.window.visibleTextEditors) {
-			const key = this.renderEditor(editor.document.uri);
+		for (const uri of this.collectTargetUris().values()) {
+			const key = this.renderEditor(uri);
 			if (key) active.add(key);
 		}
 		this.pruneThreads(active);
+	}
+
+	/** Gathers the marked diff URIs to render, deduped by URI string. */
+	private collectTargetUris(): Map<string, vscode.Uri> {
+		const uris = new Map<string, vscode.Uri>();
+		for (const repo of this.state.repositories) {
+			for (const branch of repo.branches) addBranchDiffUris(uris, repo.id, branch);
+		}
+		for (const editor of vscode.window.visibleTextEditors) {
+			const uri = editor.document.uri;
+			if (parseGitSpiceDiffUri(uri)) uris.set(uri.toString(), uri);
+		}
+		return uris;
 	}
 
 	/** Renders threads for one document URI; returns its key when it is a marked diff. */
@@ -120,6 +140,23 @@ export class ForgeCommentController implements vscode.Disposable {
 		for (const key of [...this.threadsByUri.keys()]) this.disposeThreads(key);
 		for (const d of this.disposables) d.dispose();
 		this.disposables.length = 0;
+	}
+}
+
+/**
+ * Adds the reconstructed right-side diff URIs for a branch's file-anchored
+ * comments. The URI matches the one `buildBranchFileDiffUris` opens (ref =
+ * branch name + marker), so eagerly-created threads land on the very document
+ * the changes view shows. PR-scope-only branches contribute no path here and
+ * are picked up by the visible-editor pass instead.
+ */
+function addBranchDiffUris(uris: Map<string, vscode.Uri>, repoRoot: string, branch: BranchViewModel): void {
+	const comments = branch.change?.inlineComments;
+	if (!comments?.length) return;
+	for (const relPath of distinctFilePaths(comments)) {
+		const fileUri = vscode.Uri.file(nodePath.join(repoRoot, relPath));
+		const uri = buildGitUri(fileUri, branch.name, { branchName: branch.name });
+		uris.set(uri.toString(), uri);
 	}
 }
 

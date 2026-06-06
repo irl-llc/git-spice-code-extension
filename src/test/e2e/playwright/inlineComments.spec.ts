@@ -48,15 +48,19 @@ async function openBranchFileDiff(vscode: VSCodeInstance, webview: Frame): Promi
 	await expect(changesTab).toBeVisible({ timeout: 15_000 });
 }
 
-// fixme: setup is green (seeding via `gs branch comment add` + launch all work —
-// verified end-to-end in Docker), but the CommentController does not yet render
-// a thread on the opened branch diff: `.comment-body` never appears. The
-// remaining slice-2 work is the fetch→controller→diff wiring — confirm
-// `gs branch comment list --branch <b> --json` returns the seeded comments to
-// the extension, that the diff opened from "Summarized Changes" carries the
-// git-spice URI marker `parseGitSpiceDiffUri` matches, and that `.comment-body`
-// is the right native selector. Un-fixme once the thread renders + screenshot
-// is captured via the Docker harness (issue #40 slice 2).
+// fixme (issue #40 slice 2): the CommentController now creates threads EAGERLY
+// from the fetched state — it reconstructs the marked right-side diff URI for
+// every file-anchored comment (byte-identical to what the changes view opens)
+// and attaches the thread there, instead of waiting for the inner editor to be
+// "visible" (a `vscode.changes` multi-diff does not populate
+// `window.visibleTextEditors`). That removed one blocker, but `.comment-body`
+// still does not appear, so a thread is not reaching the DOM. Remaining
+// suspects, in order of likelihood: (1) the forge fetch returns nothing to the
+// extension — confirm `gs branch comment list --branch feat1 --json` actually
+// emits the seeded comments in the shamhub env (vs. count-only / empty), so the
+// controller's state carries `branch.change.inlineComments`; (2) a native
+// render precondition for programmatic threads in a diff editor. Un-fixme once
+// `.comment-body` renders and the screenshot is captured via the Docker harness.
 test.describe.fixme('inline forge comments (shamhub)', () => {
 	let scenario: ShamhubStack;
 	let vscode: VSCodeInstance;

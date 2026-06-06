@@ -5,7 +5,7 @@
 
 import * as assert from 'assert';
 
-import { mapCommentsToThreads } from '../../stackView/commentThreadMapping';
+import { distinctFilePaths, mapCommentsToThreads } from '../../stackView/commentThreadMapping';
 import type { InlineComment } from '../../commentSchema';
 
 /** Builds a minimal forge comment with overrides. */
@@ -74,10 +74,43 @@ describe('mapCommentsToThreads', () => {
 		assert.strictEqual(specs[0].line, 1);
 	});
 
+	it('matches a forward-slashed forge path against a backslashed Windows absolute path', () => {
+		// Forge comment paths are always forward-slashed; the diff URI's absolute
+		// path uses the OS separator. On Windows the two differ and must still match.
+		const specs = mapCommentsToThreads('C:\\repo\\src\\file.ts', [
+			comment({ scope: 'line', path: 'src/file.ts', line: 2 }),
+		]);
+
+		assert.strictEqual(specs.length, 1);
+		assert.strictEqual(specs[0].line, 1);
+	});
+
 	it('treats a line comment with no/zero line as top-anchored', () => {
 		const specs = mapCommentsToThreads(ABS, [comment({ scope: 'line', path: 'src/file.ts' })]);
 
 		assert.strictEqual(specs.length, 1);
 		assert.strictEqual(specs[0].line, 0);
+	});
+});
+
+describe('distinctFilePaths', () => {
+	it('returns distinct paths of line- and file-scoped comments', () => {
+		const paths = distinctFilePaths([
+			comment({ scope: 'line', path: 'a.ts', line: 1 }),
+			comment({ scope: 'line', path: 'a.ts', line: 9 }),
+			comment({ scope: 'file', path: 'b.ts' }),
+		]);
+
+		assert.deepStrictEqual([...paths].sort(), ['a.ts', 'b.ts']);
+	});
+
+	it('excludes pr-scoped comments and entries without a path', () => {
+		const paths = distinctFilePaths([
+			comment({ scope: 'pr', id: 'p1', body: 'whole pr' }),
+			comment({ scope: 'line', path: '', line: 2 }),
+			comment({ scope: 'line', path: 'kept.ts', line: 3 }),
+		]);
+
+		assert.deepStrictEqual(paths, ['kept.ts']);
 	});
 });

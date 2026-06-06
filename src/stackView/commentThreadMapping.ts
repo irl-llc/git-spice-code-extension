@@ -19,10 +19,17 @@
 
 import type { InlineComment } from '../gitSpiceSchema';
 
-/** True when `relativePath` is a trailing path-segment suffix of `absolutePath`. */
+/**
+ * True when `relativePath` is a trailing path-segment suffix of `absolutePath`.
+ * Both sides are normalized to forward slashes first: the diff URI's absolute
+ * path uses the OS separator (backslashes on Windows) while forge comment paths
+ * are always forward-slashed, so a raw compare would miss on Windows.
+ */
 function pathMatches(absolutePath: string, relativePath: string): boolean {
-	if (absolutePath === relativePath) return true;
-	return absolutePath.endsWith(`/${relativePath}`) || absolutePath.endsWith(`\\${relativePath}`);
+	const abs = absolutePath.replace(/\\/g, '/');
+	const rel = relativePath.replace(/\\/g, '/');
+	if (abs === rel) return true;
+	return abs.endsWith(`/${rel}`);
 }
 
 /** Zero-based line a thread anchors to (VS Code uses zero-based positions). */
@@ -34,6 +41,20 @@ export type CommentThreadSpec = Readonly<{
 	/** Stable key for diffing/reuse: scope + line + first comment id. */
 	key: string;
 }>;
+
+/**
+ * Distinct repo-relative paths of line/file-scoped comments. The
+ * CommentController reconstructs one marked diff URI per path to attach threads
+ * eagerly (PR-scope comments carry no path and are excluded here).
+ */
+export function distinctFilePaths(comments: ReadonlyArray<InlineComment>): string[] {
+	const paths = new Set<string>();
+	for (const comment of comments) {
+		const anchored = comment.scope === 'line' || comment.scope === 'file';
+		if (anchored && typeof comment.path === 'string' && comment.path.length > 0) paths.add(comment.path);
+	}
+	return [...paths];
+}
 
 /** Whether a comment is anchored to (and should render on) the given file. */
 function targetsFile(comment: InlineComment, filePath: string): boolean {
