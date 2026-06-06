@@ -1,0 +1,2 @@
+kind: Fixed
+body: 'Fixed the stack view failing to load in a linked worktree of a bare repository (git "exit 128"): the extension now resolves the real working-tree root via `git rev-parse --show-toplevel` before running git-spice, and the file watcher follows the worktree''s actual git-dir and shared common dir instead of assuming `.git` is a directory, so branch and HEAD changes still trigger refreshes.'

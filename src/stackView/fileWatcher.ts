@@ -9,11 +9,11 @@ import * as vscode from 'vscode';
 
 import { FILE_WATCHER_DEBOUNCE_MS } from '../constants';
 import type { DiscoveredRepo } from '../repoDiscovery';
-import { filterIgnoredPaths } from '../utils/git';
+import { filterIgnoredPaths, resolveGitDirs } from '../utils/git';
 
 /** Watchers for a single repository. */
 interface RepoWatchers extends vscode.Disposable {
-	git: vscode.FileSystemWatcher;
+	git: vscode.FileSystemWatcher[];
 	workspace: vscode.FileSystemWatcher;
 }
 
@@ -38,15 +38,15 @@ export class FileWatcherManager implements vscode.Disposable {
 	constructor(private readonly onRefreshNeeded: () => void) {}
 
 	/** Watches a single workspace folder (backward compat). */
-	watch(folder: vscode.WorkspaceFolder): void {
-		this.watchAll([{ rootUri: folder.uri, name: folder.name }]);
+	watch(folder: vscode.WorkspaceFolder): Promise<void> {
+		return this.watchAll([{ rootUri: folder.uri, name: folder.name }]);
 	}
 
 	/** Syncs watchers to match the given set of repos. */
-	watchAll(repos: ReadonlyArray<DiscoveredRepo>): void {
+	async watchAll(repos: ReadonlyArray<DiscoveredRepo>): Promise<void> {
 		const newIds = new Set(repos.map((r) => r.rootUri.fsPath));
 		this.removeStaleWatchers(newIds);
-		this.addMissingWatchers(repos);
+		await this.addMissingWatchers(repos);
 		this.ensureSaveListener();
 	}
 
@@ -60,30 +60,45 @@ export class FileWatcherManager implements vscode.Disposable {
 	}
 
 	/** Adds watchers for repos not yet tracked. */
-	private addMissingWatchers(repos: ReadonlyArray<DiscoveredRepo>): void {
+	private async addMissingWatchers(repos: ReadonlyArray<DiscoveredRepo>): Promise<void> {
 		for (const repo of repos) {
-			if (this.repoWatchers.has(repo.rootUri.fsPath)) continue;
-			this.repoWatchers.set(repo.rootUri.fsPath, this.createRepoWatchers(repo.rootUri));
+			const id = repo.rootUri.fsPath;
+			if (this.repoWatchers.has(id)) continue;
+			// Reserve the slot synchronously so concurrent syncs don't double-create.
+			this.repoWatchers.set(id, this.createWorkspaceOnlyWatchers(repo.rootUri));
+			await this.attachGitWatchers(repo.rootUri);
 		}
 	}
 
-	/** Creates git + workspace watchers for a single repo. */
-	private createRepoWatchers(rootUri: vscode.Uri): RepoWatchers {
-		const git = this.createGitWatcher(rootUri);
+	/** Creates the workspace watcher immediately; git watchers attach once dirs resolve. */
+	private createWorkspaceOnlyWatchers(rootUri: vscode.Uri): RepoWatchers {
 		const workspace = this.createWorkspaceWatcher(rootUri);
+		const git: vscode.FileSystemWatcher[] = [];
 		return {
 			git,
 			workspace,
 			dispose: () => {
-				git.dispose();
+				for (const w of git) w.dispose();
 				workspace.dispose();
 			},
 		};
 	}
 
-	/** Watches .git internals for branch/index/spice-data changes. */
-	private createGitWatcher(rootUri: vscode.Uri): vscode.FileSystemWatcher {
-		const gitDir = vscode.Uri.joinPath(rootUri, '.git');
+	/** Resolves the repo's real git dirs and attaches watchers for branch/HEAD/spice changes. */
+	private async attachGitWatchers(rootUri: vscode.Uri): Promise<void> {
+		const watchers = this.repoWatchers.get(rootUri.fsPath);
+		if (!watchers) return; // Removed while we awaited.
+		const dirs = await resolveGitDirs(rootUri.fsPath);
+		if (!dirs || !this.repoWatchers.has(rootUri.fsPath)) return;
+		// Per-worktree dir holds HEAD/index; common dir holds refs (incl. refs/spice/data).
+		// They coincide for a normal repo — dedupe so we don't double-fire.
+		const targets = dirs.gitDir === dirs.commonDir ? [dirs.gitDir] : [dirs.gitDir, dirs.commonDir];
+		for (const dir of targets) watchers.git.push(this.createGitWatcher(dir));
+	}
+
+	/** Watches a git directory for branch/index/spice-data changes. */
+	private createGitWatcher(gitDirPath: string): vscode.FileSystemWatcher {
+		const gitDir = vscode.Uri.file(gitDirPath);
 		const pattern = new vscode.RelativePattern(gitDir, '{refs/spice/data,HEAD,refs/heads/**,index}');
 		const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 		const handler = (): void => this.onGitEvent();

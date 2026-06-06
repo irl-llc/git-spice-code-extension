@@ -149,9 +149,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	private syncWatchers(): void {
 		const repos = this.getDiscoveredRepos();
 		if (repos.length > 0) {
-			this.fileWatcher.watchAll(repos);
+			void this.fileWatcher.watchAll(repos);
 		} else if (this.fallbackFolder) {
-			this.fileWatcher.watch(this.fallbackFolder);
+			void this.fileWatcher.watch(this.fallbackFolder);
 		}
 	}
 
