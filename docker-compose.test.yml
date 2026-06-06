@@ -34,6 +34,9 @@ services:
       npm_config_cache: /tmp/.npm
       CI: 'true'
       PW_FLAGS: ''
+      # Vanilla stock gs built by `npm run gs:fetch` into the mounted .gs volume.
+      # Lets stock-binary Playwright specs prove beta surfaces stay gated off.
+      GIT_SPICE_STOCK_BIN: /work/.gs/bin/gs-stock
     entrypoint:
       - bash
       - -c

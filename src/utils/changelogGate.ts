@@ -42,6 +42,11 @@ const NON_RELEASE_FILES = [
 	'Dockerfile',
 	'.dockerignore',
 	'docker-compose.test.yml',
+	// Pinned git-spice binary versions for tests (built by `npm run gs:fetch`):
+	// the ed-irl SHA pin and the vanilla stock release-tag pin (issue #72). Both
+	// only affect the test binaries, never the shipped extension.
+	'.gs-version',
+	'.gs-stock-version',
 ];
 
 /**
