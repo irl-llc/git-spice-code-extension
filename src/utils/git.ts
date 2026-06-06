@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { normalize as pathNormalize, isAbsolute as pathIsAbsolute } from 'node:path';
+import { normalize as pathNormalize, isAbsolute as pathIsAbsolute, resolve as pathResolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -57,7 +57,8 @@ export async function resolveWorkingTreeRoot(candidatePath: string): Promise<str
 	try {
 		const { stdout } = await execGit(candidatePath, ['rev-parse', '--show-toplevel']);
 		const toplevel = stdout.trim();
-		return toplevel.length > 0 ? toplevel : candidatePath;
+		// git emits forward slashes; normalize so the cwd matches Node path APIs on Windows.
+		return toplevel.length > 0 ? pathNormalize(toplevel) : candidatePath;
 	} catch {
 		return candidatePath;
 	}
@@ -86,14 +87,26 @@ export interface GitDirs {
 export async function resolveGitDirs(cwd: string): Promise<GitDirs | null> {
 	try {
 		const { stdout } = await execGit(cwd, ['rev-parse', '--absolute-git-dir', '--git-common-dir']);
-		const [gitDir, commonDirRaw] = stdout.trim().split('\n');
-		if (!gitDir) return null;
-		// --git-common-dir may be relative to gitDir; only --absolute-git-dir is guaranteed absolute.
-		const commonDir = commonDirRaw && pathIsAbsolute(commonDirRaw) ? commonDirRaw : gitDir;
-		return { gitDir, commonDir };
+		const [gitDirRaw, commonDirRaw] = stdout.trim().split('\n');
+		if (!gitDirRaw) return null;
+		// git emits forward slashes; normalize so equal dirs compare equal on Windows.
+		const gitDir = pathNormalize(gitDirRaw);
+		return { gitDir, commonDir: resolveCommonDir(cwd, gitDir, commonDirRaw) };
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Resolves the `--git-common-dir` output to an absolute, normalized path. git
+ * may emit it relative to `cwd` (e.g. `.git` for a normal repo); resolve such
+ * paths against `cwd` rather than falling back to `gitDir`, which is wrong for a
+ * linked worktree (its common dir lives in the shared/bare repo, not the
+ * per-worktree git-dir).
+ */
+function resolveCommonDir(cwd: string, gitDir: string, raw: string | undefined): string {
+	if (!raw) return gitDir;
+	return pathIsAbsolute(raw) ? pathNormalize(raw) : pathResolve(cwd, raw);
 }
 
 /**
