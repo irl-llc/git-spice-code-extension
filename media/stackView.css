@@ -917,10 +917,12 @@ button {
    Untracked Branch Card
    ============================================ */
 
-/* Untracked card - dashed red border */
+/* Untracked card - dashed red border, dimmed to the swimlane's visual weight.
+ * Same rendered width as the gutter line; the lower-intensity color keeps the
+ * red semantic without reading heavier than the faint connector lines (#86). */
 .branch-card.untracked {
 	border-style: dashed;
-	border-color: var(--vscode-errorForeground);
+	border-color: color-mix(in srgb, var(--vscode-errorForeground) 55%, transparent);
 }
 
 /* Full-width cards: no tree lane indent for untracked and treeless uncommitted */
@@ -970,10 +972,12 @@ button {
    Uncommitted Changes Card
    ============================================ */
 
-/* Uncommitted card - dashed blue border */
+/* Uncommitted card - dashed blue border, dimmed to the swimlane's visual weight
+ * (same rendered width as the gutter line; lower intensity so it doesn't read
+ * heavier than the faint connector lines, #86). */
 .branch-card.uncommitted {
 	border-style: dashed;
-	border-color: var(--vscode-textLink-foreground);
+	border-color: color-mix(in srgb, var(--vscode-textLink-foreground) 55%, transparent);
 }
 
 /* Uncommitted tree node - hollow dashed blue circle */
