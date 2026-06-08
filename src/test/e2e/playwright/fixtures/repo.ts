@@ -131,6 +131,10 @@ export function createBareRepoWorktree(trunk: string): BareRepoWorktree {
 	runGit(seed, 'commit', '--allow-empty', '-q', '-m', 'initial');
 	runGit(seed, 'push', '-q', 'origin', trunk);
 	runGit(barePath, 'worktree', 'add', worktreePath, trunk);
+	// The linked worktree is off the bare repo, which never got an identity (only
+	// the seed clone did); set one here so `gs branch create` can commit in CI.
+	runGit(worktreePath, 'config', 'user.email', 'e2e@example.com');
+	runGit(worktreePath, 'config', 'user.name', 'E2E Bot');
 
 	const git = (...args: string[]): string => runGit(worktreePath, ...args);
 	const gs = (...args: string[]): string => execFileSync(GS_BIN, args, { cwd: worktreePath, encoding: 'utf8' });
