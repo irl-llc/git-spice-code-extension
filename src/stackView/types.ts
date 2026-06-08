@@ -85,7 +85,7 @@ export type LaneSegment = {
 };
 
 /** Node styling variant for tree visualization. */
-export type TreeNodeStyle = 'normal' | 'current' | 'uncommitted' | 'integration';
+export type TreeNodeStyle = 'normal' | 'current' | 'uncommitted' | 'integration' | 'placeholder';
 
 /** Styling information for a child fork connection. */
 export type ChildForkStyle = {
@@ -152,7 +152,44 @@ export type BranchViewModel = {
 	 * branch is configured (the indicator is suppressed entirely).
 	 */
 	outOfIntegration?: boolean;
+	/**
+	 * True when this branch CAN be collapsed (it has descendants and is neither
+	 * trunk nor the integration branch). The webview shows a collapse affordance
+	 * only on collapsible branches. See {@link CollapsiblePlaceholderViewModel}
+	 * for the rendered placeholder once a branch is collapsed.
+	 */
+	collapsible?: boolean;
 };
+
+/**
+ * A placeholder row standing in for one or more collapsed subtrees. Collapse
+ * state is computed extension-side (the layout authority) during the DFS in
+ * `state.ts`; when subtrees are collapsed their rows are omitted and this
+ * single placeholder row is emitted in their place. Adjacent collapse states
+ * are coalesced into one placeholder (issue #66).
+ */
+export type CollapsedPlaceholderViewModel = {
+	/**
+	 * The collapse-root branch names this placeholder stands in for. Clicking the
+	 * [+] expands them — each root is removed from the collapsed set. A coalesced
+	 * placeholder lists every adjacent collapse root.
+	 */
+	roots: string[];
+	/** Number of distinct collapsed subtrees (collapse roots) this placeholder hides. */
+	subtreeCount: number;
+	/** Total number of hidden branches across all collapsed subtrees. */
+	branchCount: number;
+	/** Tree fragment for the placeholder row (a dashed empty lane). */
+	treeFragment: TreeFragmentData;
+};
+
+/**
+ * A single row in the rendered stack: either a real branch or a collapsed
+ * placeholder standing in for hidden subtree(s). Discriminated by `kind`.
+ */
+export type StackRowViewModel =
+	| { kind: 'branch'; branch: BranchViewModel }
+	| { kind: 'placeholder'; placeholder: CollapsedPlaceholderViewModel };
 
 /**
  * View model for the configured integration branch, rendered as the topmost
@@ -177,6 +214,14 @@ export type RepositoryViewModel = {
 	/** Human-readable name (folder basename). */
 	name: string;
 	branches: BranchViewModel[];
+	/**
+	 * The rendered stack in display order, with collapsed subtrees replaced by
+	 * placeholder rows. `branches` lists only the still-visible real branches
+	 * (collapsed descendants omitted); `rows` interleaves those branches with
+	 * collapse placeholders so the webview can render the stack top-to-bottom
+	 * without re-deriving collapse geometry (issue #66).
+	 */
+	rows: StackRowViewModel[];
 	uncommitted?: UncommittedState;
 	uncommittedTreeFragment?: TreeFragmentData;
 	error?: string;

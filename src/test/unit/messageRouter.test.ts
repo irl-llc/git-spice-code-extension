@@ -125,6 +125,15 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 		handleStackSubmit: async (_repoId) => {
 			calls.push('handleStackSubmit');
 		},
+		handleCollapseSubtree: (_repoId, branchName) => {
+			calls.push(`handleCollapseSubtree:${branchName}`);
+		},
+		handleExpandSubtree: (_repoId, roots) => {
+			calls.push(`handleExpandSubtree:${roots.join(',')}`);
+		},
+		handleCollapseOtherStacks: (_repoId, branchName) => {
+			calls.push(`handleCollapseOtherStacks:${branchName}`);
+		},
 		getExecFunctions: () => mockExecFunctions,
 	};
 }
