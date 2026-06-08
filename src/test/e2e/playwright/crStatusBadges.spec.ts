@@ -32,10 +32,7 @@ async function enableRemoteForgeStatus(workbench: Page): Promise<void> {
  * not skip the others — Playwright abandons the rest of an afterAll once a
  * statement throws, which would otherwise leak the temp dirs `cleanup()` removes.
  */
-async function teardownScenario(
-	vscode: VSCodeInstance | undefined,
-	scenario: ShamhubStack | undefined,
-): Promise<void> {
+async function teardownScenario(vscode: VSCodeInstance | undefined, scenario: ShamhubStack | undefined): Promise<void> {
 	try {
 		await vscode?.close();
 	} finally {
