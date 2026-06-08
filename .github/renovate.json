@@ -62,7 +62,7 @@
       "matchStrings": ["^(?<currentValue>v?[0-9][0-9A-Za-z.\\-+]*)\\s*$"],
       "depNameTemplate": "abhinav/git-spice",
       "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v?(?<version>\\d+\\.\\d+\\.\\d+)$"
+      "extractVersionTemplate": "^(?<version>v\\d+\\.\\d+\\.\\d+)$"
     }
   ]
 }
