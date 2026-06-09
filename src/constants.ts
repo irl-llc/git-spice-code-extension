@@ -6,25 +6,22 @@
 /** Length of cryptographic nonce for CSP script security. */
 export const NONCE_LENGTH = 32;
 
-/** Delay in ms before triggering refresh after file system changes. */
+/**
+ * Delay in ms before triggering a refresh after file system changes. Also the
+ * "settle" window: a git-op marker event re-arms this timer, so a refresh held
+ * during a multi-step op (issue #71) only fires once the markers have stayed
+ * clear for one debounce window.
+ */
 export const FILE_WATCHER_DEBOUNCE_MS = 300;
 
 /**
- * Minimum spacing (ms) between watcher-driven refreshes. A multi-step git
- * operation (e.g. `gs stack submit`) rewrites refs/index dozens of times over
- * its run; without a floor that would fire a refresh every debounce window.
- * Bursts within this interval coalesce into a single trailing refresh.
+ * Safety backstop (ms) for the watch-driven refresh hold. The primary signal
+ * that a git operation finished is its marker files clearing (a watch event),
+ * but VS Code's FileSystemWatcher can occasionally miss a very rapid
+ * create/delete; if a refresh is held this long it is re-evaluated from disk so
+ * a dropped completion event can't strand the view stale (issue #71).
  */
-export const MIN_REFRESH_INTERVAL_MS = 1500;
-
-/**
- * How often (ms) to re-check whether an in-progress git operation has finished.
- * Decoupled from {@link MIN_REFRESH_INTERVAL_MS}: the floor exists to coalesce a
- * submit storm, but once the operation ends the user wants the view promptly, so
- * polling for completion is kept short. (The post-op refresh still respects the
- * floor — this only governs how quickly completion is noticed.)
- */
-export const GIT_OP_RECHECK_MS = 250;
+export const GIT_OP_BACKSTOP_MS = 5000;
 
 /** Delay in ms after branch creation to allow SCM view to update. */
 export const POST_COMMIT_REFRESH_DELAY_MS = 100;

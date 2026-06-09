@@ -1,40 +1,50 @@
 /**
- * Pure decision logic for throttling watcher-driven refreshes (issue #71).
+ * Pure decision logic for watch-driven refresh coalescing (issue #71).
  *
- * A multi-step git operation such as `gs stack submit` rewrites refs, the
- * index, and refs/spice/data dozens of times over its run, firing a watcher
- * event each time. Refreshing on every one produces a ~2-minute refresh storm.
- * This module collapses such bursts into bounded refreshes: defer entirely
- * while a git operation is mid-flight, and otherwise enforce a minimum interval
- * between refreshes. Kept free of `vscode`/fs so it is unit-testable.
+ * A multi-step git operation such as `gs stack submit` rewrites refs, the index,
+ * and refs/spice/data dozens of times over its run, firing a watcher event each
+ * time and producing a ~2-minute refresh storm. Rather than guess a fixed delay,
+ * we hold refreshes while a git operation is in progress — detected by watching
+ * its marker files — and fire once the markers have cleared. Because a multi-
+ * step op cycles those markers many times, the file watcher resets its debounce
+ * on each marker event, so the refresh lands once the markers have stayed clear
+ * through one debounce window (the "settle"). Kept free of `vscode`/fs so it is
+ * unit-testable.
  */
 
-/** Inputs for a single throttle decision. */
-export interface ThrottleInputs {
-	/** Current time (ms, e.g. `Date.now()`). */
-	now: number;
-	/** When the last refresh actually fired (ms); 0 if none yet. */
-	lastRefreshAt: number;
-	/** Minimum spacing between refreshes (ms). */
-	minIntervalMs: number;
-	/** Whether a git operation (rebase/merge/index lock) is in progress. */
-	gitOpInProgress: boolean;
-	/** How long to wait before re-checking an in-progress git operation (ms). */
-	gitOpRecheckMs: number;
-}
-
-/** Refresh now, or defer by `deferMs` and re-evaluate then. */
-export type ThrottleDecision = { refresh: true } | { refresh: false; deferMs: number };
+import { basename } from 'node:path';
 
 /**
- * Decides whether a pending refresh should fire now or be deferred:
- * - while a git operation is in progress, always defer (refresh once it ends);
- * - otherwise refresh only if at least `minIntervalMs` has elapsed since the
- *   last one, else defer by the remaining time.
+ * Marker paths under a repo's git dir that indicate an in-progress multi-step
+ * operation (rebase/merge/cherry-pick) or an index lock. `rebase-merge` and
+ * `rebase-apply` are directories; the rest are files.
  */
-export function decideRefresh(input: ThrottleInputs): ThrottleDecision {
-	if (input.gitOpInProgress) return { refresh: false, deferMs: input.gitOpRecheckMs };
-	const elapsed = input.now - input.lastRefreshAt;
-	if (elapsed >= input.minIntervalMs) return { refresh: true };
-	return { refresh: false, deferMs: input.minIntervalMs - elapsed };
+export const GIT_OP_MARKERS = [
+	'index.lock',
+	'rebase-merge',
+	'rebase-apply',
+	'MERGE_HEAD',
+	'CHERRY_PICK_HEAD',
+	'REVERT_HEAD',
+];
+
+/**
+ * True when a changed git path IS a marker file, or lives inside a marker
+ * directory (e.g. `…/rebase-merge/done`). Used to tell git-op *activity* (which
+ * only resets the settle window) apart from a real ref/index change.
+ */
+export function isGitOpMarkerPath(fsPath: string): boolean {
+	const normalized = fsPath.replace(/\\/g, '/');
+	const base = basename(normalized);
+	return GIT_OP_MARKERS.some((marker) => base === marker || normalized.includes(`/${marker}/`));
+}
+
+/**
+ * Whether a pending refresh should fire now: only when something has actually
+ * changed and no git operation's marker files are present. While an operation is
+ * in progress the refresh is held until the markers clear (signalled by their
+ * own watch events), with no fixed delay.
+ */
+export function shouldRefreshNow(refreshRequested: boolean, gitOpInProgress: boolean): boolean {
+	return refreshRequested && !gitOpInProgress;
 }
