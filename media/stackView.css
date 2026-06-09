@@ -922,6 +922,9 @@ button {
  * red semantic without reading heavier than the faint connector lines (#86). */
 .branch-card.untracked {
 	border-style: dashed;
+	/* Solid fallback first for older Electron without color-mix() (else the border
+	 * would fall back to currentColor); the dimmed color-mix overrides where supported. */
+	border-color: var(--vscode-errorForeground);
 	border-color: color-mix(in srgb, var(--vscode-errorForeground) 55%, transparent);
 }
 
@@ -977,6 +980,8 @@ button {
  * heavier than the faint connector lines, #86). */
 .branch-card.uncommitted {
 	border-style: dashed;
+	/* Solid fallback first for older Electron without color-mix(); color-mix overrides. */
+	border-color: var(--vscode-textLink-foreground);
 	border-color: color-mix(in srgb, var(--vscode-textLink-foreground) 55%, transparent);
 }
 
