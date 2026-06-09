@@ -107,32 +107,37 @@ export function applyCollapse(ordered: CollapseBranchInput[], collapsed: Readonl
 }
 
 /**
- * Maps each hidden branch to the collapse root that owns it: the collapse root
- * whose descendant set contains it. When collapse roots nest, the deepest
- * (nearest) root that is itself collapsed wins so a [+] expands one level. We
- * approximate "nearest" by preferring a root that has the fewest descendants,
- * which for a tree is always the deepest enclosing collapsed ancestor.
+ * Maps each hidden branch to the ACTIVE collapse root that owns it. A collapse
+ * root is active only when no ancestor of it is also collapsed; a nested
+ * collapsed root is itself hidden behind its ancestor's placeholder, so the
+ * ancestor owns the whole run. Active roots never nest, so each hidden branch is
+ * enclosed by exactly one — which makes clicking a placeholder's [+] expand
+ * exactly one level (issue #66).
  */
 function computeOwningRoot(
 	ordered: CollapseBranchInput[],
 	collapsed: ReadonlySet<string>,
 	descendants: Map<string, Set<string>>,
 ): Map<string, string> {
-	const roots = ordered.map((b) => b.name).filter((name) => collapsed.has(name));
+	const activeRoots = activeCollapseRoots(ordered, collapsed);
 	const owner = new Map<string, string>();
 	for (const branch of ordered) {
-		const enclosing = roots.filter((root) => descendants.get(root)?.has(branch.name));
-		if (enclosing.length === 0) continue;
-		owner.set(branch.name, nearestRoot(enclosing, descendants));
+		const root = activeRoots.find((r) => descendants.get(r)?.has(branch.name));
+		if (root) owner.set(branch.name, root);
 	}
 	return owner;
 }
 
-/** Of the collapse roots enclosing a branch, the one with the fewest descendants (deepest). */
-function nearestRoot(enclosing: string[], descendants: Map<string, Set<string>>): string {
-	return enclosing.reduce((best, root) =>
-		(descendants.get(root)?.size ?? 0) < (descendants.get(best)?.size ?? 0) ? root : best,
-	);
+/** Collapsed roots with no collapsed ancestor (the visible, top-most ones). */
+function activeCollapseRoots(ordered: CollapseBranchInput[], collapsed: ReadonlySet<string>): string[] {
+	const parentOf = new Map(ordered.map((b) => [b.name, b.parentName]));
+	const hasCollapsedAncestor = (name: string): boolean => {
+		for (let cur = parentOf.get(name); cur; cur = parentOf.get(cur)) {
+			if (collapsed.has(cur)) return true;
+		}
+		return false;
+	};
+	return ordered.map((b) => b.name).filter((name) => collapsed.has(name) && !hasCollapsedAncestor(name));
 }
 
 /**

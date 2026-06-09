@@ -91,6 +91,16 @@ describe('applyCollapse', () => {
 		assert.strictEqual(phs[0].subtreeCount, 1);
 		assert.deepStrictEqual(branchNames(rows), ['a', 'main']);
 	});
+
+	it('owns a nested collapsed root via its active ancestor (expand one level)', () => {
+		// Collapse both `a` and its descendant `b`: only `a` is active (visible), so
+		// the placeholder shows root [a] (not [b, a]) and clicking [+] expands one level.
+		const rows = applyCollapse(CHAIN, new Set(['a', 'b']));
+		const phs = placeholderRows(rows);
+		assert.strictEqual(phs.length, 1);
+		assert.deepStrictEqual(phs[0].roots, ['a']);
+		assert.strictEqual(phs[0].subtreeCount, 1);
+	});
 });
 
 describe('computeCollapseOthers', () => {

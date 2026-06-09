@@ -355,9 +355,9 @@ function RepoStack({ repo, ui, treeColors, postMessage, dispatch }: RepoStackPro
 				<UncommittedItem repo={repo} ui={ui} postMessage={postMessage} dispatch={dispatch} treeless />
 			) : null}
 			{repo.untrackedBranch ? <UntrackedItem branchName={repo.untrackedBranch} postMessage={postMessage} /> : null}
-			{repo.rows.map((row, index) => (
+			{repo.rows.map((row) => (
 				<StackRow
-					key={rowKey(row, index)}
+					key={rowKey(row)}
 					row={row}
 					repo={repo}
 					ui={ui}
@@ -373,9 +373,10 @@ function RepoStack({ repo, ui, treeColors, postMessage, dispatch }: RepoStackPro
 	);
 }
 
-/** Stable React key for a stack row (branch name, or the placeholder's roots). */
-function rowKey(row: StackRowViewModel, index: number): string {
-	return row.kind === 'branch' ? `b:${row.branch.name}` : `p:${row.placeholder.roots.join(',')}:${index}`;
+/** Stable React key for a stack row. A placeholder's collapse roots are unique
+ * across the stack, so they key it without the (unstable) array index. */
+function rowKey(row: StackRowViewModel): string {
+	return row.kind === 'branch' ? `b:${row.branch.name}` : `p:${row.placeholder.roots.join(',')}`;
 }
 
 interface StackRowProps {
