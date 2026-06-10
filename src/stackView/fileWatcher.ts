@@ -3,13 +3,18 @@
  * Supports watching multiple repositories simultaneously.
  */
 
-import { relative as pathRelative, isAbsolute as pathIsAbsolute } from 'node:path';
+import { existsSync } from 'node:fs';
+import { relative as pathRelative, isAbsolute as pathIsAbsolute, join as pathJoin } from 'node:path';
 
 import * as vscode from 'vscode';
 
-import { FILE_WATCHER_DEBOUNCE_MS } from '../constants';
+import { FILE_WATCHER_DEBOUNCE_MS, GIT_OP_BACKSTOP_MS } from '../constants';
 import type { DiscoveredRepo } from '../repoDiscovery';
 import { filterIgnoredPaths, resolveGitDirs } from '../utils/git';
+import { GIT_OP_MARKERS, isGitOpMarkerPath, shouldRefreshNow } from './refreshThrottle';
+
+/** Git internals (refs/HEAD/index) plus the git-op marker files, watched together. */
+const GIT_WATCH_GLOB = `{refs/spice/data,HEAD,refs/heads/**,index,${GIT_OP_MARKERS.join(',')},rebase-merge/**,rebase-apply/**}`;
 
 /** Watchers for a single repository. */
 interface RepoWatchers extends vscode.Disposable {
@@ -34,6 +39,10 @@ export class FileWatcherManager implements vscode.Disposable {
 	private pendingPaths = new Map<string, Set<string>>();
 	/** A git-internal event occurred — refresh unconditionally on next flush. */
 	private gitEventPending = false;
+	/** True while a flush is awaiting its async ignore-filter — blocks re-entry. */
+	private flushInProgress = false;
+	/** Backstop timer armed while a refresh is held for an in-progress git op. */
+	private backstopTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(private readonly onRefreshNeeded: () => void) {}
 
@@ -96,12 +105,12 @@ export class FileWatcherManager implements vscode.Disposable {
 		for (const dir of targets) watchers.git.push(this.createGitWatcher(dir));
 	}
 
-	/** Watches a git directory for branch/index/spice-data changes. */
+	/** Watches a git directory for branch/index/spice-data changes and op markers. */
 	private createGitWatcher(gitDirPath: string): vscode.FileSystemWatcher {
 		const gitDir = vscode.Uri.file(gitDirPath);
-		const pattern = new vscode.RelativePattern(gitDir, '{refs/spice/data,HEAD,refs/heads/**,index}');
+		const pattern = new vscode.RelativePattern(gitDir, GIT_WATCH_GLOB);
 		const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-		const handler = (): void => this.onGitEvent();
+		const handler = (uri: vscode.Uri): void => this.onGitEvent(uri.fsPath);
 		watcher.onDidChange(handler);
 		watcher.onDidCreate(handler);
 		watcher.onDidDelete(handler);
@@ -126,9 +135,13 @@ export class FileWatcherManager implements vscode.Disposable {
 		this.saveListener = vscode.workspace.onDidSaveTextDocument((doc) => this.onDocumentSave(doc.uri.fsPath));
 	}
 
-	/** Records a git-internal event and schedules a flush. */
-	private onGitEvent(): void {
-		this.gitEventPending = true;
+	/**
+	 * Records a git event. A marker file change is op *activity* — it only
+	 * re-arms the debounce (the settle window) so we don't refresh mid-op; a real
+	 * ref/index change additionally requests a refresh.
+	 */
+	private onGitEvent(fsPath: string): void {
+		if (!isGitOpMarkerPath(fsPath)) this.gitEventPending = true;
 		this.scheduleFlush();
 	}
 
@@ -166,26 +179,88 @@ export class FileWatcherManager implements vscode.Disposable {
 	}
 
 	/**
-	 * Refreshes if a git-internal event occurred, or if any accumulated
-	 * workspace path survives `git check-ignore` (i.e. is not gitignored).
+	 * Flush boundary (issue #71). Watch-driven, no fixed delay: while a git
+	 * operation's marker files are present the refresh is HELD — the markers'
+	 * own watch events re-arm the debounce (the settle window), so a multi-step
+	 * `gs stack submit` that cycles the markers many times collapses to one
+	 * trailing refresh once they stay clear. A coarse backstop re-evaluates from
+	 * disk in case the completion event was dropped by the watcher.
 	 */
 	private async flush(): Promise<void> {
+		// A flush awaiting its async ignore-filter must not run concurrently.
+		if (this.flushInProgress) {
+			this.deferFlush(FILE_WATCHER_DEBOUNCE_MS);
+			return;
+		}
+		if (!this.gitEventPending && this.pendingPaths.size === 0) return;
+		if (!shouldRefreshNow(true, this.gitOperationInProgress())) {
+			this.armBackstop(); // hold for the marker-clear watch event; backstop catches drops
+			return;
+		}
+		await this.guardedRefresh();
+	}
+
+	/** Runs the refresh under the re-entry guard so flushes never overlap. */
+	private async guardedRefresh(): Promise<void> {
+		this.clearBackstop();
+		this.flushInProgress = true;
+		try {
+			await this.runRefreshIfNeeded();
+		} finally {
+			this.flushInProgress = false;
+		}
+	}
+
+	/** Re-arms the flush timer after `ms`, keeping the pending flags. */
+	private deferFlush(ms: number): void {
+		this.refreshTimer = setTimeout(() => void this.flush(), ms);
+	}
+
+	/** Arms a one-shot disk re-check in case the git-op completion event is dropped. */
+	private armBackstop(): void {
+		if (this.backstopTimer) return;
+		this.backstopTimer = setTimeout(() => {
+			this.backstopTimer = undefined;
+			void this.flush();
+		}, GIT_OP_BACKSTOP_MS);
+	}
+
+	/** Cancels the backstop (a refresh is firing). */
+	private clearBackstop(): void {
+		if (!this.backstopTimer) return;
+		clearTimeout(this.backstopTimer);
+		this.backstopTimer = undefined;
+	}
+
+	/**
+	 * Consumes pending events and refreshes if any warrants it: git-internal
+	 * events always refresh; workspace paths must survive `git check-ignore`
+	 * (gitignored build output/logs cannot affect the stack).
+	 */
+	private async runRefreshIfNeeded(): Promise<void> {
 		const gitPending = this.gitEventPending;
 		this.gitEventPending = false;
 		const pending = this.pendingPaths;
 		this.pendingPaths = new Map();
 
-		if (gitPending) {
-			this.onRefreshNeeded();
-			return;
-		}
+		if (gitPending) return this.fireRefresh();
 		for (const [root, paths] of pending) {
 			const fresh = await filterIgnoredPaths(root, [...paths]);
-			if (fresh.length > 0) {
-				this.onRefreshNeeded();
-				return;
-			}
+			if (fresh.length > 0) return this.fireRefresh();
 		}
+	}
+
+	/** Notifies the provider that the stack should refresh. */
+	private fireRefresh(): void {
+		this.onRefreshNeeded();
+	}
+
+	/** True if any tracked repo has an in-progress git operation or index lock. */
+	private gitOperationInProgress(): boolean {
+		for (const root of this.repoWatchers.keys()) {
+			if (GIT_OP_MARKERS.some((marker) => existsSync(pathJoin(root, '.git', marker)))) return true;
+		}
+		return false;
 	}
 
 	/** Disposes all watchers and timers. */
@@ -196,6 +271,8 @@ export class FileWatcherManager implements vscode.Disposable {
 		this.saveListener = undefined;
 		this.pendingPaths.clear();
 		this.gitEventPending = false;
+		this.flushInProgress = false;
+		this.clearBackstop();
 		if (this.refreshTimer) {
 			clearTimeout(this.refreshTimer);
 			this.refreshTimer = undefined;

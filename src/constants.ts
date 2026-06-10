@@ -6,8 +6,22 @@
 /** Length of cryptographic nonce for CSP script security. */
 export const NONCE_LENGTH = 32;
 
-/** Delay in ms before triggering refresh after file system changes. */
+/**
+ * Delay in ms before triggering a refresh after file system changes. Also the
+ * "settle" window: a git-op marker event re-arms this timer, so a refresh held
+ * during a multi-step op (issue #71) only fires once the markers have stayed
+ * clear for one debounce window.
+ */
 export const FILE_WATCHER_DEBOUNCE_MS = 300;
+
+/**
+ * Safety backstop (ms) for the watch-driven refresh hold. The primary signal
+ * that a git operation finished is its marker files clearing (a watch event),
+ * but VS Code's FileSystemWatcher can occasionally miss a very rapid
+ * create/delete; if a refresh is held this long it is re-evaluated from disk so
+ * a dropped completion event can't strand the view stale (issue #71).
+ */
+export const GIT_OP_BACKSTOP_MS = 5000;
 
 /** Delay in ms after branch creation to allow SCM view to update. */
 export const POST_COMMIT_REFRESH_DELAY_MS = 100;
