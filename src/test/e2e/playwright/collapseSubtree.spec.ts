@@ -18,6 +18,7 @@ const TRUNK = 'main';
 
 /** Seeds a 3-branch linear stack (feat-a → feat-b → feat-c, current = feat-c). */
 function seedStack(repo: WorkspaceRepo): void {
+	repo.initTrunk(TRUNK);
 	repo.createBranch({ name: 'feat-a', base: TRUNK, commits: [{ message: 'a', files: { 'a.txt': '1\n' } }] });
 	repo.createBranch({ name: 'feat-b', base: 'feat-a', commits: [{ message: 'b', files: { 'b.txt': '1\n' } }] });
 	repo.createBranch({ name: 'feat-c', base: 'feat-b', commits: [{ message: 'c', files: { 'c.txt': '1\n' } }] });
