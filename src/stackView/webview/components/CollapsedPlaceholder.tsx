@@ -17,9 +17,12 @@ export interface CollapsedPlaceholderProps {
 	onExpand: (roots: string[]) => void;
 }
 
-/** Pluralizes a noun by count: "1 subtree" / "2 subtrees". */
+/** Pluralizes a noun by count: "1 subtree" / "2 subtrees" / "2 branches". */
 function plural(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? '' : 's'}`;
+	if (count === 1) return `1 ${noun}`;
+	// Sibilant endings (e.g. "branch") take "-es", not "-s".
+	const suffix = /(s|x|z|ch|sh)$/.test(noun) ? 'es' : 's';
+	return `${count} ${noun}${suffix}`;
 }
 
 export function CollapsedPlaceholder({ placeholder, onExpand }: CollapsedPlaceholderProps): JSX.Element {
