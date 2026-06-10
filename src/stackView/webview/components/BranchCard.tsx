@@ -117,7 +117,7 @@ function BranchToggle({ branch, expanded, hasCommits, onToggle, onCollapseSubtre
 					type="button"
 					className="branch-collapse-subtree codicon codicon-remove"
 					aria-label={`Collapse subtree above ${branch.name}`}
-					title="Collapse the stack above this branch"
+					title="Collapse the subtree above this branch"
 					onClick={(e) => {
 						e.stopPropagation();
 						onCollapseSubtree();

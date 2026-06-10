@@ -246,6 +246,29 @@ describe('messageRouter', () => {
 			});
 		});
 
+		describe('collapse messages', () => {
+			it('should route collapseSubtree message to handleCollapseSubtree', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'collapseSubtree', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleCollapseSubtree:feature-1']);
+			});
+
+			it('should route expandSubtree message to handleExpandSubtree, forwarding roots', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'expandSubtree', roots: ['feat-a', 'feat-c'] }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleExpandSubtree:feat-a,feat-c']);
+			});
+
+			it('should route collapseOtherStacks message to handleCollapseOtherStacks', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'collapseOtherStacks', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleCollapseOtherStacks:feature-1']);
+			});
+		});
+
 		describe('commit messages', () => {
 			it('should route getCommitFiles message', () => {
 				const ctx = createMockContext();

@@ -92,6 +92,26 @@ describe('applyCollapse', () => {
 		assert.deepStrictEqual(branchNames(rows), ['a', 'main']);
 	});
 
+	it('anchors the placeholder lane to the first hidden branch’s lane', () => {
+		// Lanes provided: feat-b lives on a sibling lane 1; collapsing feat-a hides
+		// feat-b, so the placeholder must report nodeLane 1 (not 0) so the dashed
+		// lane sits under the fork (issue #66 review).
+		const laned: CollapseBranchInput[] = [
+			{ name: 'feat-b', parentName: 'feat-a', lane: 1 },
+			{ name: 'feat-a', parentName: 'main', lane: 1 },
+			{ name: 'feat-c', parentName: 'main', lane: 0 },
+			{ name: 'main', lane: 0 },
+		];
+		const phs = placeholderRows(applyCollapse(laned, new Set(['feat-a'])));
+		assert.strictEqual(phs.length, 1);
+		assert.strictEqual(phs[0].nodeLane, 1);
+	});
+
+	it('defaults the placeholder lane to 0 when lanes are absent', () => {
+		const phs = placeholderRows(applyCollapse(ORDERED, new Set(['feat-a'])));
+		assert.strictEqual(phs[0].nodeLane, 0);
+	});
+
 	it('owns a nested collapsed root via its active ancestor (expand one level)', () => {
 		// Collapse both `a` and its descendant `b`: only `a` is active (visible), so
 		// the placeholder shows root [a] (not [b, a]) and clicking [+] expands one level.

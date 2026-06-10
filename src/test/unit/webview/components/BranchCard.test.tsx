@@ -157,6 +157,44 @@ describe('BranchCard', () => {
 		});
 	});
 
+	describe('subtree-collapse button', () => {
+		it('renders the [-] button only when branch.collapsible is true', () => {
+			const h = harness();
+			const { rerender } = render(
+				<BranchCard branch={makeBranch()} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />,
+			);
+			assert.strictEqual(
+				screen.queryByRole('button', { name: /collapse subtree above feat-a/i }),
+				null,
+				'absent when not collapsible',
+			);
+			rerender(
+				<BranchCard
+					branch={makeBranch({ collapsible: true })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			assert.ok(screen.getByRole('button', { name: /collapse subtree above feat-a/i }), 'present when collapsible');
+		});
+
+		it('clicking the [-] button posts collapseSubtree and does not toggle the header', () => {
+			const h = harness();
+			render(
+				<BranchCard
+					branch={makeBranch({ collapsible: true })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			fireEvent.click(screen.getByRole('button', { name: /collapse subtree above feat-a/i }));
+			assert.deepStrictEqual(h.messages, [{ type: 'collapseSubtree', branchName: 'feat-a' }]);
+			// stopPropagation: the header chevron must not have toggled.
+			const toggle = screen.getByRole('button', { name: /expand feat-a/i });
+			assert.strictEqual(toggle.getAttribute('aria-expanded'), 'false');
+		});
+	});
+
 	describe('tags', () => {
 		it('shows the Restack tag when branch.restack is true', () => {
 			const h = harness();

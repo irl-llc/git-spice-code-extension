@@ -16,12 +16,31 @@ export type CollapseBranchInput = {
 	name: string;
 	/** Parent (base) branch name, or undefined for a root/trunk. */
 	parentName?: string;
+	/**
+	 * Display lane of the branch. Optional because the collapsibility/owning-root
+	 * logic does not need it; {@link applyCollapse} uses it to anchor a
+	 * placeholder's dashed lane to the column the hidden subtree occupied so the
+	 * surviving parent's fork connector lands on a real lane (issue #66 review).
+	 */
+	lane?: number;
 };
 
 /** A row produced by {@link applyCollapse}: a visible branch or a placeholder. */
 export type CollapseRow =
 	| { kind: 'branch'; name: string }
-	| { kind: 'placeholder'; roots: string[]; subtreeCount: number; branchCount: number };
+	| {
+			kind: 'placeholder';
+			roots: string[];
+			subtreeCount: number;
+			branchCount: number;
+			/**
+			 * Lane the placeholder's dashed pass-through occupies: the lane of the
+			 * topmost hidden branch in DFS order. Anchors the placeholder under the
+			 * fork that the hidden subtree branched off, so non-lane-0 (sibling)
+			 * collapses render the dashed lane in the correct column.
+			 */
+			nodeLane: number;
+	  };
 
 /**
  * Returns the set of branch names that are collapsible: any branch with at
@@ -98,7 +117,7 @@ export function applyCollapse(ordered: CollapseBranchInput[], collapsed: Readonl
 	for (const branch of ordered) {
 		const owningRoot = owner.get(branch.name);
 		if (owningRoot !== undefined) {
-			appendHiddenBranch(rows, owningRoot);
+			appendHiddenBranch(rows, owningRoot, branch.lane ?? 0);
 			continue;
 		}
 		rows.push({ kind: 'branch', name: branch.name });
@@ -146,9 +165,9 @@ function activeCollapseRoots(ordered: CollapseBranchInput[], collapsed: Readonly
  * one (issue #66). A hidden branch that is itself a collapse root contributes a
  * new subtree to the placeholder's root list.
  */
-function appendHiddenBranch(rows: CollapseRow[], owningRoot: string): void {
+function appendHiddenBranch(rows: CollapseRow[], owningRoot: string, lane: number): void {
 	const last = rows[rows.length - 1];
-	const placeholder = last?.kind === 'placeholder' ? last : startPlaceholder(rows);
+	const placeholder = last?.kind === 'placeholder' ? last : startPlaceholder(rows, lane);
 	placeholder.branchCount += 1;
 	if (!placeholder.roots.includes(owningRoot)) {
 		placeholder.roots.push(owningRoot);
@@ -156,13 +175,17 @@ function appendHiddenBranch(rows: CollapseRow[], owningRoot: string): void {
 	}
 }
 
-/** Pushes and returns a fresh empty placeholder row. */
-function startPlaceholder(rows: CollapseRow[]): Extract<CollapseRow, { kind: 'placeholder' }> {
+/**
+ * Pushes and returns a fresh empty placeholder row anchored to `lane` — the
+ * lane of the first (topmost in DFS) hidden branch it stands in for.
+ */
+function startPlaceholder(rows: CollapseRow[], lane: number): Extract<CollapseRow, { kind: 'placeholder' }> {
 	const placeholder: Extract<CollapseRow, { kind: 'placeholder' }> = {
 		kind: 'placeholder',
 		roots: [],
 		subtreeCount: 0,
 		branchCount: 0,
+		nodeLane: lane,
 	};
 	rows.push(placeholder);
 	return placeholder;

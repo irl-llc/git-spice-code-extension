@@ -213,12 +213,17 @@ export type RepositoryViewModel = {
 	id: string;
 	/** Human-readable name (folder basename). */
 	name: string;
+	/**
+	 * View models for ALL tracked branches in DFS order, regardless of collapse
+	 * state (collapsed descendants are still present here). Used for repo-wide
+	 * derivations such as the graph width. To render the stack respecting the
+	 * collapsed set, iterate {@link rows} instead.
+	 */
 	branches: BranchViewModel[];
 	/**
-	 * The rendered stack in display order, with collapsed subtrees replaced by
-	 * placeholder rows. `branches` lists only the still-visible real branches
-	 * (collapsed descendants omitted); `rows` interleaves those branches with
-	 * collapse placeholders so the webview can render the stack top-to-bottom
+	 * The rendered stack in display order: the still-visible branches interleaved
+	 * with collapse placeholders (collapsed descendants are omitted and replaced
+	 * by a single placeholder row). Lets the webview render the stack top-to-bottom
 	 * without re-deriving collapse geometry (issue #66).
 	 */
 	rows: StackRowViewModel[];
