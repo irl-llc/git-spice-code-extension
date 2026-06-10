@@ -46,11 +46,19 @@ async function openNarrowView(vscode: VSCodeInstance): Promise<Frame> {
 	return webview;
 }
 
-/** Right-clicks a branch card and picks a menu item by label from the Monaco context menu. */
+/**
+ * Right-clicks a branch card and picks a menu item by label from VS Code's native
+ * webview context menu. The webview's `data-vscode-context` drives a Monaco menu
+ * rendered in the workbench (outside the frame); retry the right-click until it
+ * appears, as the first contextmenu event can be swallowed during webview focus.
+ */
 async function pickBranchMenu(workbench: Page, frame: Frame, branch: string, item: string): Promise<void> {
-	await frame.locator(`article[data-branch="${branch}"] .branch-header`).first().click({ button: 'right' });
+	const card = frame.locator(`article[data-branch="${branch}"] .branch-header`).first();
 	const menu = workbench.locator('.monaco-menu:visible').first();
-	await expect(menu).toBeVisible({ timeout: 5_000 });
+	await expect(async () => {
+		await card.click({ button: 'right' });
+		await expect(menu).toBeVisible({ timeout: 2_000 });
+	}).toPass({ timeout: 20_000 });
 	await menu.locator('.action-label', { hasText: item }).first().click();
 }
 
@@ -85,7 +93,7 @@ test.describe('subtree collapse/expand (#66)', () => {
 		// Collapse, then expand via the placeholder's [+] and verify the stack is whole.
 		await webview.getByRole('button', { name: /Collapse subtree above feat-a/i }).click();
 		await webview.locator('.collapsed-placeholder').waitFor({ state: 'visible', timeout: 10_000 });
-		await webview.getByRole('button', { name: /Expand/i }).click();
+		await webview.locator('.collapsed-placeholder-expand').click();
 		await webview.locator('.collapsed-placeholder').waitFor({ state: 'hidden', timeout: 10_000 });
 		await vscode.workbench.waitForTimeout(500);
 
