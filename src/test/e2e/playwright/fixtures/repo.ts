@@ -64,9 +64,14 @@ export function createTempRepo(): WorkspaceRepo {
 		gs('repo', 'init', '--trunk', trunk);
 	};
 
+	const currentBranch = (): string => git('rev-parse', '--abbrev-ref', 'HEAD').trim();
+
 	const createBranch = (spec: BranchSpec): void => {
 		const base = spec.base;
-		if (base) gs('branch', 'checkout', base);
+		// Skip the checkout when already on the base: with some pinned gs builds a
+		// no-op `gs branch checkout <current>` shells out to git in a way that can
+		// flake (exit 128) under parallel workers. Avoiding it is behavior-neutral.
+		if (base && currentBranch() !== base) gs('branch', 'checkout', base);
 		const [first, ...rest] = spec.commits;
 		if (!first) throw new Error(`Branch ${spec.name} must have at least one commit`);
 
