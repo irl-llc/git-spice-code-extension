@@ -3,9 +3,15 @@
 # snapshot PNGs are byte-identical across hosts.
 FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
-# git-lfs to materialize the snapshot PNGs from .gitattributes pointers.
+# git-lfs to materialize the snapshot PNGs from .gitattributes pointers, plus a
+# modern git (>= 2.38) from the git-core PPA. Jammy's default git is 2.34, which
+# lacks `git merge-tree --write-tree` — the command shamhub's MergeChange runs to
+# merge a CR — so `shamhub merge` fails with "merge-tree: exit status 128".
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git-lfs ca-certificates curl \
+ && apt-get install -y --no-install-recommends software-properties-common gnupg ca-certificates curl \
+ && add-apt-repository -y ppa:git-core/ppa \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends git git-lfs \
  && rm -rf /var/lib/apt/lists/* \
  && git lfs install --skip-repo
 
