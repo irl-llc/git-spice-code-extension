@@ -370,6 +370,28 @@ When adding a new webview component:
 - Compose it inside `StackView.tsx` where appropriate
 - Add a Layer-2 BDD test in `src/test/e2e/playwright/` only when the user-journey contract differs from existing coverage
 
+## Visual Design Principles
+
+Every UI change must adhere to these principles:
+
+- **Codicons everywhere an icon is needed**; if none fits, draw a custom SVG
+  icon. Never emoji.
+- **One visual indicator per fact.** A "Send" button needs no icon, a red
+  blocker banner needs no warning glyph, "review" text needs no eyes — and a
+  PR number needs no pull-request icon.
+- **Prefer icons over badges/banners**; limit big UI elements.
+- **Show status indicators only when the non-default status is active.** Hide
+  passing-CI checkmarks; show failing/pending. An upload affordance appears
+  only when there is something to upload.
+- **Add detail with hover**: tooltips, or icons/badges that appear on hover.
+  Omnipresent elements are reserved for critical at-a-glance status;
+  everything else hides behind expand/hover.
+- **Background-activity indicators must never cause layout shift** — give
+  them a permanently reserved slot or an unused corner. (The extension's old
+  top-banner refresh spinner, which appeared/disappeared per refresh, is the
+  named anti-pattern; it was removed in favor of the VS Code progress
+  notification.)
+
 ## Code Quality Standards
 
 ### Lint Enforcement (local + CI consistency)
