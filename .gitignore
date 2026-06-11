@@ -9,3 +9,11 @@ NOTES.md
 .gs/
 test-results/
 playwright-report/
+
+# git-lfs regenerates its hooks into the husky hooks dir (core.hooksPath=.husky)
+# on lfs/git operations. Only the tracked .husky/pre-commit is ours; ignore the
+# rest so they don't show up as stray untracked files.
+/.husky/post-checkout
+/.husky/post-commit
+/.husky/post-merge
+/.husky/pre-push
