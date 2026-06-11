@@ -1,4 +1,4 @@
-import type { GitSpiceChangeStatus, GitSpiceComments } from '../gitSpiceSchema';
+import type { GitSpiceChangeStatus, GitSpiceComments, InlineComment } from '../gitSpiceSchema';
 
 export type BranchCommitViewModel = {
 	sha: string;
@@ -36,6 +36,12 @@ export type BranchChangeViewModel = {
 	url?: string;
 	status?: GitSpiceChangeStatus;
 	comments?: GitSpiceComments;
+	/**
+	 * Per-comment inline comments for this change, when loaded. Carried through
+	 * to the webview as data only; a follow-up slice renders them inline in the
+	 * diff via a scoped CommentController (issue #40).
+	 */
+	inlineComments?: ReadonlyArray<InlineComment>;
 };
 
 /**

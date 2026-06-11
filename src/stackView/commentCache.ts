@@ -8,10 +8,13 @@
  * dependency so they can be unit-tested directly.
  */
 
-import type { GitSpiceBranch, GitSpiceComments } from '../gitSpiceSchema';
+import type { GitSpiceBranch, GitSpiceComments, InlineComment } from '../gitSpiceSchema';
 
 /** Comment counts keyed by Change Request id. */
 export type CommentCache = Map<string, GitSpiceComments>;
+
+/** Inline (per-comment) lists keyed by Change Request id. */
+export type InlineCommentCache = Map<string, ReadonlyArray<InlineComment>>;
 
 /** Extracts `[changeId, comments]` pairs from branches that carry counts. */
 export function collectComments(branches: ReadonlyArray<GitSpiceBranch>): Array<[string, GitSpiceComments]> {
@@ -35,5 +38,22 @@ export function mergeCachedComments(branches: ReadonlyArray<GitSpiceBranch>, cac
 		const cached = cache.get(branch.change.id);
 		if (!cached) return branch;
 		return { ...branch, change: { ...branch.change, comments: cached } };
+	});
+}
+
+/**
+ * Attaches each branch's inline comment list from the cache, keyed by Change
+ * Request id. Branches without a change, or whose change id is not cached, are
+ * returned unchanged. Returns new branch objects; does not mutate the input.
+ */
+export function mergeInlineComments(
+	branches: ReadonlyArray<GitSpiceBranch>,
+	cache: InlineCommentCache,
+): GitSpiceBranch[] {
+	return branches.map((branch) => {
+		if (!branch.change?.id) return branch;
+		const inlineComments = cache.get(branch.change.id);
+		if (!inlineComments) return branch;
+		return { ...branch, change: { ...branch.change, inlineComments } };
 	});
 }
