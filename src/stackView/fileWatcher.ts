@@ -8,10 +8,10 @@ import { relative as pathRelative, isAbsolute as pathIsAbsolute, join as pathJoi
 
 import * as vscode from 'vscode';
 
-import { FILE_WATCHER_DEBOUNCE_MS, GIT_OP_BACKSTOP_MS } from '../constants';
+import { FILE_WATCHER_DEBOUNCE_MS, GIT_OP_BACKSTOP_MS, WATCHER_REFRESH_MIN_INTERVAL_MS } from '../constants';
 import type { DiscoveredRepo } from '../repoDiscovery';
 import { filterIgnoredPaths, resolveGitDirs } from '../utils/git';
-import { GIT_OP_MARKERS, isGitOpMarkerPath, shouldRefreshNow } from './refreshThrottle';
+import { GIT_OP_MARKERS, isGitOpMarkerPath, OperationCounter, RefreshRateLimiter, shouldRefreshNow } from './refreshThrottle';
 
 /** Git internals (refs/HEAD/index) plus the git-op marker files, watched together. */
 const GIT_WATCH_GLOB = `{refs/spice/data,HEAD,refs/heads/**,index,${GIT_OP_MARKERS.join(',')},rebase-merge/**,rebase-apply/**}`;
@@ -43,8 +43,45 @@ export class FileWatcherManager implements vscode.Disposable {
 	private flushInProgress = false;
 	/** Backstop timer armed while a refresh is held for an in-progress git op. */
 	private backstopTimer: ReturnType<typeof setTimeout> | undefined;
+	/**
+	 * Depth of extension-initiated multi-step operations (submit/restack/sync/…)
+	 * currently running. While > 0, watcher refreshes are held: a `gs stack
+	 * submit` rewrites refs/spice-data between network pushes that leave NO
+	 * marker file, so the marker-based hold alone releases in those gaps and
+	 * storms one refresh per branch (issue #71). The extension knows exactly
+	 * when its own operation runs, so it gates deterministically and refreshes
+	 * once at the end.
+	 */
+	private readonly operations = new OperationCounter();
+	/**
+	 * Bounds watcher-driven refreshes to one per interval for git activity the
+	 * gate/markers cannot see (terminal-driven `gs repo sync`/`submit`, agents
+	 * working in linked worktrees). Leading-edge: a lone change refreshes
+	 * immediately; a storm coalesces to one trailing refresh per interval.
+	 */
+	private readonly rateLimiter = new RefreshRateLimiter(WATCHER_REFRESH_MIN_INTERVAL_MS);
 
 	constructor(private readonly onRefreshNeeded: () => void) {}
+
+	/**
+	 * A begin/end gate raised around an extension-initiated multi-step git
+	 * operation. While raised, watcher-driven refreshes are held; lowering it
+	 * flushes any events that accumulated during the operation. The operation's
+	 * own explicit post-run refresh provides the single coalesced update.
+	 */
+	get operationGate(): { begin: () => void; end: () => void } {
+		return { begin: () => this.beginOperation(), end: () => this.endOperation() };
+	}
+
+	/** Raises the operation gate (refreshes held until it returns to zero). */
+	private beginOperation(): void {
+		this.operations.begin();
+	}
+
+	/** Lowers the operation gate; on reaching zero, flushes events held during the op. */
+	private endOperation(): void {
+		if (this.operations.end()) this.scheduleFlush();
+	}
 
 	/** Watches a single workspace folder (backward compat). */
 	watch(folder: vscode.WorkspaceFolder): Promise<void> {
@@ -193,8 +230,19 @@ export class FileWatcherManager implements vscode.Disposable {
 			return;
 		}
 		if (!this.gitEventPending && this.pendingPaths.size === 0) return;
-		if (!shouldRefreshNow(true, this.gitOperationInProgress())) {
-			this.armBackstop(); // hold for the marker-clear watch event; backstop catches drops
+		// Hold while EITHER an extension-initiated op is running (deterministic,
+		// covers marker-free network-push gaps) OR a git-op marker is present
+		// (covers terminal-initiated ops the extension can't see).
+		const busy = this.operations.inProgress || this.gitOperationInProgress();
+		if (!shouldRefreshNow(true, busy)) {
+			this.armBackstop(); // hold for the marker-clear / op-end event; backstop catches drops
+			return;
+		}
+		// Rate-limit refreshes the gate/markers can't hold (terminal-driven ops):
+		// defer to the interval's trailing edge, keeping the pending flags.
+		const wait = this.rateLimiter.tryAcquire(Date.now());
+		if (wait > 0) {
+			this.deferFlush(wait);
 			return;
 		}
 		await this.guardedRefresh();

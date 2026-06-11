@@ -87,7 +87,10 @@ export function routeMessage(message: WebviewMessage, ctx: MessageHandlerContext
 function routeStateMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
 	switch (message.type) {
 		case 'ready':
-			ctx.pushState();
+			// Forced: 'ready' may arrive after a push the webview wasn't yet
+			// subscribed for, and the unchanged-state dedupe must not leave a
+			// freshly-loaded webview blank.
+			ctx.pushState(true);
 			return true;
 		case 'refresh':
 			void ctx.refresh(true);

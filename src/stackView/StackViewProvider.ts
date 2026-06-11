@@ -58,6 +58,7 @@ import {
 	getExecFunctions,
 	runWithProgress,
 	type BranchCommandRunnerDeps,
+	type OperationGate,
 } from './handlers/branchCommandRunner';
 import {
 	handleStageFile,
@@ -77,6 +78,12 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	private readonly commentCache: CommentCache = new Map();
 	/** When true, the next refresh re-fetches comment counts from the forge. */
 	private commentsDirty = true;
+	/**
+	 * Serialized form of the last state pushed to the webviews. Non-forced
+	 * pushes with identical content are dropped so watcher-driven refreshes
+	 * that found nothing new cause zero webview traffic or re-render (#71).
+	 */
+	private lastPushedStateJson: string | undefined;
 
 	constructor(
 		private readonly discovery: RepoDiscovery | undefined,
@@ -91,6 +98,15 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
 		await this.attachWebview(webviewView.webview, (cb) => webviewView.onDidDispose(cb));
+	}
+
+	/**
+	 * Gate raised around extension-initiated multi-step operations so the file
+	 * watcher holds its refreshes until the operation completes, then refreshes
+	 * once — killing the submit/sync refresh storm (issue #71).
+	 */
+	get operationGate(): OperationGate {
+		return this.fileWatcher.operationGate;
 	}
 
 	/** Creates a full-editor-pane instance of the Git Spice view. */
@@ -120,6 +136,9 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		webview.onDidReceiveMessage((message: WebviewMessage) => routeMessage(message, this));
 		this.hosts.add(webview);
 		onDispose(() => this.hosts.delete(webview));
+		// A fresh webview has no state yet — invalidate the dedupe cache so the
+		// upcoming push is never suppressed as "unchanged" and left blank.
+		this.lastPushedStateJson = undefined;
 		this.syncWatchers();
 		void this.refresh();
 	}
@@ -190,7 +209,10 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 
 	/** Fetches latest state from all repos and pushes to webview. */
 	private async doRefresh(force: boolean): Promise<void> {
-		this.broadcast({ type: 'refreshing' });
+		// No in-view refresh indicator at all (#71): user-initiated operations
+		// already show a VS Code progress notification, and background watch
+		// refreshes must be silent — the old top-banner spinner caused layout
+		// shift on every cycle, the visible half of the refresh storm.
 		const withForgeStatus = this.shouldFetchForgeStatus();
 		const repos = this.getDiscoveredRepos();
 		if (repos.length > 0) {
@@ -243,6 +265,11 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	pushState(force = false): void {
 		if (this.hosts.size === 0) return;
 		const state = this.buildDisplayState();
+		const json = JSON.stringify(state);
+		// Unchanged content on a non-forced push = a watcher refresh that found
+		// nothing new; dropping it keeps background git churn invisible (#71).
+		if (!force && json === this.lastPushedStateJson) return;
+		this.lastPushedStateJson = json;
 		this.broadcast({ type: 'state', payload: state, force });
 	}
 
@@ -431,31 +458,27 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	async handleRepoSync(repoId: string | undefined): Promise<void> {
 		const folder = this.resolveWorkspaceFolder(repoId);
 		if (!folder) return;
-		await handleSync({ folder, refresh: () => this.refresh(true) });
+		await handleSync({ folder, refresh: () => this.refresh(true), gate: this.operationGate });
 	}
 
 	/** Restacks all branches in the specified repo's stack. */
 	async handleStackRestack(repoId: string | undefined): Promise<void> {
 		const folder = this.resolveWorkspaceFolder(repoId);
 		if (!folder) return;
-		await runWithProgress(
-			'Restacking stack...',
-			() => execStackRestack(folder),
-			'Stack restacked successfully',
-			() => this.refresh(),
-		);
+		await runWithProgress('Restacking stack...', () => execStackRestack(folder), 'Stack restacked successfully', {
+			refresh: () => this.refresh(),
+			gate: this.operationGate,
+		});
 	}
 
 	/** Submits the specified repo's stack. */
 	async handleStackSubmit(repoId: string | undefined): Promise<void> {
 		const folder = this.resolveWorkspaceFolder(repoId);
 		if (!folder) return;
-		await runWithProgress(
-			'Submitting stack...',
-			() => execStackSubmit(folder),
-			'Stack submitted successfully',
-			() => this.refresh(true),
-		);
+		await runWithProgress('Submitting stack...', () => execStackSubmit(folder), 'Stack submitted successfully', {
+			refresh: () => this.refresh(true),
+			gate: this.operationGate,
+		});
 	}
 
 	// --- Branch Command Infrastructure ---
@@ -464,6 +487,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		return {
 			getActiveWorkspaceFolder: () => this.resolveWorkspaceFolder(repoId),
 			refresh: () => this.refresh(),
+			gate: this.operationGate,
 		};
 	}
 

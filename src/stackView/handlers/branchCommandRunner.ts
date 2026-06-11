@@ -18,10 +18,21 @@ import type { ExecFunctionMap, ExecFunction } from '../messageRouter';
 /** Result shape from branch commands — has optional error. */
 type CommandResult = { value?: unknown; error?: string };
 
+/**
+ * Begin/end gate raised for the duration of a multi-step operation so the file
+ * watcher holds its refreshes until the operation completes (issue #71). The
+ * FileWatcherManager supplies one via its `operationGate`.
+ */
+export type OperationGate = { begin: () => void; end: () => void };
+
+/** Post-operation refresh plus the optional storm-suppression gate (issue #71). */
+export type ProgressDeps = { refresh: () => Promise<void>; gate?: OperationGate };
+
 /** Dependencies needed by the branch command runner. */
 export interface BranchCommandRunnerDeps {
 	getActiveWorkspaceFolder: () => vscode.WorkspaceFolder | undefined;
 	refresh: () => Promise<void>;
+	gate?: OperationGate;
 }
 
 /** Map of command names to their execution functions. */
@@ -75,7 +86,7 @@ export async function executeBranchCommandWithExec(
 
 	const title = `${commandName.charAt(0).toUpperCase() + commandName.slice(1)}ing branch: ${trimmedName}`;
 	const successMessage = `Branch ${trimmedName} ${commandName}ed successfully.`;
-	await runWithProgress(title, () => execFunction(folder, trimmedName), successMessage, deps.refresh);
+	await runWithProgress(title, () => execFunction(folder, trimmedName), successMessage, deps);
 }
 
 /** Runs a branch command with progress notification. */
@@ -83,28 +94,36 @@ export async function runWithProgress(
 	title: string,
 	operation: () => Promise<CommandResult>,
 	successMessage: string,
-	refresh: () => Promise<void>,
+	deps: ProgressDeps,
 ): Promise<boolean> {
 	let success = false;
 	await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, () =>
-		runProgressBody(operation, successMessage, refresh, (value) => (success = value)),
+		runProgressBody(operation, successMessage, deps, (value) => (success = value)),
 	);
 	return success;
 }
 
-/** Body of the progress notification: runs the operation and reports the result. */
+/**
+ * Body of the progress notification: runs the operation and reports the result.
+ * The operation gate is raised for the whole body so watcher refreshes are held
+ * until the (multi-step, possibly network-bound) operation finishes — then the
+ * explicit `refresh()` provides the single coalesced update (issue #71).
+ */
 async function runProgressBody(
 	operation: () => Promise<CommandResult>,
 	successMessage: string,
-	refresh: () => Promise<void>,
+	deps: ProgressDeps,
 	setSuccess: (value: boolean) => void,
 ): Promise<void> {
+	deps.gate?.begin();
 	try {
 		setSuccess(showResult(await operation(), successMessage));
-		await refresh();
+		await deps.refresh();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
+	} finally {
+		deps.gate?.end();
 	}
 }
 
