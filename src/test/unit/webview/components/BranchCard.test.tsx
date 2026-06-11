@@ -47,6 +47,7 @@ function makeBranch(overrides?: Partial<BranchViewModel>): BranchViewModel {
 		current: false,
 		restack: false,
 		isTrunk: false,
+		needsPush: false,
 		commits: [{ sha: 'abc123', shortSha: 'abc', subject: 'first' }],
 		tree: makeTreePosition(),
 		treeFragment: makeTreeFragment(),
@@ -243,16 +244,30 @@ describe('BranchCard', () => {
 			assert.deepStrictEqual(h.messages, [{ type: 'branchSubmit', branchName: 'feat-a' }]);
 		});
 
-		it('submit button label switches to "Submit" when branch already has a change', () => {
+		it('submitted branch with unpushed commits shows "Submit" (needs-upload state)', () => {
 			const h = harness();
 			render(
 				<BranchCard
-					branch={makeBranch({ change: { id: '#42' } })}
+					branch={makeBranch({ change: { id: '#42' }, needsPush: true })}
 					postMessage={h.postMessage}
 					setArticleClass={h.setArticleClass}
 				/>,
 			);
 			assert.ok(screen.getByRole('button', { name: /submit feat-a and ancestors/i }));
+		});
+
+		it('hides the upload affordance on a submitted, fully-pushed branch', () => {
+			const h = harness();
+			render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#42' }, needsPush: false })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			// Default status (nothing to upload) shows no indicator at all.
+			assert.strictEqual(screen.queryByRole('button', { name: /submit feat-a/i }), null);
+			assert.strictEqual(screen.queryByRole('button', { name: /create pr for feat-a/i }), null);
 		});
 
 		it('PR link opens the URL when present and posts openChange', () => {
@@ -268,7 +283,7 @@ describe('BranchCard', () => {
 			assert.deepStrictEqual(h.messages, [{ type: 'openChange', url: 'https://github.com/x/y/pull/42' }]);
 		});
 
-		it('PR link keeps an accessible label while the number text is hover-revealed (aria-hidden)', () => {
+		it('PR number is omnipresent plain text with no pull-request icon', () => {
 			const h = harness();
 			const { container } = render(
 				<BranchCard
@@ -277,14 +292,13 @@ describe('BranchCard', () => {
 					setArticleClass={h.setArticleClass}
 				/>,
 			);
-			// aria-label is always present so screen readers announce the PR.
 			const link = screen.getByRole('button', { name: /open pr #42 for feat-a/i });
 			assert.ok(link, 'PR link exposes an aria-label');
-			// The visible number text is decorative (revealed on hover via CSS).
+			// The number IS the indicator: always-visible text, no icon glyph.
 			const number = container.querySelector('.branch-pr-number');
-			assert.ok(number, 'PR number span present');
 			assert.strictEqual(number?.textContent, '#42');
-			assert.strictEqual(number?.getAttribute('aria-hidden'), 'true');
+			assert.strictEqual(number?.getAttribute('aria-hidden'), null);
+			assert.strictEqual(link.querySelector('.codicon'), null, 'PR link must not render an icon');
 		});
 
 		it('suppresses the submit button on the trunk branch', () => {

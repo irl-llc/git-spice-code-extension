@@ -325,37 +325,15 @@ button {
 	align-items: center;
 }
 
-.branch-pr-link .codicon {
-	font-size: 0.8rem;
-	line-height: 1;
-}
-
 /*
- * PR number is revealed only on hover/focus to reduce badge clutter. The
- * spacing rides on the number's own margin-left (not a static container gap),
- * so a hidden number leaves no phantom gap next to the icon.
+ * The PR number is the omnipresent at-a-glance indicator for "this branch has
+ * a change request" — always visible, no icon (one visual indicator per fact).
  */
 .branch-pr-number {
-	max-width: 0;
-	overflow: hidden;
 	white-space: nowrap;
-	opacity: 0;
-	margin-left: 0;
-	transition:
-		max-width 0.15s ease,
-		margin-left 0.15s ease,
-		opacity 0.15s ease;
 }
 
-.branch-pr-link:hover .branch-pr-number,
-.branch-pr-link:focus-visible .branch-pr-number,
-.branch-pr-link:disabled .branch-pr-number {
-	max-width: 10rem;
-	margin-left: 0.15rem;
-	opacity: 1;
-}
-
-/* No URL → not clickable, but keep the PR number statically visible. */
+/* No URL → not clickable. */
 .branch-pr-link:disabled {
 	cursor: default;
 	opacity: 0.6;

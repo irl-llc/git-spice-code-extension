@@ -172,13 +172,23 @@ function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 					<i className="codicon codicon-fold-down" aria-hidden="true" />
 				</button>
 			) : null}
-			{branch.isTrunk ? null : <SubmitButton branch={branch} postMessage={postMessage} />}
+			{showSubmit(branch) ? <SubmitButton branch={branch} postMessage={postMessage} /> : null}
 			{branch.change ? <PrLink branch={branch} postMessage={postMessage} /> : null}
 		</div>
 	);
 }
 
-/** The cloud-upload submit affordance (suppressed on trunk by the caller). */
+/**
+ * The upload affordance shows ONLY when there is something to upload: an
+ * unsubmitted branch (no change request yet) or unpushed local commits.
+ * Trunk never shows it; a submitted, fully-pushed branch shows nothing —
+ * status indicators appear only when the non-default status is active.
+ */
+function showSubmit(branch: BranchViewModel): boolean {
+	if (branch.isTrunk) return false;
+	return !branch.change || branch.needsPush;
+}
+
 function SubmitButton({ branch, postMessage }: BranchTagsProps): JSX.Element {
 	return (
 		<button
@@ -214,10 +224,7 @@ function PrLink({ branch, postMessage }: BranchTagsProps): JSX.Element {
 					: undefined
 			}
 		>
-			<i className="codicon codicon-git-pull-request" aria-hidden="true" />
-			<span className="branch-pr-number" aria-hidden="true">
-				{change.id}
-			</span>
+			<span className="branch-pr-number">{change.id}</span>
 		</button>
 	);
 }
