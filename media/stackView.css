@@ -917,9 +917,11 @@ button {
    Untracked Branch Card
    ============================================ */
 
-/* Untracked card - dashed red border */
+/* Untracked card - dashed red border. The CSS dashed border renders much heavier
+ * than the SVG swimlane stroke, so halve the width to match the gutter line (#86). */
 .branch-card.untracked {
 	border-style: dashed;
+	border-width: 0.5px;
 	border-color: var(--vscode-errorForeground);
 }
 
@@ -970,9 +972,10 @@ button {
    Uncommitted Changes Card
    ============================================ */
 
-/* Uncommitted card - dashed blue border */
+/* Uncommitted card - dashed blue border, halved to the swimlane line weight (#86). */
 .branch-card.uncommitted {
 	border-style: dashed;
+	border-width: 0.5px;
 	border-color: var(--vscode-textLink-foreground);
 }
 
