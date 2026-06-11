@@ -92,7 +92,7 @@ function BranchHeader(props: BranchHeaderProps): JSX.Element {
 	);
 }
 
-/** The expand/collapse chevron for commits, plus the subtree-collapse [-] affordance. */
+/** The expand/collapse chevron for commits, plus the hover-revealed subtree-collapse affordance. */
 function BranchToggle({ branch, expanded, hasCommits, onToggle, onCollapseSubtree }: BranchHeaderProps): JSX.Element {
 	return (
 		<>
@@ -115,7 +115,7 @@ function BranchToggle({ branch, expanded, hasCommits, onToggle, onCollapseSubtre
 			{branch.collapsible ? (
 				<button
 					type="button"
-					className="branch-collapse-subtree codicon codicon-remove"
+					className="branch-collapse-subtree codicon codicon-fold-up"
 					aria-label={`Collapse subtree above ${branch.name}`}
 					title="Collapse the subtree above this branch"
 					onClick={(e) => {

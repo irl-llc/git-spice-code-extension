@@ -315,6 +315,35 @@ button {
 	text-decoration: underline;
 }
 
+/*
+ * Subtree-collapse affordance (issue #66): a quiet icon button revealed on
+ * card hover/focus — collapse is a secondary action, not at-a-glance status,
+ * so it must not be omnipresent. opacity (not display) keeps it clickable
+ * and in the accessibility tree, and reserves its slot (no layout shift).
+ */
+.branch-collapse-subtree {
+	border: none;
+	background: transparent;
+	color: var(--vscode-icon-foreground);
+	cursor: pointer;
+	padding: 0 2px;
+	font-size: 0.8rem;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	opacity: 0;
+	transition: opacity 0.1s ease;
+}
+
+.branch-card:hover .branch-collapse-subtree,
+.branch-collapse-subtree:focus-visible {
+	opacity: 1;
+}
+
+.branch-collapse-subtree:hover {
+	color: var(--vscode-textLink-foreground);
+}
+
 .branch-submit-btn,
 .branch-action-btn {
 	border: none;

@@ -1,2 +1,2 @@
 kind: Added
-body: 'Stack subtrees can be collapsed and expanded in the stack view. Click a branch''s collapse control to hide its upstack behind a placeholder row showing the hidden subtree/branch counts; click the placeholder''s [+] to expand it. "Collapse other stacks" hides every stack except the clicked branch''s own path. Collapse state is in-memory per session.'
+body: 'Stack subtrees can be collapsed and expanded in the stack view. Hover a collapsible branch to reveal its quiet fold-up collapse control and hide its upstack behind a placeholder row showing the hidden subtree/branch counts; click the placeholder''s [+] to expand it. "Collapse other stacks" hides every stack except the clicked branch''s own path. Collapse state is in-memory per session.'
