@@ -30,6 +30,10 @@ const NON_RELEASE_PREFIXES = [
 	// changelog entry (no more manual `skip-changelog` labels on test/CI PRs).
 	'src/test/',
 	'scripts/',
+	// Agent/dev tooling: Claude Code configuration and the status-pipe agent
+	// protocol files. Never bundled into the published extension.
+	'.claude/',
+	'.status-pipe/',
 ];
 
 /** Exact repo-relative paths that never warrant a release. */

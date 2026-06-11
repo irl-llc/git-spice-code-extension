@@ -17,3 +17,8 @@ playwright-report/
 /.husky/post-commit
 /.husky/post-merge
 /.husky/pre-push
+
+# status-pipe protocol runtime state (committed files are allowlisted)
+.status-pipe/*
+!.status-pipe/launch.json
+!.status-pipe/config.json
