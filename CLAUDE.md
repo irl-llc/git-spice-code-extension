@@ -281,10 +281,10 @@ For complete command reference: https://abhinav.github.io/git-spice/cli/referenc
 
 4. **Pinned `gs` binary for tests** (`npm run gs:fetch`):
    - The extension shells out to git-spice via `src/utils/gitSpice.ts`. The executable is resolved by `resolveGitSpiceBinary` (in `src/utils/gitSpiceBinary.ts`) with precedence: the `git-spice.path` setting, then the `GIT_SPICE_BIN` env var, then `git-spice` on PATH. Tests rely on the `GIT_SPICE_BIN` env var (they don't set the setting), so that path keeps working.
-   - For deterministic tests against features not in upstream git-spice, we build a pinned binary from `ed-irl/git-spice` at the SHA in [.gs-version](.gs-version).
+   - For deterministic tests against features not in a stock release, we build a pinned binary from the `ed-irl/integration` branch of `abhinav/git-spice` at the SHA in [.gs-version](.gs-version).
    - `npm run gs:fetch` clones at that SHA into `.gs/src/` and builds to `.gs/bin/gs`. The script is idempotent — it skips rebuilds when `.gs/.built-sha` already matches `.gs-version`.
    - CI sets `GIT_SPICE_BIN=${{ github.workspace }}/.gs/bin/gs` for the E2E job. Local dev: either install the same version on PATH, or `export GIT_SPICE_BIN=$(pwd)/.gs/bin/gs` after running `npm run gs:fetch`.
-   - To bump the pin: edit the SHA in `.gs-version` and re-run `npm run gs:fetch`. Renovate ([.github/renovate.json](.github/renovate.json)) opens weekly PRs proposing new SHAs from the `ed-irl/git-spice` `integration` branch.
+   - To bump the pin: edit the SHA in `.gs-version` and re-run `npm run gs:fetch`. Renovate ([.github/renovate.json](.github/renovate.json)) opens weekly PRs proposing new SHAs from the `ed-irl/integration` branch of `abhinav/git-spice`. A second regex manager tracks the latest stock release tag of `abhinav/git-spice` in `.gs-stock-version` (added by #72); both pin files are built from source by `npm run gs:fetch`.
 
 5. **Visual snapshot tests** (`npm run test:e2e:playwright:docker`):
    - Playwright tests in [src/test/e2e/playwright/](src/test/e2e/playwright/) ending in `.spec.ts` that call `toHaveScreenshot` produce PNG baselines stored next to the spec at `<spec>.snapshots/`. PNGs are git-lfs-tracked via the existing `*.png filter=lfs` rule in `.gitattributes`.
