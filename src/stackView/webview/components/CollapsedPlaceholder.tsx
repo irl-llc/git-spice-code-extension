@@ -3,8 +3,8 @@
  *
  * Renders in place of one or more hidden subtrees: a dashed empty lane (drawn
  * by the row's TreeFragmentSvg) beside a card summarizing how many subtrees and
- * branches are hidden, with a centered [+] that expands them. Only the [+]
- * expands — clicking the card body does nothing (binding design answer #4).
+ * branches are hidden, with an expand-all icon button that expands them. Only
+ * that button expands — clicking the card body does nothing (design answer #4).
  */
 
 import { type JSX } from 'react';
@@ -31,7 +31,7 @@ export function CollapsedPlaceholder({ placeholder, onExpand }: CollapsedPlaceho
 		<div className="collapsed-placeholder" data-role="collapsed-placeholder">
 			<button
 				type="button"
-				className="collapsed-placeholder-expand codicon codicon-add"
+				className="collapsed-placeholder-expand codicon codicon-expand-all"
 				aria-label={`Expand ${label}`}
 				title="Expand collapsed subtrees"
 				onClick={() => onExpand(placeholder.roots)}

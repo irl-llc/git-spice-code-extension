@@ -316,23 +316,27 @@ button {
 }
 
 /*
- * Subtree-collapse affordance (issue #66): a quiet icon button revealed on
- * card hover/focus — collapse is a secondary action, not at-a-glance status,
- * so it must not be omnipresent. opacity (not display) keeps it clickable
- * and in the accessibility tree, and reserves its slot (no layout shift).
+ * Subtree-collapse affordance (issue #66): a quiet icon button at the END of
+ * the card's tag row, revealed on card hover/focus — collapse is a secondary
+ * action, not at-a-glance status, so it must not be omnipresent. opacity (not
+ * display) keeps it clickable, in the accessibility tree, and its slot
+ * reserved at the row end where it crowds nothing.
  */
 .branch-collapse-subtree {
 	border: none;
 	background: transparent;
 	color: var(--vscode-icon-foreground);
 	cursor: pointer;
-	padding: 0 2px;
-	font-size: 0.8rem;
-	line-height: 1;
+	padding: 0 1px;
 	display: inline-flex;
 	align-items: center;
 	opacity: 0;
 	transition: opacity 0.1s ease;
+}
+
+.branch-collapse-subtree.codicon {
+	font-size: 0.8rem;
+	line-height: 1;
 }
 
 .branch-card:hover .branch-collapse-subtree,
@@ -341,6 +345,35 @@ button {
 }
 
 .branch-collapse-subtree:hover {
+	color: var(--vscode-textLink-foreground);
+}
+
+/* Collapsed-subtree placeholder row (issue #66): quiet expand icon + summary. */
+.collapsed-placeholder {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.15rem 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.8rem;
+}
+
+.collapsed-placeholder-expand {
+	border: none;
+	background: transparent;
+	color: var(--vscode-icon-foreground);
+	cursor: pointer;
+	padding: 0 1px;
+	display: inline-flex;
+	align-items: center;
+}
+
+.collapsed-placeholder-expand.codicon {
+	font-size: 0.9rem;
+	line-height: 1;
+}
+
+.collapsed-placeholder-expand:hover {
 	color: var(--vscode-textLink-foreground);
 }
 
