@@ -33,6 +33,10 @@ export interface BranchCardProps {
 
 export function BranchCard(props: BranchCardProps): JSX.Element {
 	const { branch, postMessage, setArticleClass, summary, commits } = props;
+	const collapseSubtree = useCallback(
+		() => postMessage({ type: 'collapseSubtree', branchName: branch.name }),
+		[postMessage, branch.name],
+	);
 	const hasCommits = Boolean(branch.commits && branch.commits.length > 0);
 
 	const [expanded, setExpanded] = useState(branch.current === true);
@@ -59,6 +63,7 @@ export function BranchCard(props: BranchCardProps): JSX.Element {
 				postMessage={postMessage}
 				onToggle={toggle}
 				onHeaderClick={handleHeaderClick}
+				onCollapseSubtree={collapseSubtree}
 			/>
 			{summary ?? null}
 			{commits ?? null}
@@ -73,18 +78,24 @@ interface BranchHeaderProps {
 	postMessage: PostMessage;
 	onToggle: () => void;
 	onHeaderClick: (event: React.MouseEvent<HTMLDivElement>) => void;
+	onCollapseSubtree: () => void;
 }
 
-function BranchHeader({
-	branch,
-	expanded,
-	hasCommits,
-	postMessage,
-	onToggle,
-	onHeaderClick,
-}: BranchHeaderProps): JSX.Element {
+function BranchHeader(props: BranchHeaderProps): JSX.Element {
+	const { branch, hasCommits, postMessage, onHeaderClick } = props;
 	return (
 		<div className="branch-header" style={hasCommits ? { cursor: 'pointer' } : undefined} onClick={onHeaderClick}>
+			<BranchToggle {...props} />
+			<span className="branch-name">{branch.name}</span>
+			<BranchTags branch={branch} postMessage={postMessage} onCollapseSubtree={props.onCollapseSubtree} />
+		</div>
+	);
+}
+
+/** The expand/collapse chevron for the card's own commits. */
+function BranchToggle({ branch, expanded, hasCommits, onToggle }: BranchHeaderProps): JSX.Element {
+	return (
+		<>
 			{hasCommits ? (
 				<button
 					type="button"
@@ -101,9 +112,7 @@ function BranchHeader({
 			) : (
 				<span className="branch-toggle-spacer" />
 			)}
-			<span className="branch-name">{branch.name}</span>
-			<BranchTags branch={branch} postMessage={postMessage} />
-		</div>
+		</>
 	);
 }
 
@@ -130,6 +139,8 @@ function ChangeStatusBadge({ status }: { status: GitSpiceChangeStatus }): JSX.El
 interface BranchTagsProps {
 	branch: BranchViewModel;
 	postMessage: PostMessage;
+	/** Collapses the subtree above this branch (hover-revealed action). */
+	onCollapseSubtree?: () => void;
 }
 
 /** The read-only status pills shown before the action buttons. */
@@ -144,7 +155,7 @@ function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
 	);
 }
 
-function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
+function BranchTags({ branch, postMessage, onCollapseSubtree }: BranchTagsProps): JSX.Element {
 	const showSquash = Boolean(branch.commits && branch.commits.length > 1);
 	return (
 		<div className="branch-tags">
@@ -178,6 +189,18 @@ function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 				<i className="codicon codicon-cloud-upload" aria-hidden="true" />
 			</button>
 			{branch.change ? <PrLink branch={branch} postMessage={postMessage} /> : null}
+			{branch.collapsible && onCollapseSubtree ? (
+				<button
+					type="button"
+					className="branch-collapse-subtree codicon codicon-collapse-all"
+					aria-label={`Collapse subtree above ${branch.name}`}
+					title="Collapse the subtree above this branch"
+					onClick={(e) => {
+						e.stopPropagation();
+						onCollapseSubtree();
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }

@@ -125,6 +125,15 @@ function createMockContext(): MessageHandlerContext & { calls: string[] } {
 		handleStackSubmit: async (_repoId) => {
 			calls.push('handleStackSubmit');
 		},
+		handleCollapseSubtree: (_repoId, branchName) => {
+			calls.push(`handleCollapseSubtree:${branchName}`);
+		},
+		handleExpandSubtree: (_repoId, roots) => {
+			calls.push(`handleExpandSubtree:${roots.join(',')}`);
+		},
+		handleCollapseOtherStacks: (_repoId, branchName) => {
+			calls.push(`handleCollapseOtherStacks:${branchName}`);
+		},
 		getExecFunctions: () => mockExecFunctions,
 	};
 }
@@ -234,6 +243,29 @@ describe('messageRouter', () => {
 				const result = routeMessage({ type: 'upstackMove', branchName: 'feature-1', newParent: 'main' }, ctx);
 				assert.strictEqual(result, true);
 				assert.deepStrictEqual(ctx.calls, ['handleUpstackMove:feature-1:main']);
+			});
+		});
+
+		describe('collapse messages', () => {
+			it('should route collapseSubtree message to handleCollapseSubtree', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'collapseSubtree', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleCollapseSubtree:feature-1']);
+			});
+
+			it('should route expandSubtree message to handleExpandSubtree, forwarding roots', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'expandSubtree', roots: ['feat-a', 'feat-c'] }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleExpandSubtree:feat-a,feat-c']);
+			});
+
+			it('should route collapseOtherStacks message to handleCollapseOtherStacks', () => {
+				const ctx = createMockContext();
+				const result = routeMessage({ type: 'collapseOtherStacks', branchName: 'feature-1' }, ctx);
+				assert.strictEqual(result, true);
+				assert.deepStrictEqual(ctx.calls, ['handleCollapseOtherStacks:feature-1']);
 			});
 		});
 

@@ -11,6 +11,7 @@ import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type { DiscoveredRepo, RepoDiscovery } from '../repoDiscovery';
 import { collectComments, mergeCachedComments, type CommentCache } from './commentCache';
 import { buildRepoDisplayState, type RepoDisplayInput } from './state';
+import { CollapseStore, type CollapseOp } from './collapseState';
 import { fetchRepoState, fetchFolderState, type RepoState } from './repoStateBuilder';
 import type { DisplayState, RepositoryViewModel, UncommittedState } from './types';
 import type { WebviewMessage } from './webviewTypes';
@@ -77,6 +78,12 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	private readonly commentCache: CommentCache = new Map();
 	/** When true, the next refresh re-fetches comment counts from the forge. */
 	private commentsDirty = true;
+	/**
+	 * Per-repo collapse-root sets (issue #66). In-memory per session — collapse
+	 * state is intentionally NOT persisted across reload/restart. Keyed by repo
+	 * root path; applied during the DFS in state.ts (the layout authority).
+	 */
+	private readonly collapse = new CollapseStore();
 
 	constructor(
 		private readonly discovery: RepoDiscovery | undefined,
@@ -204,6 +211,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			this.updateCommentCache();
 			this.commentsDirty = false;
 		}
+		this.collapse.prune(new Set(this.repoStates.keys()));
 		this.pushState(force);
 	}
 
@@ -258,6 +266,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 				uncommitted: state.uncommitted,
 				untrackedBranch: state.untrackedBranch,
 				integration: state.integration,
+				collapsed: this.collapse.get(state.rootPath),
 			};
 			repositories.push(buildRepoDisplayState(input));
 		}
@@ -444,6 +453,31 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			'Stack restacked successfully',
 			() => this.refresh(),
 		);
+	}
+
+	// --- Subtree Collapse/Expand Handlers (issue #66) ---
+
+	/** Resolves the repo, applies a collapse op to its set, and re-pushes state. */
+	private runCollapseOp(repoId: string | undefined, op: CollapseOp): void {
+		const state = this.resolveRepoState(repoId);
+		if (!state) return;
+		this.collapse.mutate(state.rootPath, state.branches, state.integration?.name, op);
+		this.pushState(true);
+	}
+
+	/** Toggles a branch as a collapse root (hides/reveals its upstack). */
+	handleCollapseSubtree(repoId: string | undefined, branchName: string): void {
+		this.runCollapseOp(repoId, { kind: 'toggle', branchName });
+	}
+
+	/** Expands the given collapse roots (clicking a placeholder's [+]). */
+	handleExpandSubtree(repoId: string | undefined, roots: string[]): void {
+		this.runCollapseOp(repoId, { kind: 'expand', roots });
+	}
+
+	/** Collapses every stack except the clicked branch, its ancestors, and descendants. */
+	handleCollapseOtherStacks(repoId: string | undefined, branchName: string): void {
+		this.runCollapseOp(repoId, { kind: 'collapseOthers', branchName });
 	}
 
 	/** Submits the specified repo's stack. */

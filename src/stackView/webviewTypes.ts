@@ -42,7 +42,10 @@ type RepoWebviewMessage =
 	| { type: 'branchTrack'; repoId?: string; branchName: string }
 	| { type: 'repoSync'; repoId?: string }
 	| { type: 'stackRestack'; repoId?: string }
-	| { type: 'stackSubmit'; repoId?: string };
+	| { type: 'stackSubmit'; repoId?: string }
+	| { type: 'collapseSubtree'; repoId?: string; branchName: string }
+	| { type: 'expandSubtree'; repoId?: string; roots: string[] }
+	| { type: 'collapseOtherStacks'; repoId?: string; branchName: string };
 
 /** All messages from webview to extension. */
 export type WebviewMessage = GlobalWebviewMessage | RepoWebviewMessage;

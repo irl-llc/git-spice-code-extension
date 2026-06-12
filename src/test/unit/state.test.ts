@@ -257,4 +257,75 @@ describe('state', () => {
 			assert.ok(a1?.tree.ancestorIsLast.includes(false));
 		});
 	});
+
+	describe('buildRepoDisplayState collapse integration (issue #66)', () => {
+		// main ─┬─ a ── a1   └─ b ── b1
+		const forkBranches: GitSpiceBranch[] = [
+			createBranch('main'),
+			createBranch('a', { down: { name: 'main' } }),
+			createBranch('a1', { down: { name: 'a' } }),
+			createBranch('b', { down: { name: 'main' } }),
+			createBranch('b1', { down: { name: 'b' } }),
+		];
+
+		it('flags branches with children as collapsible, trunk and leaves as not', () => {
+			const result = buildRepoDisplayState(repoInput(forkBranches));
+			const byName = new Map(result.branches.map((b) => [b.name, b]));
+			assert.strictEqual(byName.get('a')?.collapsible, true);
+			assert.strictEqual(byName.get('b')?.collapsible, true);
+			assert.strictEqual(byName.get('main')?.collapsible, undefined, 'trunk not collapsible');
+			assert.strictEqual(byName.get('a1')?.collapsible, undefined, 'leaf not collapsible');
+		});
+
+		it('emits a branch row per branch when nothing is collapsed', () => {
+			const result = buildRepoDisplayState(repoInput(forkBranches));
+			assert.ok(
+				result.rows.every((row) => row.kind === 'branch'),
+				'no placeholders',
+			);
+			assert.strictEqual(result.rows.length, result.branches.length);
+		});
+
+		it('replaces a collapsed root’s descendants with a placeholder row, keeping siblings', () => {
+			const input: RepoDisplayInput = { ...repoInput(forkBranches), collapsed: new Set(['a']) };
+			const result = buildRepoDisplayState(input);
+			const placeholders = result.rows.filter((r) => r.kind === 'placeholder');
+			assert.strictEqual(placeholders.length, 1, 'one placeholder for collapsed a');
+			const visibleBranches = result.rows.flatMap((r) => (r.kind === 'branch' ? [r.branch.name] : []));
+			assert.ok(!visibleBranches.includes('a1'), 'a1 hidden');
+			assert.deepStrictEqual(visibleBranches.sort(), ['a', 'b', 'b1', 'main']);
+		});
+
+		it('anchors a collapsed sibling placeholder to the hidden subtree’s lane (not lane 0)', () => {
+			// Collapse b (a lane >= 1 sibling subtree): the placeholder must sit in b1's
+			// lane, not lane 0, and the surviving b card's fork must land on a real lane.
+			const input: RepoDisplayInput = { ...repoInput(forkBranches), collapsed: new Set(['b']) };
+			const result = buildRepoDisplayState(input);
+			const placeholderRow = result.rows.find((r) => r.kind === 'placeholder');
+			assert.ok(placeholderRow && placeholderRow.kind === 'placeholder');
+			const ph = placeholderRow.placeholder;
+			assert.strictEqual(ph.treeFragment.nodeStyle, 'placeholder');
+			assert.ok(
+				ph.treeFragment.nodeLane >= 1,
+				`placeholder lane should be a sibling lane, got ${ph.treeFragment.nodeLane}`,
+			);
+			// The placeholder is a dashed stub: no node circle, no own forks.
+			assert.ok(
+				ph.treeFragment.lanes.every((lane) => !lane.hasNode),
+				'placeholder draws no node',
+			);
+			assert.deepStrictEqual(ph.treeFragment.childForkLanes, [], 'placeholder has no child forks');
+			// Every surviving fork connector must point at a lane that a visible row
+			// actually occupies — no dangling fork into a now-hidden lane.
+			const visibleLanes = result.rows.flatMap((r) =>
+				r.kind === 'branch' ? [r.branch.treeFragment.nodeLane] : [r.placeholder.treeFragment.nodeLane],
+			);
+			for (const r of result.rows) {
+				if (r.kind !== 'branch') continue;
+				for (const fork of r.branch.treeFragment.childForkLanes) {
+					assert.ok(visibleLanes.includes(fork.lane), `fork lane ${fork.lane} references a visible row`);
+				}
+			}
+		});
+	});
 });

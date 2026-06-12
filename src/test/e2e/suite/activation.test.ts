@@ -31,6 +31,7 @@ const EXTENSION_COMMANDS = [
 	'git-spice.enableRemoteForgeStatus',
 	'git-spice.disableRemoteForgeStatus',
 	'git-spice.copyBranchName',
+	'git-spice.collapseOtherStacks',
 	'git-spice.commitCopySha',
 	'git-spice.commitSplit',
 ];
