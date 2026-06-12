@@ -169,7 +169,7 @@ function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 						postMessage({ type: 'branchSquash', branchName: branch.name });
 					}}
 				>
-					<i className="codicon codicon-fold-down" aria-hidden="true" />
+					<i className="codicon codicon-combine" aria-hidden="true" />
 				</button>
 			) : null}
 			{showSubmit(branch) ? <SubmitButton branch={branch} postMessage={postMessage} /> : null}

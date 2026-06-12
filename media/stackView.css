@@ -366,6 +366,25 @@ button {
 	color: var(--vscode-textLink-foreground);
 }
 
+/*
+ * Squash is an action, not at-a-glance status: hover-revealed like the
+ * subtree-collapse control. opacity (not display) keeps it clickable and in
+ * the accessibility tree with its slot reserved (no layout shift on hover).
+ * Declared after the shared base rule above so this hide wins the cascade.
+ */
+.branch-action-btn {
+	opacity: 0;
+}
+
+.branch-card:hover .branch-action-btn,
+.branch-action-btn:focus-visible {
+	opacity: 0.7;
+}
+
+.branch-card:hover .branch-action-btn:hover {
+	opacity: 1;
+}
+
 .branch-toggle {
 	border: none;
 	background: transparent;
