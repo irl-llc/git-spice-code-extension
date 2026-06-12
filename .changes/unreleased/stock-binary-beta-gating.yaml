@@ -1,0 +1,2 @@
+kind: Changed
+body: 'The changelog gate now treats the pinned git-spice test-binary version files (`.gs-version` and the new `.gs-stock-version`) as non-release tooling, so bumping a test binary pin no longer requires a change fragment. This supports building a vanilla upstream "stock" git-spice binary alongside the patched one, used by new tests that prove the extension''s beta surfaces (the `integration` command group and the `gs ll -S` forge-status path) stay gated off against stock git-spice.'
