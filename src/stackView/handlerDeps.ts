@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 
-import { runWithProgress } from './handlers/branchCommandRunner';
+import { runWithProgress, type OperationGate } from './handlers/branchCommandRunner';
 import type { BranchHandlerDeps } from './handlers/branchHandlers';
 import type { CommitHandlerDeps } from './handlers/commitHandlers';
 import type { DiffHandlerDeps } from './handlers/diffHandlers';
@@ -23,6 +23,8 @@ export interface HandlerDepsHost {
 	resolveRepoState(repoId?: string): RepoState | undefined;
 	resolveWorkspaceFolder(repoId?: string): vscode.WorkspaceFolder | undefined;
 	refresh(force?: boolean): Promise<void>;
+	/** Gate that holds watcher refreshes for the duration of a multi-step op (issue #71). */
+	operationGate: OperationGate;
 	broadcast(message: unknown): void;
 	handleBranchCommandInternal(
 		repoId: string | undefined,
@@ -38,7 +40,8 @@ export function buildBranchHandlerDeps(host: HandlerDepsHost, repoId?: string): 
 		workspaceFolder: host.resolveWorkspaceFolder(repoId),
 		branches: state?.branches ?? [],
 		integration: state?.integration ?? null,
-		runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => host.refresh()),
+		runBranchCommand: (title, op, msg) =>
+			runWithProgress(title, op, msg, { refresh: () => host.refresh(), gate: host.operationGate }),
 		handleBranchCommandInternal: (cmd, branch, fn) => host.handleBranchCommandInternal(repoId, cmd, branch, fn),
 		postMessageToWebview: (message) => host.broadcast(message),
 	};
@@ -47,7 +50,8 @@ export function buildBranchHandlerDeps(host: HandlerDepsHost, repoId?: string): 
 export function buildCommitHandlerDeps(host: HandlerDepsHost, repoId?: string): CommitHandlerDeps {
 	return {
 		workspaceFolder: host.resolveWorkspaceFolder(repoId),
-		runBranchCommand: (title, op, msg) => runWithProgress(title, op, msg, () => host.refresh()),
+		runBranchCommand: (title, op, msg) =>
+			runWithProgress(title, op, msg, { refresh: () => host.refresh(), gate: host.operationGate }),
 		refresh: () => host.refresh(),
 		postCommitFilesToWebview: (sha, files) => host.broadcast({ type: 'commitFiles', repoId, sha, files }),
 	};

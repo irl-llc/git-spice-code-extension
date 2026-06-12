@@ -1,10 +1,7 @@
 /**
- * Component tests for StackView.tsx — focused on the refresh indicator.
- *
- * The extension host sends a `refreshing` message when a refresh starts and
- * a `state` message when it completes. The indicator must appear on the
- * former and clear on the latter, so users get visible feedback that the
- * refresh button actually did something.
+ * Component tests for StackView.tsx — message handling and the initial-state
+ * handshake. Also guards that no in-view refresh indicator renders (#71):
+ * progress feedback lives in VS Code notifications, not the view.
  */
 
 // MUST be first — installs JSDOM globals before testing-library imports.
@@ -45,39 +42,20 @@ function renderStackView(): Harness {
 	return { emit, messages, container };
 }
 
-function indicator(container: HTMLElement): Element | null {
-	return container.querySelector('[data-role="refresh-indicator"]');
-}
-
-describe('StackView refresh indicator', () => {
+describe('StackView refresh indicator (removed, issue #71)', () => {
 	beforeEach(installJsdomGlobals);
 	afterEach(cleanup);
 
-	it('is hidden before any refresh begins', () => {
+	// The in-view refresh banner was removed: user-initiated operations get a
+	// VS Code progress notification, and background watch refreshes are
+	// silent. The old banner appeared/disappeared per refresh, shifting layout
+	// on every watcher cycle — the visible half of the refresh storm.
+	it('never renders an in-view refresh indicator, even across state updates', () => {
 		const h = renderStackView();
-		assert.strictEqual(indicator(h.container), null);
-	});
-
-	it('appears on a `refreshing` message even before any state arrives', () => {
-		const h = renderStackView();
-		h.emit({ type: 'refreshing' });
-		assert.ok(indicator(h.container), 'expected refresh indicator to render');
-	});
-
-	it('clears when the resulting `state` message arrives', () => {
-		const h = renderStackView();
-		h.emit({ type: 'refreshing' });
-		assert.ok(indicator(h.container), 'indicator should be visible during refresh');
+		assert.strictEqual(h.container.querySelector('[data-role="refresh-indicator"]'), null);
 		h.emit({ type: 'state', payload: { repositories: [] } });
-		assert.strictEqual(indicator(h.container), null, 'indicator should clear after state arrives');
-	});
-
-	it('re-appears on a subsequent refresh after a completed one', () => {
-		const h = renderStackView();
-		h.emit({ type: 'refreshing' });
-		h.emit({ type: 'state', payload: { repositories: [] } });
-		h.emit({ type: 'refreshing' });
-		assert.ok(indicator(h.container), 'indicator should re-appear on the next refresh');
+		assert.strictEqual(h.container.querySelector('[data-role="refresh-indicator"]'), null);
+		assert.strictEqual(h.container.querySelector('.refresh-indicator'), null);
 	});
 });
 
