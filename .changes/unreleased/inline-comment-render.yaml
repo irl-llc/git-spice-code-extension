@@ -1,0 +1,2 @@
+kind: Added
+body: 'Forge review comments now render inline in diff interfaces. The extension surfaces each comment as a VS Code comment thread at its file and line within the diff view, including the author, body, and resolved/stale state, so stacked Change Request feedback is visible without leaving the editor.'
