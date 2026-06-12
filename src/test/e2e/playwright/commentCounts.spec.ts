@@ -19,6 +19,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { launchVSCode, type VSCodeInstance } from './fixtures/vscode';
 import { seedShamhubStack, type ShamhubStack } from './fixtures/shamhub';
 import { openGitSpiceEditor } from './fixtures/webview';
+import { waitForStableWidth } from './fixtures/stability';
 
 /** Seeds a feat1/feat2/feat3 stack, then posts comments via shamhub. */
 async function seedCommentScenario(): Promise<ShamhubStack> {
@@ -75,6 +76,11 @@ test.describe('comment counts (shamhub)', () => {
 		// OFF (default): no comment indicators rendered. (toHaveScreenshot has
 		// built-in stability waits, so no explicit timeout is needed.)
 		await expect(webview.locator('.comments-indicator')).toHaveCount(0);
+		// Wait for the card-row width to settle before capturing: an in-flight
+		// async forge fetch can reflow #repoContainer from 632px to the 680px
+		// with-badges layout after first paint, and toHaveCount(0) passes during
+		// that transient window (issue #78).
+		await waitForStableWidth(repoContainer);
 		await expect(repoContainer).toHaveScreenshot('comment-counts-hidden.png');
 
 		// ON: enable remote forge status; counts fetched from shamhub appear.
@@ -83,6 +89,7 @@ test.describe('comment counts (shamhub)', () => {
 		await expect(webview.locator('.comments-indicator')).toHaveCount(2);
 		await expect(webview.locator('.comments-indicator', { hasText: '1/2' })).toBeVisible();
 		await expect(webview.locator('.comments-indicator', { hasText: '1/1' })).toBeVisible();
+		await waitForStableWidth(repoContainer);
 		await expect(repoContainer).toHaveScreenshot('comment-counts-shown.png');
 	});
 });
