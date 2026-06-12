@@ -16,14 +16,60 @@ export interface DiffUriPair {
 }
 
 /**
+ * Marker carried in the query of git-spice-opened branch diffs. The forge
+ * CommentController matches on this so it only attaches threads to diffs the
+ * extension itself opened — never to git diffs from the built-in Git extension
+ * or the GitHub Pull Requests extension (which use their own URI schemes).
+ */
+export const GIT_SPICE_DIFF_MARKER = 'gitSpiceBranch';
+
+/**
+ * Identifies which branch's Change Request a git-spice diff belongs to, so the
+ * CommentController can look up that branch's inline comments. Parsed back out
+ * of the right-side diff URI via {@link parseGitSpiceDiffUri}.
+ */
+export type GitSpiceDiffMarker = Readonly<{ branchName: string }>;
+
+/**
  * Builds a git-scheme URI for viewing a file at a specific git reference.
+ *
+ * Pass `marker` to tag the URI as a git-spice branch diff; the value is stored
+ * under {@link GIT_SPICE_DIFF_MARKER} in the JSON query and read back by
+ * {@link parseGitSpiceDiffUri}. The scheme stays `git` so VS Code's Git
+ * extension still resolves the file content.
  *
  * @param fileUri - The file URI (must be a file:// URI)
  * @param ref - The git reference (SHA, branch name, HEAD, ~, etc.)
+ * @param marker - Optional git-spice branch marker for comment scoping
  */
-export function buildGitUri(fileUri: vscode.Uri, ref: string): vscode.Uri {
-	const query = JSON.stringify({ path: fileUri.fsPath, ref });
-	return fileUri.with({ scheme: 'git', query });
+export function buildGitUri(fileUri: vscode.Uri, ref: string, marker?: GitSpiceDiffMarker): vscode.Uri {
+	const base: Record<string, unknown> = { path: fileUri.fsPath, ref };
+	if (marker) base[GIT_SPICE_DIFF_MARKER] = marker.branchName;
+	return fileUri.with({ scheme: 'git', query: JSON.stringify(base) });
+}
+
+/**
+ * Parses the git-spice branch marker out of a diff URI's query, or returns
+ * undefined when the URI is not a marked git-spice diff (wrong scheme,
+ * unparseable query, or no marker). The CommentController uses this to decide
+ * whether to render forge comments on a freshly-opened diff editor.
+ */
+export function parseGitSpiceDiffUri(uri: vscode.Uri): GitSpiceDiffMarker | undefined {
+	if (uri.scheme !== 'git') return undefined;
+	const branchName = readMarkerBranch(uri.query);
+	return branchName ? { branchName } : undefined;
+}
+
+/** Reads the marker branch name from a git URI query string, defensively. */
+function readMarkerBranch(query: string): string | undefined {
+	try {
+		const parsed: unknown = JSON.parse(query);
+		if (typeof parsed !== 'object' || parsed === null) return undefined;
+		const value = (parsed as Record<string, unknown>)[GIT_SPICE_DIFF_MARKER];
+		return typeof value === 'string' && value.length > 0 ? value : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 /**

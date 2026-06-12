@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import { POST_COMMIT_REFRESH_DELAY_MS } from './constants';
 import { createRepoDiscovery } from './repoDiscovery';
+import { ForgeCommentController } from './stackView/commentController';
 import { StackViewProvider } from './stackView/StackViewProvider';
 import {
 	execBranchCreate,
@@ -333,6 +334,17 @@ function registerWorkspaceListeners(context: vscode.ExtensionContext, provider: 
 	);
 }
 
+/**
+ * Wires the forge CommentController to the provider: every forge-status refresh
+ * that loads inline comments pushes the new DisplayState here, which re-renders
+ * native comment threads on any open git-spice diff (issue #40, slice 2).
+ */
+function registerForgeCommentController(context: vscode.ExtensionContext, provider: StackViewProvider): void {
+	const controller = new ForgeCommentController();
+	provider.onInlineCommentsUpdated = (state) => controller.update(state);
+	context.subscriptions.push(controller);
+}
+
 /** Registers the core provider and basic commands (refresh, sync). */
 function registerCoreProvider(context: vscode.ExtensionContext, provider: StackViewProvider): void {
 	context.subscriptions.push(
@@ -360,6 +372,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	registerStackCommands(context, provider);
 	registerBranchCreateCommand(context, provider);
 	registerWorkspaceListeners(context, provider);
+	registerForgeCommentController(context, provider);
 }
 
 export function deactivate(): void {

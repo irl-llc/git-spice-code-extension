@@ -139,6 +139,13 @@ export interface SeedStackOptions {
 	trunk?: string;
 	/** Pass `--fill` to `gs stack submit` so CR bodies are auto-filled. Default true. */
 	submit?: boolean;
+	/**
+	 * When true, each branch gets a multi-line file and a second commit, so the
+	 * webview's "Summarized Changes" button renders (it requires >1 commit) and
+	 * line-anchored inline comments have real lines to attach to. Default false
+	 * to preserve the simple single-commit shape other specs depend on.
+	 */
+	multiCommit?: boolean;
 }
 
 /** A running shamhub + a local repo with a submitted stack, ready for VS Code. */
@@ -148,8 +155,23 @@ export interface ShamhubStack {
 	repoPath: string;
 	/** Env that points VS Code, `gs`, and git at this shamhub instance. */
 	env: Record<string, string>;
+	/**
+	 * Posts an inline forge comment end-to-end via `gs branch comment add`,
+	 * which writes through shamhub so `gs branch comment list --json` (and the
+	 * extension's CommentController) then surface it. `anchor` follows the gs
+	 * grammar: `file.txt:42` for a line, `file.txt` for a file, or `undefined`
+	 * for a whole-PR comment (`--pr`).
+	 */
+	addInlineComment(branch: string, anchor: string | undefined, body: string): void;
 	/** Removes the temp repo and home dirs. Call shamhub.close() separately. */
 	cleanup(): void;
+}
+
+/** Runs `gs branch comment add` in the seeded repo to post an inline comment. */
+function postInlineComment(runners: RepoRunners, branch: string, anchor: string | undefined, body: string): void {
+	const head = ['branch', 'comment', 'add', '--branch', branch];
+	const tail = anchor === undefined ? ['--pr', '-m', body] : [anchor, '-m', body];
+	runners.gs(...head, ...tail);
 }
 
 /** Bound git/gs runners plus a file writer, all scoped to one repo + env. */
@@ -170,8 +192,15 @@ export async function seedShamhubStack(options: SeedStackOptions): Promise<Shamh
 	const home = mkdtempSync(join(tmpdir(), 'gs-shamhub-home-'));
 	try {
 		const env = buildStackEnv(home, shamhub.env);
-		seedStackRepo(createRepoRunners(repoPath, env), shamhub.repoUrl, options);
-		return { shamhub, repoPath, env, cleanup: () => cleanupDirs(repoPath, home) };
+		const runners = createRepoRunners(repoPath, env);
+		seedStackRepo(runners, shamhub.repoUrl, options);
+		return {
+			shamhub,
+			repoPath,
+			env,
+			addInlineComment: (branch, anchor, body) => postInlineComment(runners, branch, anchor, body),
+			cleanup: () => cleanupDirs(repoPath, home),
+		};
 	} catch (error) {
 		// Setup threw partway through: don't leak the shamhub child or temp dirs.
 		await shamhub.close();
@@ -184,7 +213,7 @@ export async function seedShamhubStack(options: SeedStackOptions): Promise<Shamh
 function seedStackRepo(runners: RepoRunners, repoUrl: string, options: SeedStackOptions): void {
 	const trunk = options.trunk ?? TRUNK;
 	initAndPushTrunk(runners, repoUrl, trunk);
-	for (const name of options.branches) createSubmittableBranch(runners, name);
+	for (const name of options.branches) createSubmittableBranch(runners, name, options.multiCommit ?? false);
 	if (options.submit ?? true) runners.gs('stack', 'submit', '--fill');
 }
 
@@ -198,12 +227,23 @@ function buildStackEnv(home: string, shamhubEnv: ShamhubEnv): Record<string, str
 	};
 }
 
+/** Runs a binary, failing fast (with captured output) instead of hanging. */
+function runOrThrow(bin: string, args: string[], opts: { cwd?: string; env: NodeJS.ProcessEnv }): void {
+	try {
+		execFileSync(bin, args, { ...opts, timeout: 30_000 });
+	} catch (e) {
+		const err = e as { signal?: string; stderr?: Buffer; stdout?: Buffer };
+		const out = `${err.stderr?.toString() ?? ''}${err.stdout?.toString() ?? ''}`.trim();
+		throw new Error(`${bin} ${args.join(' ')} failed${err.signal ? ` (${err.signal})` : ''}: ${out}`);
+	}
+}
+
 /** Binds git/gs/write helpers to one repo + env (env merged onto process.env). */
 function createRepoRunners(repoPath: string, env: Record<string, string>): RepoRunners {
 	const execEnv = { ...process.env, ...env };
 	return {
-		git: (...a) => void execFileSync('git', ['-C', repoPath, ...a], { env: execEnv }),
-		gs: (...a) => void execFileSync(GS_BIN, a, { cwd: repoPath, env: execEnv }),
+		git: (...a) => runOrThrow('git', ['-C', repoPath, ...a], { env: execEnv }),
+		gs: (...a) => runOrThrow(GS_BIN, [...a], { cwd: repoPath, env: execEnv }),
 		write: (rel, content) => {
 			const abs = join(repoPath, rel);
 			mkdirSync(dirname(abs), { recursive: true });
@@ -225,11 +265,21 @@ function initAndPushTrunk(runners: RepoRunners, repoUrl: string, trunk: string):
 	gs('auth', 'login');
 }
 
-/** Writes a one-file commit and creates a tracked branch ready for submit. */
-function createSubmittableBranch(runners: RepoRunners, name: string): void {
-	runners.write(`${name}.txt`, `${name}\n`);
+/**
+ * Writes a one-file commit and creates a tracked branch ready for submit. When
+ * `multiCommit` is set, the file is multi-line and a second commit is added so
+ * the branch has >1 commit (Summarized Changes button) and real lines for
+ * inline-comment anchors.
+ */
+function createSubmittableBranch(runners: RepoRunners, name: string, multiCommit: boolean): void {
+	const initial = multiCommit ? `${name} line 1\n${name} line 2\n${name} line 3\n` : `${name}\n`;
+	runners.write(`${name}.txt`, initial);
 	runners.git('add', '.');
 	runners.gs('branch', 'create', '-m', name, '--no-prompt', '--no-verify', name);
+	if (!multiCommit) return;
+	runners.write(`${name}.txt`, `${initial}${name} line 4\n`);
+	runners.git('add', '.');
+	runners.gs('commit', 'create', '-m', `${name} second commit`, '--no-verify');
 }
 
 function cleanupDirs(...dirs: string[]): void {
