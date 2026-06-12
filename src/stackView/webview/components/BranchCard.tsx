@@ -132,12 +132,21 @@ interface BranchTagsProps {
 	postMessage: PostMessage;
 }
 
+/** Compact icon indicating the branch is out of sync with its base. */
+function RestackIndicator(): JSX.Element {
+	return (
+		<span className="branch-restack-icon" title="Needs restack" aria-label="Needs restack" role="img">
+			<i className="codicon codicon-history" aria-hidden="true" />
+		</span>
+	);
+}
+
 /** The read-only status pills shown before the action buttons. */
 function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
 	const comments = branch.change?.comments;
 	return (
 		<>
-			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
+			{branch.restack ? <RestackIndicator /> : null}
 			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
 			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}
 		</>
@@ -160,25 +169,40 @@ function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 						postMessage({ type: 'branchSquash', branchName: branch.name });
 					}}
 				>
-					<i className="codicon codicon-fold-down" aria-hidden="true" />
+					<i className="codicon codicon-combine" aria-hidden="true" />
 				</button>
 			) : null}
-			<button
-				type="button"
-				className="branch-submit-btn"
-				title={branch.change ? 'Submit branch and ancestors' : 'Create PR for branch and ancestors'}
-				aria-label={
-					branch.change ? `Submit ${branch.name} and ancestors` : `Create PR for ${branch.name} and ancestors`
-				}
-				onClick={(e) => {
-					e.stopPropagation();
-					postMessage({ type: 'branchSubmit', branchName: branch.name });
-				}}
-			>
-				<i className="codicon codicon-cloud-upload" aria-hidden="true" />
-			</button>
+			{showSubmit(branch) ? <SubmitButton branch={branch} postMessage={postMessage} /> : null}
 			{branch.change ? <PrLink branch={branch} postMessage={postMessage} /> : null}
 		</div>
+	);
+}
+
+/**
+ * The upload affordance shows ONLY when there is something to upload: an
+ * unsubmitted branch (no change request yet) or unpushed local commits.
+ * Trunk never shows it; a submitted, fully-pushed branch shows nothing —
+ * status indicators appear only when the non-default status is active.
+ */
+function showSubmit(branch: BranchViewModel): boolean {
+	if (branch.isTrunk) return false;
+	return !branch.change || branch.needsPush;
+}
+
+function SubmitButton({ branch, postMessage }: BranchTagsProps): JSX.Element {
+	return (
+		<button
+			type="button"
+			className="branch-submit-btn"
+			title={branch.change ? 'Submit branch and ancestors' : 'Create PR for branch and ancestors'}
+			aria-label={branch.change ? `Submit ${branch.name} and ancestors` : `Create PR for ${branch.name} and ancestors`}
+			onClick={(e) => {
+				e.stopPropagation();
+				postMessage({ type: 'branchSubmit', branchName: branch.name });
+			}}
+		>
+			<i className="codicon codicon-cloud-upload" aria-hidden="true" />
+		</button>
 	);
 }
 
@@ -200,7 +224,7 @@ function PrLink({ branch, postMessage }: BranchTagsProps): JSX.Element {
 					: undefined
 			}
 		>
-			{change.id}
+			<span className="branch-pr-number">{change.id}</span>
 		</button>
 	);
 }
