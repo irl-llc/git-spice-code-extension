@@ -1,0 +1,2 @@
+kind: Changed
+body: 'The CI change-fragment gate now treats `.claude/` (Claude Code configuration) and `.status-pipe/` (agent-loop protocol files) as non-release agent/dev tooling, alongside the existing `src/test/` and `scripts/` paths, so changes to that tooling no longer require a changelog fragment or a `skip-changelog` label.'
