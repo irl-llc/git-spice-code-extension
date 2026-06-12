@@ -42,12 +42,18 @@ export interface WorkspaceRepo {
 	createBranch(spec: BranchSpec): void;
 }
 
-/** Creates a fresh empty temp dir. Caller must call cleanup(). */
-export function createTempRepo(): WorkspaceRepo {
+/**
+ * Creates a fresh empty temp dir. Caller must call cleanup().
+ *
+ * `gsBinary` overrides which git-spice binary seeds the repo — pass the stock
+ * binary (`.gs/bin/gs-stock`, via GIT_SPICE_STOCK_BIN) to seed a vanilla repo
+ * for the beta-gating specs (issue #72). Defaults to the pinned ed-irl `gs`.
+ */
+export function createTempRepo(gsBinary: string = GS_BIN): WorkspaceRepo {
 	const path = mkdtempSync(join(tmpdir(), 'gs-e2e-'));
 
 	const git = (...args: string[]): string => execFileSync('git', ['-C', path, ...args], { encoding: 'utf8' });
-	const gs = (...args: string[]): string => execFileSync(GS_BIN, args, { cwd: path, encoding: 'utf8' });
+	const gs = (...args: string[]): string => execFileSync(gsBinary, args, { cwd: path, encoding: 'utf8' });
 	const writeFile = (relPath: string, content: string): void => {
 		const abs = join(path, relPath);
 		mkdirSync(dirname(abs), { recursive: true });

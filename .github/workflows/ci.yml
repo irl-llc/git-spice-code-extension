@@ -54,11 +54,13 @@ jobs:
           # Go 1.23+ to parse its `go 1.26.x` directive.
           go-version: '1.25'
 
-      - name: Cache pinned gs binary
+      - name: Cache pinned gs binaries
         uses: actions/cache@v4
         with:
           path: .gs
-          key: gs-${{ runner.os }}-${{ hashFiles('.gs-version') }}
+          # Both the ed-irl pin (.gs-version) and the stock pin
+          # (.gs-stock-version) live under .gs; bust the cache when either moves.
+          key: gs-${{ runner.os }}-${{ hashFiles('.gs-version', '.gs-stock-version') }}
 
       - name: Install dependencies
         run: npm ci
@@ -97,6 +99,10 @@ jobs:
       - name: Run unit tests
         id: unit-tests
         run: npm run test:unit -- --reporter json --reporter-option output=test-results.json
+        env:
+          # Point the stock-binary gating tests at the vanilla build so they
+          # run (rather than skip) in CI. See src/test/unit/stockBinary.test.ts.
+          GIT_SPICE_STOCK_BIN: ${{ github.workspace }}/.gs/bin/gs-stock
         continue-on-error: true
 
       - name: Report test results
@@ -117,6 +123,7 @@ jobs:
         env:
           DISPLAY: ':99.0'
           GIT_SPICE_BIN: ${{ github.workspace }}/.gs/bin/gs
+          GIT_SPICE_STOCK_BIN: ${{ github.workspace }}/.gs/bin/gs-stock
         continue-on-error: true
 
       - name: Cache Docker test image layers
