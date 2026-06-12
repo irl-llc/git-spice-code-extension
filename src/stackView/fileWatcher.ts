@@ -11,7 +11,13 @@ import * as vscode from 'vscode';
 import { FILE_WATCHER_DEBOUNCE_MS, GIT_OP_BACKSTOP_MS, WATCHER_REFRESH_MIN_INTERVAL_MS } from '../constants';
 import type { DiscoveredRepo } from '../repoDiscovery';
 import { filterIgnoredPaths, resolveGitDirs } from '../utils/git';
-import { GIT_OP_MARKERS, isGitOpMarkerPath, OperationCounter, RefreshRateLimiter, shouldRefreshNow } from './refreshThrottle';
+import {
+	GIT_OP_MARKERS,
+	isGitOpMarkerPath,
+	OperationCounter,
+	RefreshRateLimiter,
+	shouldRefreshNow,
+} from './refreshThrottle';
 
 /** Git internals (refs/HEAD/index) plus the git-op marker files, watched together. */
 const GIT_WATCH_GLOB = `{refs/spice/data,HEAD,refs/heads/**,index,${GIT_OP_MARKERS.join(',')},rebase-merge/**,rebase-apply/**}`;
