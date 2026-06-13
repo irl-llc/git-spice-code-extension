@@ -303,6 +303,100 @@ describe('BranchCard', () => {
 			const indicator = container.querySelector('.comments-indicator');
 			assert.ok(indicator?.classList.contains('has-unresolved'));
 		});
+
+		it('build-status indicator is hidden on a success rollup', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#42', checks: { rollup: 'success' } } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			assert.strictEqual(container.querySelector('.build-status'), null);
+		});
+
+		it('build-status indicator is hidden on a none rollup', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#42', checks: { rollup: 'none' } } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			assert.strictEqual(container.querySelector('.build-status'), null);
+		});
+
+		it('build-status indicator shows the failure treatment and opens the checks URL', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({
+						change: { id: '#42', checks: { rollup: 'failure', url: 'https://ci/checks' } },
+					})}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const indicator = container.querySelector('.build-status');
+			assert.ok(indicator?.classList.contains('build-status-failure'));
+			fireEvent.click(indicator as Element);
+			assert.deepStrictEqual(h.messages, [{ type: 'openChange', url: 'https://ci/checks' }]);
+		});
+
+		it('build-status indicator shows the pending treatment', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#42', checks: { rollup: 'pending', url: 'https://ci' } } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			assert.ok(container.querySelector('.build-status-pending'));
+		});
+
+		it('build-status indicator is disabled and inert when no checks URL is present', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#42', checks: { rollup: 'failure' } } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const indicator = container.querySelector('.build-status') as HTMLButtonElement;
+			assert.strictEqual(indicator.disabled, true);
+			fireEvent.click(indicator);
+			assert.deepStrictEqual(h.messages, []);
+		});
+
+		it('build-status tooltip lists per-run forge-native detail', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({
+						change: {
+							id: '#42',
+							checks: {
+								rollup: 'failure',
+								url: 'https://ci',
+								runs: [
+									{ name: 'build', state: 'failure' },
+									{ name: 'lint', state: 'cancelled' },
+								],
+							},
+						},
+					})}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const indicator = container.querySelector('.build-status');
+			assert.match(indicator?.getAttribute('title') ?? '', /build: failure/);
+			assert.match(indicator?.getAttribute('title') ?? '', /lint: cancelled/);
+		});
 	});
 
 	describe('header click bubble', () => {

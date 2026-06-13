@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
 
-import type { GitSpiceChangeStatus, GitSpiceComments } from '../../../gitSpiceSchema';
+import type { GitSpiceChangeStatus, GitSpiceChecks, GitSpiceComments } from '../../../gitSpiceSchema';
 import type { BranchViewModel } from '../../types';
 import type { WebviewMessage } from '../../webviewTypes';
 
@@ -132,14 +132,65 @@ interface BranchTagsProps {
 	postMessage: PostMessage;
 }
 
+/**
+ * Card treatment per build-status rollup. Only non-default states get an
+ * entry: `success`/`none` are intentionally absent so the indicator is hidden
+ * on green and on no-CI (per #63/#65 — one visual indicator per non-default
+ * fact, silent when everything is fine).
+ */
+const CHECKS_ROLLUP_DISPLAY: Partial<Record<GitSpiceChecks['rollup'], { icon: string; label: string }>> = {
+	failure: { icon: 'codicon-error', label: 'Checks failing' },
+	pending: { icon: 'codicon-sync', label: 'Checks running' },
+};
+
+/**
+ * Clickable build-status indicator. Rendered only for the `failure`/`pending`
+ * rollups; opens the forge checks page when a URL is present. The rollup is
+ * the only fact shown on the card — per-run detail lives in {@link GitSpiceChecks.runs}
+ * for future surfaces and is surfaced here only as a hover tooltip.
+ */
+function BuildStatusIndicator({ checks, postMessage }: { checks: GitSpiceChecks; postMessage: PostMessage }): JSX.Element | null {
+	const display = CHECKS_ROLLUP_DISPLAY[checks.rollup];
+	if (!display) return null;
+	const hasUrl = Boolean(checks.url);
+	return (
+		<button
+			type="button"
+			className={`build-status build-status-${checks.rollup}`}
+			disabled={!hasUrl}
+			title={buildChecksTooltip(checks, display.label)}
+			aria-label={hasUrl ? `${display.label} — open checks` : display.label}
+			onClick={
+				hasUrl
+					? (e) => {
+							e.stopPropagation();
+							postMessage({ type: 'openChange', url: checks.url! });
+						}
+					: undefined
+			}
+		>
+			<i className={`codicon ${display.icon}`} aria-hidden="true" />
+		</button>
+	);
+}
+
+/** Builds the hover tooltip: rollup label plus per-run forge-native detail. */
+function buildChecksTooltip(checks: GitSpiceChecks, label: string): string {
+	if (!checks.runs || checks.runs.length === 0) return label;
+	const lines = checks.runs.map((run) => `${run.name}: ${run.state}`);
+	return [label, ...lines].join('\n');
+}
+
 /** The read-only status pills shown before the action buttons. */
-function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
+function BranchBadges({ branch, postMessage }: BranchTagsProps): JSX.Element {
 	const comments = branch.change?.comments;
+	const checks = branch.change?.checks;
 	return (
 		<>
 			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
 			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
 			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}
+			{checks ? <BuildStatusIndicator checks={checks} postMessage={postMessage} /> : null}
 		</>
 	);
 }
@@ -148,7 +199,7 @@ function BranchTags({ branch, postMessage }: BranchTagsProps): JSX.Element {
 	const showSquash = Boolean(branch.commits && branch.commits.length > 1);
 	return (
 		<div className="branch-tags">
-			<BranchBadges branch={branch} />
+			<BranchBadges branch={branch} postMessage={postMessage} />
 			{showSquash ? (
 				<button
 					type="button"

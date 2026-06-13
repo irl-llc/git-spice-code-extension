@@ -19,6 +19,8 @@
 //	        -> seeds a resolvable PR comment
 //	    merge <change#>   -> marks the change merged (its CR status becomes "merged")
 //	    close <change#>   -> rejects the change without merging (status "closed")
+//	    setcheck <change#> <pending|passed|failed>
+//	        -> sets the aggregate CI/checks state reported for the change
 //	    quit              -> closes the server and exits
 //
 // A fixed user ("alice") and repo ("alice/example") are provisioned on start.
@@ -31,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 
+	"go.abhg.dev/gs/internal/forge"
 	"go.abhg.dev/gs/internal/forge/shamhub"
 )
 
@@ -82,8 +85,45 @@ func handle(sh *shamhub.ShamHub, line string) string {
 		return handleMerge(sh, fields)
 	case "close":
 		return handleClose(sh, fields)
+	case "setcheck":
+		return handleSetCheck(sh, fields)
 	default:
 		return "ERR unknown command: " + fields[0]
+	}
+}
+
+// handleSetCheck sets the aggregate CI/checks state for a change so the
+// `gs ll -S --json` `checks` rollup can be exercised end-to-end.
+func handleSetCheck(sh *shamhub.ShamHub, fields []string) string {
+	if len(fields) < 3 {
+		return "ERR usage: setcheck <change#> <pending|passed|failed>"
+	}
+	change, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return "ERR invalid change number: " + fields[1]
+	}
+	state, errMsg := parseChecksState(fields[2])
+	if errMsg != "" {
+		return errMsg
+	}
+	if err := sh.SetChangeChecksState(owner, repo, change, state); err != nil {
+		return "ERR " + err.Error()
+	}
+	return "OK"
+}
+
+// parseChecksState maps the wire string to the forge enum, returning an
+// "ERR ..." reply (second value non-empty) on an unknown state.
+func parseChecksState(s string) (forge.ChecksState, string) {
+	switch s {
+	case "pending":
+		return forge.ChecksPending, ""
+	case "passed":
+		return forge.ChecksPassed, ""
+	case "failed":
+		return forge.ChecksFailed, ""
+	default:
+		return 0, "ERR invalid checks state: " + s
 	}
 }
 

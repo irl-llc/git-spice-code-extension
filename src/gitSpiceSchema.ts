@@ -16,11 +16,43 @@ export type GitSpiceComments = Readonly<{
 	unresolved: number;
 }>;
 
+/**
+ * Rolled-up CI/checks state for a change, driving the card build-status
+ * indicator. Deliberately collapsed to four values (the upstream contract
+ * agreed in issue #63): `success`/`failure`/`pending` plus `none` (no checks
+ * reported, distinct from "all passed"). Forge-native fidelity lives in
+ * {@link GitSpiceCheckRun.state}, not here.
+ */
+export type GitSpiceChecksRollup = 'success' | 'failure' | 'pending' | 'none';
+
+/**
+ * A single CI check/run. `state` is the raw forge-native string (e.g.
+ * `success`, `failure`, `neutral`, `cancelled`, `in_progress`) so future
+ * detail surfaces can render per-run nuance the rollup intentionally drops.
+ */
+export type GitSpiceCheckRun = Readonly<{
+	name: string;
+	state: string;
+	url?: string;
+}>;
+
+/**
+ * CI/checks information for a change. `rollup` drives the card indicator;
+ * `runs[]` carries forge-native per-check detail for future surfaces; `url`
+ * is the forge checks-summary page used as the indicator's click target.
+ */
+export type GitSpiceChecks = Readonly<{
+	rollup: GitSpiceChecksRollup;
+	runs?: ReadonlyArray<GitSpiceCheckRun>;
+	url?: string;
+}>;
+
 export type GitSpiceChange = Readonly<{
 	id: string;
 	url: string;
 	status?: GitSpiceChangeStatus;
 	comments?: GitSpiceComments;
+	checks?: GitSpiceChecks;
 }>;
 
 export type GitSpicePush = Readonly<{
@@ -157,13 +189,70 @@ function readChange(value: unknown): GitSpiceChange | undefined {
 
 	const status = readChangeStatus(value.status);
 	const comments = readComments(value.comments);
+	const checks = readChecks(value.checks);
 
 	return {
 		id,
 		url,
 		...(status && { status }),
 		...(comments && { comments }),
+		...(checks && { checks }),
 	};
+}
+
+function readChecks(value: unknown): GitSpiceChecks | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+
+	const rollup = readChecksRollup(value.rollup);
+	if (!rollup) {
+		return undefined;
+	}
+
+	const runs = readCheckRuns(value.runs);
+	const url = readString(value.url);
+
+	return {
+		rollup,
+		...(runs && { runs }),
+		...(url && { url }),
+	};
+}
+
+function readChecksRollup(value: unknown): GitSpiceChecksRollup | undefined {
+	if (value === 'success' || value === 'failure' || value === 'pending' || value === 'none') {
+		return value;
+	}
+
+	return undefined;
+}
+
+function readCheckRuns(value: unknown): ReadonlyArray<GitSpiceCheckRun> | undefined {
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
+
+	const runs = value
+		.map((entry) => readCheckRun(entry))
+		.filter((run): run is GitSpiceCheckRun => run !== undefined);
+
+	return runs.length > 0 ? runs : undefined;
+}
+
+function readCheckRun(value: unknown): GitSpiceCheckRun | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+
+	const name = readString(value.name);
+	const state = readString(value.state);
+	if (!name || !state) {
+		return undefined;
+	}
+
+	const url = readString(value.url);
+	return { name, state, ...(url && { url }) };
 }
 
 function readComments(value: unknown): GitSpiceComments | undefined {
