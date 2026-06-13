@@ -39,6 +39,12 @@ concurrency:
 jobs:
   auto-release:
     runs-on: ubuntu-latest
+    outputs:
+      # 'true' only when a release was actually cut (pending fragments, not a
+      # dry run). Gates the downstream publish job.
+      released: ${{ steps.release.outputs.released }}
+      # The freshly created tag (e.g. v0.1.0); the publish job checks it out.
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,7 +75,23 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Run auto-release
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: node scripts/auto-release.mjs
+
+  # Publish to the Marketplace + Open VSX after a release is cut. This runs in
+  # the SAME workflow run as the release (not via `on: release`) because GitHub
+  # won't re-trigger workflows from a Release created with the default
+  # GITHUB_TOKEN (issue #29). Calls the shared reusable workflow, the same one
+  # ci.yml uses for human-created releases, so publish logic lives in one place.
+  publish:
+    needs: auto-release
+    if: needs.auto-release.outputs.released == 'true'
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ needs.auto-release.outputs.tag }}
+    secrets:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}

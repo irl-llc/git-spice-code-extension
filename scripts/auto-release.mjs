@@ -20,15 +20,16 @@
 // identity are required for a real run.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 const UNRELEASED_DIR = resolve(REPO_ROOT, '.changes/unreleased');
 const PACKAGE_JSON = resolve(REPO_ROOT, 'package.json');
 const BUMP_MODULE = resolve(REPO_ROOT, 'out/utils/releaseBump.js');
+const OUTPUT_MODULE = resolve(REPO_ROOT, 'out/utils/releaseOutput.js');
 const CHANGIE = process.env.CHANGIE_BIN || 'changie';
 const DRY_RUN = process.env.DRY_RUN === '1';
 
@@ -88,24 +89,45 @@ function commitAndRelease(version) {
 	console.log(`auto-release: created release ${tag}`);
 }
 
+/**
+ * Signals to the workflow whether a release was cut, so the downstream
+ * `publish` job (which calls the reusable publish workflow) runs. GitHub does
+ * NOT re-trigger workflows from a Release created with the default
+ * GITHUB_TOKEN, so the publish can't ride the `on: release` event — it must be
+ * chained in this same run (issue #29). Writes `released=<true|false>` and,
+ * when releasing, `tag=v<version>` to $GITHUB_OUTPUT so the publish job checks
+ * out the freshly tagged commit rather than the pre-release SHA.
+ */
+async function emitReleased(released, tag = '') {
+	const outputPath = process.env.GITHUB_OUTPUT;
+	if (!outputPath) {
+		return;
+	}
+	const { formatReleaseOutput } = await import(pathToFileURL(OUTPUT_MODULE).href);
+	appendFileSync(outputPath, formatReleaseOutput({ released, tag }));
+}
+
 async function main() {
 	if (!existsSync(BUMP_MODULE)) {
 		fail(`compiled bump module missing at ${BUMP_MODULE}; run \`npm run compile-tests\`.`);
 	}
-	const { deriveNextVersion } = await import(BUMP_MODULE);
+	const { deriveNextVersion } = await import(pathToFileURL(BUMP_MODULE).href);
 	const kinds = pendingKinds();
 	const { level, nextVersion } = deriveNextVersion(currentVersion(), kinds);
 	if (!nextVersion) {
 		console.log('auto-release: no pending change fragments; nothing to release.');
+		await emitReleased(false);
 		return;
 	}
 	console.log(`auto-release: ${kinds.length} pending fragment(s) → ${level} bump → v${nextVersion}`);
 	if (DRY_RUN) {
 		console.log('auto-release: DRY_RUN set; not mutating git/forge.');
+		await emitReleased(false);
 		return;
 	}
 	applyChangie(level, nextVersion);
 	commitAndRelease(nextVersion);
+	await emitReleased(true, `v${nextVersion}`);
 }
 
 main().catch((err) => fail(err instanceof Error ? err.message : String(err)));
