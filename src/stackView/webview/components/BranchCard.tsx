@@ -149,7 +149,13 @@ const CHECKS_ROLLUP_DISPLAY: Partial<Record<GitSpiceChecks['rollup'], { icon: st
  * the only fact shown on the card — per-run detail lives in {@link GitSpiceChecks.runs}
  * for future surfaces and is surfaced here only as a hover tooltip.
  */
-function BuildStatusIndicator({ checks, postMessage }: { checks: GitSpiceChecks; postMessage: PostMessage }): JSX.Element | null {
+function BuildStatusIndicator({
+	checks,
+	postMessage,
+}: {
+	checks: GitSpiceChecks;
+	postMessage: PostMessage;
+}): JSX.Element | null {
 	const display = CHECKS_ROLLUP_DISPLAY[checks.rollup];
 	if (!display) return null;
 	const hasUrl = Boolean(checks.url);

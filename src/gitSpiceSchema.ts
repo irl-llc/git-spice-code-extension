@@ -233,9 +233,7 @@ function readCheckRuns(value: unknown): ReadonlyArray<GitSpiceCheckRun> | undefi
 		return undefined;
 	}
 
-	const runs = value
-		.map((entry) => readCheckRun(entry))
-		.filter((run): run is GitSpiceCheckRun => run !== undefined);
+	const runs = value.map((entry) => readCheckRun(entry)).filter((run): run is GitSpiceCheckRun => run !== undefined);
 
 	return runs.length > 0 ? runs : undefined;
 }

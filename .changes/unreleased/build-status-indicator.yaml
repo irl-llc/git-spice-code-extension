@@ -1,0 +1,2 @@
+kind: Added
+body: 'Branch cards now show forge build (CI) status rolled up from the Change Request. A clickable indicator appears only when the status is not passing — a red glyph for failure and a spinner for pending — opening the checks page on the forge; per-run detail is available on hover. Surfaced only when remote forge status is enabled.'
