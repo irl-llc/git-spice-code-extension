@@ -175,6 +175,17 @@ button {
 	border-color: var(--vscode-problemsWarningIcon-foreground);
 }
 
+/* Conflict-resolution-in-progress: a rebase/merge is parked mid-operation on
+ * this branch. The red border is the dominant at-a-glance signal (issue #81) and
+ * must win over is-current / needs-restack, so it is declared after them and
+ * adds a matching ring. One indicator per fact: the border alone carries it, no
+ * extra badge. The red intentionally overlaps the untracked dashed-red border;
+ * placement (a tracked card mid-stack vs. the untracked card) disambiguates. */
+.branch-card.conflict {
+	border-color: var(--vscode-errorForeground);
+	box-shadow: 0 0 0 1px var(--vscode-errorForeground);
+}
+
 /* Integration-branch card: rendered atop the stack. */
 .branch-card.integration-card {
 	border-color: var(--vscode-textLink-foreground);

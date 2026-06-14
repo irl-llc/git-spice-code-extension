@@ -12,6 +12,7 @@ import { execGitSpice, execGitSpiceSupportsIntegration } from '../utils/gitSpice
 import { execGitSpiceIntegrationState } from '../utils/integrationExec';
 import type { IntegrationState } from '../utils/integrationState';
 import { fetchCurrentBranchName, fetchWorkingCopyChanges } from './workingCopy';
+import { detectConflictBranch } from './conflictState';
 
 /** Per-repository cached state. */
 export interface RepoState {
@@ -25,6 +26,8 @@ export interface RepoState {
 	untrackedBranch: string | undefined;
 	/** Parsed integration-branch state, or null when unconfigured/unsupported. */
 	integration: IntegrationState | null;
+	/** Current branch name when a rebase/merge is in progress (conflict resolution), else undefined. */
+	conflictBranch: string | undefined;
 }
 
 /**
@@ -59,6 +62,7 @@ export async function fetchRepoState(repo: DiscoveredRepo, withForgeStatus = fal
 		fetchCurrentBranchName(cwd),
 		fetchIntegrationState(folder),
 	]);
+	const conflictBranch = await detectConflictBranch(cwd, currentBranch);
 	return buildRepoState({
 		rootUri: repo.rootUri,
 		name: repo.name,
@@ -66,6 +70,7 @@ export async function fetchRepoState(repo: DiscoveredRepo, withForgeStatus = fal
 		uncommitted,
 		currentBranch,
 		integration,
+		conflictBranch,
 	});
 }
 
@@ -78,6 +83,7 @@ export async function fetchFolderState(folder: vscode.WorkspaceFolder, withForge
 		fetchCurrentBranchName(cwd),
 		fetchIntegrationState(folder),
 	]);
+	const conflictBranch = await detectConflictBranch(cwd, currentBranch);
 	return buildRepoState({
 		rootUri: folder.uri,
 		name: folder.name,
@@ -85,6 +91,7 @@ export async function fetchFolderState(folder: vscode.WorkspaceFolder, withForge
 		uncommitted,
 		currentBranch,
 		integration,
+		conflictBranch,
 	});
 }
 
@@ -106,12 +113,13 @@ type BuildRepoStateInput = {
 	uncommitted: UncommittedState;
 	currentBranch?: string;
 	integration: IntegrationState | null;
+	conflictBranch?: string;
 };
 
 /** Builds a RepoState from URI, name, and fetch results. */
 function buildRepoState(input: BuildRepoStateInput): RepoState {
-	const { rootUri, name, branchResult, uncommitted, currentBranch, integration } = input;
-	const base = { rootPath: rootUri.fsPath, name, rootUri, uncommitted, integration };
+	const { rootUri, name, branchResult, uncommitted, currentBranch, integration, conflictBranch } = input;
+	const base = { rootPath: rootUri.fsPath, name, rootUri, uncommitted, integration, conflictBranch };
 	if ('error' in branchResult) {
 		return { ...base, branches: [], error: branchResult.error, untrackedBranch: currentBranch };
 	}
