@@ -11,6 +11,7 @@ import type { UncommittedState } from './types';
 import { execGitSpice, execGitSpiceSupportsIntegration } from '../utils/gitSpice';
 import { execGitSpiceIntegrationState } from '../utils/integrationExec';
 import type { IntegrationState } from '../utils/integrationState';
+import { fetchTrunkSyncState, type TrunkSyncState } from '../utils/trunkSync';
 import { fetchCurrentBranchName, fetchWorkingCopyChanges } from './workingCopy';
 
 /** Per-repository cached state. */
@@ -25,6 +26,8 @@ export interface RepoState {
 	untrackedBranch: string | undefined;
 	/** Parsed integration-branch state, or null when unconfigured/unsupported. */
 	integration: IntegrationState | null;
+	/** Non-default sync state of the trunk vs. its remote, or undefined when in sync. */
+	trunkSync: TrunkSyncState | undefined;
 }
 
 /**
@@ -59,6 +62,7 @@ export async function fetchRepoState(repo: DiscoveredRepo, withForgeStatus = fal
 		fetchCurrentBranchName(cwd),
 		fetchIntegrationState(folder),
 	]);
+	const trunkSync = await fetchTrunkSyncForResult(cwd, branchResult, integration);
 	return buildRepoState({
 		rootUri: repo.rootUri,
 		name: repo.name,
@@ -66,6 +70,7 @@ export async function fetchRepoState(repo: DiscoveredRepo, withForgeStatus = fal
 		uncommitted,
 		currentBranch,
 		integration,
+		trunkSync,
 	});
 }
 
@@ -78,6 +83,7 @@ export async function fetchFolderState(folder: vscode.WorkspaceFolder, withForge
 		fetchCurrentBranchName(cwd),
 		fetchIntegrationState(folder),
 	]);
+	const trunkSync = await fetchTrunkSyncForResult(cwd, branchResult, integration);
 	return buildRepoState({
 		rootUri: folder.uri,
 		name: folder.name,
@@ -85,7 +91,41 @@ export async function fetchFolderState(folder: vscode.WorkspaceFolder, withForge
 		uncommitted,
 		currentBranch,
 		integration,
+		trunkSync,
 	});
+}
+
+/**
+ * The trunk is the tracked branch with no base (`down`) link. `gs ll -a` also
+ * lists the integration branch with no base (like a second trunk), so its name
+ * is excluded — otherwise sync could be computed against the wrong branch.
+ */
+function findTrunkName(branches: GitSpiceBranch[], integrationName: string | undefined): string | undefined {
+	return branches.find((b) => !b.down && b.name !== integrationName)?.name;
+}
+
+/**
+ * Reads the trunk sync state for a fetched branch result, gated on the trunk
+ * being identifiable. Isolates git failures so a probe error never takes down
+ * the repository state load.
+ */
+async function fetchTrunkSyncForResult(
+	cwd: string,
+	branchResult: BranchResult,
+	integration: IntegrationState | null,
+): Promise<TrunkSyncState | undefined> {
+	if ('error' in branchResult) {
+		return undefined;
+	}
+	const trunkName = findTrunkName(branchResult.value, integration?.name);
+	if (!trunkName) {
+		return undefined;
+	}
+	try {
+		return await fetchTrunkSyncState(cwd, trunkName);
+	} catch {
+		return undefined;
+	}
 }
 
 /** Converts DiscoveredRepo to a WorkspaceFolder shape for git-spice CLI. */
@@ -106,12 +146,13 @@ type BuildRepoStateInput = {
 	uncommitted: UncommittedState;
 	currentBranch?: string;
 	integration: IntegrationState | null;
+	trunkSync: TrunkSyncState | undefined;
 };
 
 /** Builds a RepoState from URI, name, and fetch results. */
 function buildRepoState(input: BuildRepoStateInput): RepoState {
-	const { rootUri, name, branchResult, uncommitted, currentBranch, integration } = input;
-	const base = { rootPath: rootUri.fsPath, name, rootUri, uncommitted, integration };
+	const { rootUri, name, branchResult, uncommitted, currentBranch, integration, trunkSync } = input;
+	const base = { rootPath: rootUri.fsPath, name, rootUri, uncommitted, integration, trunkSync };
 	if ('error' in branchResult) {
 		return { ...base, branches: [], error: branchResult.error, untrackedBranch: currentBranch };
 	}

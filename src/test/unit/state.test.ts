@@ -256,5 +256,33 @@ describe('state', () => {
 			// a1's ancestor (a) is not the last child of main, so ancestorIsLast should contain false
 			assert.ok(a1?.tree.ancestorIsLast.includes(false));
 		});
+
+		describe('trunk sync affordance (issue #82)', () => {
+			const stack: GitSpiceBranch[] = [
+				createBranch('main', { ups: [{ name: 'feature-1' }] }),
+				createBranch('feature-1', { down: { name: 'main' } }),
+			];
+
+			it('applies trunkSync only to the trunk branch', () => {
+				const result = buildRepoDisplayState({ ...repoInput(stack), trunkSync: 'origin-ahead' });
+
+				const main = result.branches.find((b) => b.name === 'main');
+				const feature = result.branches.find((b) => b.name === 'feature-1');
+				assert.strictEqual(main?.trunkSync, 'origin-ahead');
+				assert.strictEqual(feature?.trunkSync, undefined);
+			});
+
+			it('carries the remote-unknown state through to the trunk', () => {
+				const result = buildRepoDisplayState({ ...repoInput(stack), trunkSync: 'remote-unknown' });
+
+				assert.strictEqual(result.branches.find((b) => b.name === 'main')?.trunkSync, 'remote-unknown');
+			});
+
+			it('leaves trunkSync undefined when not provided (in-sync default)', () => {
+				const result = buildRepoDisplayState(repoInput(stack));
+
+				assert.strictEqual(result.branches.find((b) => b.name === 'main')?.trunkSync, undefined);
+			});
+		});
 	});
 });
