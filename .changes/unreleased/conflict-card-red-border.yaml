@@ -1,0 +1,2 @@
+kind: Added
+body: 'A branch parked mid-rebase or mid-merge while conflicts are resolved now renders its card with a red border, the dominant at-a-glance signal that the working copy is in a conflicted state. Detection is local: the repo git-dir is read for in-progress operation markers (rebase head-name, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`).'
