@@ -497,4 +497,3 @@ function toBranchTreeInput(item: BranchWithTree): BranchTreeInput {
 		needsRestack: item.branch.down?.needsRestack === true,
 	};
 }
-
