@@ -127,6 +127,37 @@ Many git-spice commands support `--json` flag for structured output:
 
 For complete command reference: https://abhinav.github.io/git-spice/cli/reference/
 
+## Integration Branch (status-pipe workers)
+
+This repo maintains a single git-spice **integration branch** that merges the
+tips of every open stack, so all in-flight work can be built and tested
+together. It is a throwaway artifact: it never gets its own PR and is rebuilt
+every orchestration tick by the `/integration-tick` command
+([.claude/commands/integration-tick.md](.claude/commands/integration-tick.md)),
+which the status-pipe loop runs instead of `/status-pipe:tick`.
+
+The tip list lives in git-spice's state store (`refs/spice/data`), which is
+shared across all worktrees — so a tip a worker adds in its worktree is the
+same tip the orchestrator's rebuild reads from the primary checkout. No fetch
+or cross-clone sync is involved.
+
+**Worker contract** — when a status-pipe worker submits or extends a stack, it
+must keep that stack's tip registered so the integration branch includes it:
+
+- After **submitting** a stack for the first time:
+  `gs integration tip add <top-branch>`.
+- After **growing** an existing stack (a new branch on top):
+  `gs integration tip advance` — moves the tip to the new top of the upstack so
+  the integration branch includes the whole stack, not a stale mid-point.
+- Do **not** remove tips on merge. `gs repo sync` (run by the orchestrator each
+  tick) prunes a merged branch from the tip list automatically via git-spice's
+  `OnBranchRemoved` hook.
+
+`gs integration tip add` requires the branch to be tracked locally — workers
+already track the branches they create, so no extra step is needed. Tips added
+during a wave are picked up by that same wave's rebuild. Fork PRs are out of
+scope for now.
+
 ## TypeScript & VSCode Extension Guidelines
 
 ### General Principles

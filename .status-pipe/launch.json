@@ -7,7 +7,7 @@
 			"command": "claude",
 			"args": [
 				"-p",
-				"/status-pipe:tick --max-concurrent 3",
+				"/integration-tick --max-concurrent 3",
 				"--output-format",
 				"stream-json",
 				"--verbose",
