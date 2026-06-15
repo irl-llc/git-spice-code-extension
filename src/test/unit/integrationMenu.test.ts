@@ -2,7 +2,7 @@
  * Unit tests for integrationMenu.ts
  *
  * Verifies the pure helpers that compose the integration tip-list entries of
- * the branch context menu (the beta ed-irl/git-spice feature; see #39).
+ * the branch context menu (the beta abhinav/git-spice feature; see #39).
  */
 
 import * as assert from 'assert';

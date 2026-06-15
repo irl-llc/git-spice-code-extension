@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the integration-branch entries of the branch context menu
- * (the beta ed-irl/git-spice feature; see #39).
+ * (the beta abhinav/git-spice feature; see #39).
  *
  * Kept free of `vscode` imports so the menu-composition logic is unit-testable
  * without a VSCode instance. The handler that shows the menu and dispatches the

@@ -1,6 +1,6 @@
 /**
  * Full-editor-pane visual snapshot tests for the integration-branch feature
- * (the beta ed-irl/git-spice command group; see issue #39).
+ * (the beta abhinav/git-spice command group; see issue #39).
  *
  * Drives the REAL pinned `gs` binary's `integration` command group (no
  * mocking): seeds a configured integration branch, rebuilds it, and drifts a

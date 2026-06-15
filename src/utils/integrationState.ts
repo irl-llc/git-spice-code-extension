@@ -1,6 +1,6 @@
 /**
  * Parser for `gs integration show` output (the beta integration-branch
- * feature; see ed-irl/git-spice).
+ * feature; see abhinav/git-spice).
  *
  * Unlike `gs ll`, the integration command group does not emit `--json`, so the
  * extension parses the human-readable text. Parsing lives in a pure function so

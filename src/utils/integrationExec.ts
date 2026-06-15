@@ -1,5 +1,5 @@
 /**
- * Exec wrappers for the beta integration-branch feature (ed-irl/git-spice).
+ * Exec wrappers for the beta integration-branch feature (abhinav/git-spice).
  *
  * Kept in a dedicated module so the integration read/probe plumbing lives
  * alongside its pure parsers ({@link ./integrationState}, {@link
