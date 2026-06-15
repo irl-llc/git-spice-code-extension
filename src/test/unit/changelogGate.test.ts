@@ -149,6 +149,16 @@ describe('changelogGate', () => {
 			assert.strictEqual(decision.kind, 'skip');
 		});
 
+		it('skips agent/dev tooling under .claude/ and .status-pipe/', () => {
+			const decision = evaluateChangelogGate(
+				input({
+					changedPaths: ['.claude/settings.json', '.status-pipe/launch.json', '.status-pipe/config.json'],
+					addedPaths: ['.status-pipe/launch.json'],
+				}),
+			);
+			assert.strictEqual(decision.kind, 'skip');
+		});
+
 		it('still requires a fragment when src/ (non-test) ships alongside test changes', () => {
 			const decision = evaluateChangelogGate(
 				input({
