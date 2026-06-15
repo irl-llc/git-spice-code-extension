@@ -152,11 +152,7 @@ describe('changelogGate', () => {
 		it('skips agent/dev tooling under .claude/ and .status-pipe/', () => {
 			const decision = evaluateChangelogGate(
 				input({
-					changedPaths: [
-						'.claude/settings.json',
-						'.status-pipe/launch.json',
-						'.status-pipe/config.json',
-					],
+					changedPaths: ['.claude/settings.json', '.status-pipe/launch.json', '.status-pipe/config.json'],
 					addedPaths: ['.status-pipe/launch.json'],
 				}),
 			);
