@@ -7,7 +7,7 @@
 		"source": "github-issues"
 	},
 	"trust": {
-		"mode": "single-maintainer",
+		"mode": "public",
 		"operators": ["ed-irl", "ekohlwey"]
 	}
 }
