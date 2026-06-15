@@ -13,7 +13,7 @@ import { parseIntegrationSupport } from '../../utils/integrationSupport';
 const ESC = '\x1b';
 
 // Abridged `gs --help` from a build WITH the integration feature
-// (ed-irl/git-spice). The `integration (int)` group entries are the signal.
+// (abhinav/git-spice). The `integration (int)` group entries are the signal.
 const HELP_WITH_INTEGRATION = `Usage: gs <command> [flags]
 
 Commands:

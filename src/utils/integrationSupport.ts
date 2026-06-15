@@ -2,7 +2,7 @@
  * Capability detection for the git-spice integration-branch feature.
  *
  * The integration-branch feature is a beta addition to git-spice (see
- * ed-irl/git-spice). It is not present in stock upstream builds, so the
+ * abhinav/git-spice). It is not present in stock upstream builds, so the
  * extension must detect whether the resolved `gs` binary supports it before
  * exposing any integration UI. We probe `gs --help`, whose top-level command
  * listing includes an `integration` command group only when the feature is

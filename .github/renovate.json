@@ -18,7 +18,7 @@
     },
     {
       "matchManagers": ["custom.regex"],
-      "matchPackageNames": ["ed-irl/git-spice"],
+      "matchPackageNames": ["abhinav/git-spice"],
       "groupName": "gs-version",
       "commitMessageTopic": "gs pin"
     }
@@ -38,10 +38,10 @@
       "description": "Bump pinned gs binary commit",
       "fileMatch": ["^\\.gs-version$"],
       "matchStrings": ["^(?<currentDigest>[0-9a-f]{40})\\s*$"],
-      "depNameTemplate": "ed-irl/git-spice",
-      "packageNameTemplate": "https://github.com/ed-irl/git-spice",
+      "depNameTemplate": "abhinav/git-spice",
+      "packageNameTemplate": "https://github.com/abhinav/git-spice",
       "datasourceTemplate": "git-refs",
-      "currentValueTemplate": "integration"
+      "currentValueTemplate": "ed-irl/integration"
     }
   ]
 }

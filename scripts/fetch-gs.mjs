@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fetches and builds the pinned `gs` binary from ed-irl/git-spice into .gs/bin/gs.
+// Fetches and builds the pinned `gs` binary from abhinav/git-spice into .gs/bin/gs.
 // Idempotent: skips work if .gs/.built-sha already matches the pin in .gs-version.
 
 import { spawnSync } from 'node:child_process';
@@ -16,7 +16,7 @@ const BIN_DIR = resolve(GS_DIR, 'bin');
 const BIN_PATH = resolve(BIN_DIR, 'gs');
 const BUILT_SHA_PATH = resolve(GS_DIR, '.built-sha');
 const VERSION_FILE = resolve(REPO_ROOT, '.gs-version');
-const UPSTREAM = 'https://github.com/ed-irl/git-spice';
+const UPSTREAM = 'https://github.com/abhinav/git-spice';
 // The shamhub test helper lives in this repo but must be built from inside the
 // gs module (shamhub is an `internal/` package). We copy it into the cloned
 // source tree and build it alongside gs. See scripts/shamhub-server/main.go.

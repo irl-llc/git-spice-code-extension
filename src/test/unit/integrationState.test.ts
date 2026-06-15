@@ -3,7 +3,7 @@
  *
  * Verifies the pure parser that turns `gs integration show` text output into a
  * structured {@link IntegrationState}. The fixtures mirror the exact line
- * formats emitted by ed-irl/git-spice's integration command group.
+ * formats emitted by abhinav/git-spice's integration command group.
  */
 
 import * as assert from 'assert';

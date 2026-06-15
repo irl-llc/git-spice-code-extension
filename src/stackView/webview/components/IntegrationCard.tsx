@@ -1,6 +1,6 @@
 /**
  * Integration-branch card: rendered as the topmost node of the stack when an
- * integration branch is configured (the beta ed-irl/git-spice feature).
+ * integration branch is configured (the beta abhinav/git-spice feature).
  *
  * The integration build is "rebuilt" (not restacked); the needs-rebuild state
  * reuses the warning (marigold) status color via the `needs-rebuild` class and
