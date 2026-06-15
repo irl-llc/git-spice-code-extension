@@ -41,7 +41,7 @@
       "depNameTemplate": "abhinav/git-spice",
       "packageNameTemplate": "https://github.com/abhinav/git-spice",
       "datasourceTemplate": "git-refs",
-      "currentValueTemplate": "ed-irl/integration"
+      "currentValueTemplate": "refs/heads/ed-irl/integration"
     }
   ]
 }
