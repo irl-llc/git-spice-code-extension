@@ -1154,6 +1154,39 @@ button {
 	animation: element-flash 0.3s ease-out;
 }
 
+/* Build-status (CI checks) indicator. Rendered only for the non-default
+   rollups (failure/pending); silent on success/none. Clickable when a checks
+   URL is present. */
+.build-status {
+	display: inline-flex;
+	align-items: center;
+	border: none;
+	background: transparent;
+	padding: 0;
+	cursor: pointer;
+}
+
+.build-status:disabled {
+	cursor: default;
+}
+
+.build-status .codicon {
+	font-size: 0.85rem;
+}
+
+.build-status-failure .codicon {
+	color: var(--vscode-charts-red, #f85149);
+}
+
+.build-status-pending .codicon {
+	color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+	animation: refresh-spin 1s linear infinite;
+}
+
+.build-status.item-updated {
+	animation: element-flash 0.3s ease-out;
+}
+
 /* ==========================================================================
    Multi-Repository Section Styles
    ========================================================================== */

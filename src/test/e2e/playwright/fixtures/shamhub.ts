@@ -31,6 +31,14 @@ export interface ShamhubEnv {
 	GIT_SPICE_SECRET_BACKEND: string;
 }
 
+/**
+ * Aggregate checks states shamhub can report. These are the forge-native
+ * 3-value rollup (`pending`/`passed`/`failed`); gs collapses them into the
+ * extension-facing `success`/`failure`/`pending` rollup (a change with no
+ * checks seeded reports the `none`/`success` path on the gs side).
+ */
+export type ChecksSeedState = 'pending' | 'passed' | 'failed';
+
 /** A running shamhub server with seeding controls. */
 export interface ShamhubServer {
 	/** Git remote URL for the provisioned `alice/example` repo. */
@@ -38,6 +46,8 @@ export interface ShamhubServer {
 	env: ShamhubEnv;
 	/** Posts a resolvable comment on a change; `resolved` drives the counts. */
 	seedComment(change: number, resolved: boolean, body: string): Promise<void>;
+	/** Sets the aggregate CI/checks state reported for a change. */
+	seedCheck(change: number, state: ChecksSeedState): Promise<void>;
 	/** Marks a change merged (its CR status becomes "merged"). */
 	mergeChange(change: number): Promise<void>;
 	/** Rejects a change without merging (its CR status becomes "closed"). */
@@ -88,6 +98,7 @@ export async function startShamhub(): Promise<ShamhubServer> {
 			GIT_SPICE_SECRET_BACKEND: 'file',
 		},
 		seedComment: (change, resolved, body) => seedComment({ child, pendingReplies }, change, resolved, body),
+		seedCheck: (change, state) => sendCommand({ child, pendingReplies }, `setcheck ${change} ${state}`),
 		mergeChange: (change) => sendCommand({ child, pendingReplies }, `merge ${change}`),
 		closeChange: (change) => sendCommand({ child, pendingReplies }, `close ${change}`),
 		close: () => closeChild(child),

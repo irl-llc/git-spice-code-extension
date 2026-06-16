@@ -129,5 +129,54 @@ describe('gitSpiceSchema', () => {
 			const invalidResult = parseGitSpiceBranches(invalidInput);
 			assert.strictEqual(invalidResult[0].change?.status, undefined);
 		});
+
+		describe('checks', () => {
+			const base = '"id":"1","url":"http://x"';
+
+			it('parses a rollup with runs and url', () => {
+				const input = `{"name":"f","change":{${base},"checks":{"rollup":"failure","url":"http://ci","runs":[{"name":"build","state":"failure","url":"http://ci/1"},{"name":"lint","state":"neutral"}]}}}`;
+				const checks = parseGitSpiceBranches(input)[0].change?.checks;
+				assert.strictEqual(checks?.rollup, 'failure');
+				assert.strictEqual(checks?.url, 'http://ci');
+				assert.deepStrictEqual(checks?.runs, [
+					{ name: 'build', state: 'failure', url: 'http://ci/1' },
+					{ name: 'lint', state: 'neutral' },
+				]);
+			});
+
+			it('accepts all four rollup values', () => {
+				for (const rollup of ['success', 'failure', 'pending', 'none']) {
+					const input = `{"name":"f","change":{${base},"checks":{"rollup":"${rollup}"}}}`;
+					assert.strictEqual(parseGitSpiceBranches(input)[0].change?.checks?.rollup, rollup);
+				}
+			});
+
+			it('drops checks with an unknown rollup value', () => {
+				const input = `{"name":"f","change":{${base},"checks":{"rollup":"errored"}}}`;
+				assert.strictEqual(parseGitSpiceBranches(input)[0].change?.checks, undefined);
+			});
+
+			it('drops checks with a missing rollup', () => {
+				const input = `{"name":"f","change":{${base},"checks":{"runs":[{"name":"b","state":"success"}]}}}`;
+				assert.strictEqual(parseGitSpiceBranches(input)[0].change?.checks, undefined);
+			});
+
+			it('omits runs when none are well-formed', () => {
+				const input = `{"name":"f","change":{${base},"checks":{"rollup":"pending","runs":[{"name":"b"},{"state":"x"}]}}}`;
+				const checks = parseGitSpiceBranches(input)[0].change?.checks;
+				assert.strictEqual(checks?.rollup, 'pending');
+				assert.strictEqual(checks?.runs, undefined);
+			});
+
+			it('preserves forge-native run state strings verbatim', () => {
+				const input = `{"name":"f","change":{${base},"checks":{"rollup":"success","runs":[{"name":"e2e","state":"cancelled"}]}}}`;
+				assert.strictEqual(parseGitSpiceBranches(input)[0].change?.checks?.runs?.[0].state, 'cancelled');
+			});
+
+			it('leaves checks undefined when the change has none', () => {
+				const input = `{"name":"f","change":{${base}}}`;
+				assert.strictEqual(parseGitSpiceBranches(input)[0].change?.checks, undefined);
+			});
+		});
 	});
 });

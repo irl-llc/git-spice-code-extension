@@ -1,4 +1,4 @@
-import type { GitSpiceChangeStatus, GitSpiceComments } from '../gitSpiceSchema';
+import type { GitSpiceChangeStatus, GitSpiceChecks, GitSpiceComments } from '../gitSpiceSchema';
 
 export type BranchCommitViewModel = {
 	sha: string;
@@ -36,6 +36,7 @@ export type BranchChangeViewModel = {
 	url?: string;
 	status?: GitSpiceChangeStatus;
 	comments?: GitSpiceComments;
+	checks?: GitSpiceChecks;
 };
 
 /**
