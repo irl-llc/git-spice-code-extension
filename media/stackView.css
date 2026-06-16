@@ -292,6 +292,36 @@ button {
 	background-color: var(--vscode-charts-red, #f85149);
 }
 
+/*
+ * Trunk sync affordance (issue #82): icon + short label pill shown on the trunk
+ * card only when its state vs. the remote is non-default. Mirrors the
+ * change-request status badge (.tag-cr) so the codicon renders reliably and the
+ * fact reads at a glance; the tooltip carries the full detail.
+ */
+.tag-trunk-sync {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.18rem;
+	text-transform: none;
+	letter-spacing: 0;
+	color: var(--vscode-editor-background);
+}
+
+.tag-trunk-sync .codicon {
+	font-size: 0.7rem;
+	line-height: 1;
+}
+
+/* Remote unknown: attention color — git-spice can't tell the trunk's state. */
+.tag-trunk-sync-remote-unknown {
+	background-color: var(--vscode-problemsWarningIcon-foreground, #cca700);
+}
+
+/* Origin ahead: informational pull affordance. */
+.tag-trunk-sync-origin-ahead {
+	background-color: var(--vscode-charts-blue, #4593e6);
+}
+
 .branch-meta {
 	display: flex;
 	gap: 0.45rem;

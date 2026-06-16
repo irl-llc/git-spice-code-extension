@@ -1,7 +1,7 @@
 import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type { IntegrationState } from '../utils/integrationState';
+import type { TrunkSyncState } from '../utils/trunkSync';
 import type {
-	BranchChangeViewModel,
 	BranchViewModel,
 	IntegrationFork,
 	IntegrationViewModel,
@@ -11,6 +11,7 @@ import type {
 	TreePosition,
 	UncommittedState,
 } from './types';
+import { createBranchViewModel, type IntegrationMarkContext } from './branchViewModel';
 import { buildTreeFragments as buildTreeFragmentsFromModel, type BranchTreeInput } from './tree/treeModel';
 
 /** Branch with computed tree position */
@@ -33,6 +34,8 @@ export type RepoDisplayInput = {
 	untrackedBranch?: string;
 	/** Parsed integration-branch state, when configured and the binary supports it. */
 	integration?: IntegrationState | null;
+	/** Non-default trunk sync state vs. remote; rendered on the trunk card only. */
+	trunkSync?: TrunkSyncState;
 };
 
 /**
@@ -54,7 +57,7 @@ export function buildRepoDisplayState(input: RepoDisplayInput): RepositoryViewMo
 	return {
 		id: input.repoId,
 		name: input.repoName,
-		branches: mapToBranchViewModels(ordered, treeFragments, integration),
+		branches: mapToBranchViewModels(ordered, treeFragments, integration, input.trunkSync),
 		uncommitted,
 		uncommittedTreeFragment: uncommitted ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
 		error: input.error,
@@ -255,42 +258,28 @@ function mapToBranchViewModels(
 	ordered: BranchWithTree[],
 	fragments: Map<string, TreeFragmentData>,
 	integration?: IntegrationViewModel,
+	trunkSync?: TrunkSyncState,
 ): BranchViewModel[] {
 	const mark: IntegrationMarkContext = {
 		tipSet: integration ? new Set(integration.tipNames) : undefined,
 		leafNames: computeLeafNames(ordered),
 	};
-	return ordered.map((item) => createBranchViewModel(item.branch, item.tree, fragments.get(item.branch.name)!, mark));
+	return ordered.map((item) =>
+		createBranchViewModel({
+			branch: item.branch,
+			tree: item.tree,
+			treeFragment: fragments.get(item.branch.name)!,
+			mark,
+			trunkSync,
+		}),
+	);
 }
-
-/** Inputs for deciding the out-of-integration "X" marker. */
-type IntegrationMarkContext = {
-	/** Integration tip names, or undefined when no integration is configured. */
-	tipSet?: Set<string>;
-	/** Names of branches that are leaves (no other branch is stacked on them). */
-	leafNames: Set<string>;
-};
 
 /** Branch names that no other branch is stacked on — the real stack heads. */
 function computeLeafNames(ordered: BranchWithTree[]): Set<string> {
 	const parents = new Set<string>();
 	for (const it of ordered) if (it.branch.down) parents.add(it.branch.down.name);
 	return new Set(ordered.map((it) => it.branch.name).filter((name) => !parents.has(name)));
-}
-
-/**
- * Determines whether a branch should show the out-of-integration "X" marker.
- * The marker flags a stack HEAD that is excluded from the integration build, so
- * it shows only when an integration branch is configured AND the branch is a
- * leaf (a real stack tip) that is not one of the integration tips. Trunk (no
- * base) and mid-stack branches (which are bases of other branches, so not tips
- * at all) never get the marker (issue #39 review).
- */
-function computeOutOfIntegration(branch: GitSpiceBranch, mark: IntegrationMarkContext): boolean | undefined {
-	if (!mark.tipSet) return undefined;
-	if (!branch.down) return false; // trunk has no base → exempt from the marker
-	if (!mark.leafNames.has(branch.name)) return false; // mid-stack branch is not a tip
-	return !mark.tipSet.has(branch.name);
 }
 
 /** Context passed during tree traversal */
@@ -506,46 +495,5 @@ function toBranchTreeInput(item: BranchWithTree): BranchTreeInput {
 		parentName: item.tree.parentName,
 		isCurrent: item.branch.current === true,
 		needsRestack: item.branch.down?.needsRestack === true,
-	};
-}
-
-/** Checks if branch needs restacking based on parent/child relationships. */
-function needsRestack(branch: GitSpiceBranch): boolean {
-	const downNeedsRestack = branch.down?.needsRestack === true;
-	const upNeedsRestack = (branch.ups ?? []).some((link) => link.needsRestack === true);
-	return downNeedsRestack || upNeedsRestack;
-}
-
-/** Maps branch commits to view model format. */
-function mapCommitsToViewModel(commits: GitSpiceBranch['commits']): BranchViewModel['commits'] {
-	if (!commits || commits.length === 0) return undefined;
-	return commits.map((c) => ({ sha: c.sha, shortSha: c.sha.slice(0, 8), subject: c.subject }));
-}
-
-/** Creates a branch view model from branch data and tree information. */
-function createBranchViewModel(
-	branch: GitSpiceBranch,
-	tree: TreePosition,
-	treeFragment: TreeFragmentData,
-	mark: IntegrationMarkContext,
-): BranchViewModel {
-	return {
-		name: branch.name,
-		current: branch.current === true,
-		restack: needsRestack(branch),
-		tree,
-		treeFragment,
-		change: branch.change ? toChangeViewModel(branch.change) : undefined,
-		commits: mapCommitsToViewModel(branch.commits),
-		outOfIntegration: computeOutOfIntegration(branch, mark),
-	};
-}
-
-function toChangeViewModel(change: NonNullable<GitSpiceBranch['change']>): BranchChangeViewModel {
-	return {
-		id: change.id,
-		url: change.url,
-		status: change.status,
-		comments: change.comments,
 	};
 }

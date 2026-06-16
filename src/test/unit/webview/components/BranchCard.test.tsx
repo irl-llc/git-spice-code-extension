@@ -182,6 +182,44 @@ describe('BranchCard', () => {
 			assert.strictEqual(screen.queryByText('Restack'), null);
 		});
 
+		it('renders the remote-not-configured trunk sync badge with cloud icon', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ trunkSync: 'remote-unknown' })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const badge = container.querySelector('.tag-trunk-sync-remote-unknown');
+			assert.ok(badge, 'remote-unknown badge present');
+			assert.ok(badge?.querySelector('.codicon-cloud'), 'uses cloud codicon');
+			assert.ok(screen.getByText('No remote'));
+		});
+
+		it('renders the origin-ahead trunk sync badge with cloud-download icon', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ trunkSync: 'origin-ahead' })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const badge = container.querySelector('.tag-trunk-sync-origin-ahead');
+			assert.ok(badge, 'origin-ahead badge present');
+			assert.ok(badge?.querySelector('.codicon-cloud-download'), 'uses cloud-download codicon');
+			assert.ok(screen.getByText('Behind remote'));
+		});
+
+		it('renders no trunk sync badge when trunkSync is undefined (in sync)', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard branch={makeBranch()} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />,
+			);
+			assert.strictEqual(container.querySelector('.tag-trunk-sync'), null);
+		});
+
 		it('renders a squash button only when the branch has multiple commits', () => {
 			const h = harness();
 			const { rerender } = render(

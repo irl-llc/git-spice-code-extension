@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
 
 import type { GitSpiceChangeStatus, GitSpiceComments } from '../../../gitSpiceSchema';
+import type { TrunkSyncState } from '../../../utils/trunkSync';
 import type { BranchViewModel } from '../../types';
 import type { WebviewMessage } from '../../webviewTypes';
 
@@ -132,12 +133,43 @@ interface BranchTagsProps {
 	postMessage: PostMessage;
 }
 
+/** Codicon + tooltip for each non-default trunk sync state. One indicator per fact. */
+const TRUNK_SYNC_DISPLAY: Record<TrunkSyncState, { icon: string; title: string; label: string }> = {
+	'remote-unknown': {
+		icon: 'codicon-cloud',
+		title: 'No remote configured — git-spice cannot determine the trunk’s remote state',
+		label: 'No remote',
+	},
+	'origin-ahead': {
+		icon: 'codicon-cloud-download',
+		title: 'The remote trunk is ahead — sync to pull new commits',
+		label: 'Behind remote',
+	},
+};
+
+/**
+ * Trunk-only badge surfacing a non-default sync state vs. the remote (issue
+ * #82). Icon + short label pill, mirroring the change-request status badge so
+ * the codicon renders reliably and the fact reads at a glance; the tooltip
+ * carries the full detail.
+ */
+function TrunkSyncBadge({ state }: { state: TrunkSyncState }): JSX.Element {
+	const { icon, title, label } = TRUNK_SYNC_DISPLAY[state];
+	return (
+		<span className={`tag tag-trunk-sync tag-trunk-sync-${state}`} title={title}>
+			<i className={`codicon ${icon}`} aria-hidden="true" />
+			<span>{label}</span>
+		</span>
+	);
+}
+
 /** The read-only status pills shown before the action buttons. */
 function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
 	const comments = branch.change?.comments;
 	return (
 		<>
 			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
+			{branch.trunkSync ? <TrunkSyncBadge state={branch.trunkSync} /> : null}
 			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
 			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}
 		</>

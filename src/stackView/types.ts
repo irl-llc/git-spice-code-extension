@@ -1,4 +1,5 @@
 import type { GitSpiceChangeStatus, GitSpiceComments } from '../gitSpiceSchema';
+import type { TrunkSyncState } from '../utils/trunkSync';
 
 export type BranchCommitViewModel = {
 	sha: string;
@@ -152,6 +153,13 @@ export type BranchViewModel = {
 	 * branch is configured (the indicator is suppressed entirely).
 	 */
 	outOfIntegration?: boolean;
+	/**
+	 * Non-default sync state of the trunk vs. its remote (issue #82). Set only on
+	 * the trunk branch; undefined elsewhere and when the trunk is in sync.
+	 *  - `remote-unknown`: no git remote configured, so sync state is unknowable.
+	 *  - `origin-ahead`: the trunk's upstream has commits the local trunk lacks.
+	 */
+	trunkSync?: TrunkSyncState;
 };
 
 /**

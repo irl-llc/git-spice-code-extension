@@ -1,0 +1,2 @@
+kind: Added
+body: 'The trunk branch card now surfaces its sync state against the remote: a "No remote" badge when git-spice has no remote configured (so it cannot determine the trunk''s remote state), and a "Behind remote" badge when the remote trunk has commits the local trunk lacks. Both appear only in the non-default state and carry a tooltip with the detail.'
