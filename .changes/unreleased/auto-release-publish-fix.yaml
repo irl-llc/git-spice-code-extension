@@ -1,2 +1,0 @@
-kind: Fixed
-body: 'Scheduled auto-releases now actually publish to the VS Code Marketplace and Open VSX. Previously a release tagged by the scheduled job never published, because GitHub does not re-trigger workflows from a Release created with the default token; the auto-release run now chains the publish step itself via a shared reusable workflow.'
