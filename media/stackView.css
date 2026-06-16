@@ -302,6 +302,18 @@ button {
 	margin: 0;
 }
 
+/* Compact "needs restack" icon, replacing the wordy text badge. */
+.branch-restack-icon {
+	display: inline-flex;
+	align-items: center;
+	color: var(--vscode-problemsWarningIcon-foreground);
+}
+
+.branch-restack-icon .codicon {
+	font-size: 0.8rem;
+	line-height: 1;
+}
+
 .branch-pr-link {
 	border: none;
 	background: transparent;
@@ -309,6 +321,22 @@ button {
 	cursor: pointer;
 	padding: 0;
 	font-size: 0.7rem;
+	display: inline-flex;
+	align-items: center;
+}
+
+/*
+ * The PR number is the omnipresent at-a-glance indicator for "this branch has
+ * a change request" — always visible, no icon (one visual indicator per fact).
+ */
+.branch-pr-number {
+	white-space: nowrap;
+}
+
+/* No URL → not clickable. */
+.branch-pr-link:disabled {
+	cursor: default;
+	opacity: 0.6;
 }
 
 .branch-pr-link:hover {
@@ -336,6 +364,25 @@ button {
 .branch-action-btn:hover {
 	opacity: 1;
 	color: var(--vscode-textLink-foreground);
+}
+
+/*
+ * Squash is an action, not at-a-glance status: hover-revealed like the
+ * subtree-collapse control. opacity (not display) keeps it clickable and in
+ * the accessibility tree with its slot reserved (no layout shift on hover).
+ * Declared after the shared base rule above so this hide wins the cascade.
+ */
+.branch-action-btn {
+	opacity: 0;
+}
+
+.branch-card:hover .branch-action-btn,
+.branch-action-btn:focus-visible {
+	opacity: 0.7;
+}
+
+.branch-card:hover .branch-action-btn:hover {
+	opacity: 1;
 }
 
 .branch-toggle {

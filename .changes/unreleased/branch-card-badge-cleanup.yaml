@@ -1,0 +1,2 @@
+kind: Changed
+body: 'Cleaned up branch-card badges: the "Restack" text badge is now a compact history icon with an accessible label; the PR number is always visible as plain text and IS the change-request indicator (the redundant pull-request icon is gone, and the link stays clickable with an always-present aria-label); and the cloud-upload affordance now appears only when there is something to upload — an unsubmitted branch or unpushed local commits — instead of on every card (and never on trunk).'

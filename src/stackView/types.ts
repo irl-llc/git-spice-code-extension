@@ -141,6 +141,17 @@ export type BranchViewModel = {
 	name: string;
 	current: boolean;
 	restack: boolean;
+	/**
+	 * True when this is the trunk branch (no base). Trunk has no change of its
+	 * own to submit, so the submit affordance is suppressed for it.
+	 */
+	isTrunk: boolean;
+	/**
+	 * True when local commits have not been pushed to the branch's upstream.
+	 * Drives the upload affordance: it shows only for unsubmitted branches or
+	 * branches in this needs-upload state — never as an omnipresent icon.
+	 */
+	needsPush: boolean;
 	change?: BranchChangeViewModel;
 	commits?: BranchCommitViewModel[];
 	tree: TreePosition;
