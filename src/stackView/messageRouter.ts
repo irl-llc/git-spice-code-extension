@@ -63,6 +63,9 @@ export interface MessageHandlerContext {
 	handleRepoSync(repoId: string | undefined): Promise<void>;
 	handleStackRestack(repoId: string | undefined): Promise<void>;
 	handleStackSubmit(repoId: string | undefined): Promise<void>;
+	handleCollapseSubtree(repoId: string | undefined, branchName: string): void;
+	handleExpandSubtree(repoId: string | undefined, roots: string[]): void;
+	handleCollapseOtherStacks(repoId: string | undefined, branchName: string): void;
 	getExecFunctions(): ExecFunctionMap;
 }
 
@@ -74,6 +77,7 @@ export function routeMessage(message: WebviewMessage, ctx: MessageHandlerContext
 	return (
 		routeStateMessage(message, ctx) ||
 		routeRepoToolbarMessage(message, ctx) ||
+		routeCollapseMessage(message, ctx) ||
 		routeNavigationMessage(message, ctx) ||
 		routeBranchManagementMessage(message, ctx) ||
 		routeCommitMessage(message, ctx) ||
@@ -108,6 +112,23 @@ function routeRepoToolbarMessage(message: WebviewMessage, ctx: MessageHandlerCon
 			return true;
 		case 'stackSubmit':
 			void ctx.handleStackSubmit(message.repoId);
+			return true;
+		default:
+			return false;
+	}
+}
+
+/** Routes subtree collapse/expand messages (issue #66). */
+function routeCollapseMessage(message: WebviewMessage, ctx: MessageHandlerContext): boolean {
+	switch (message.type) {
+		case 'collapseSubtree':
+			ctx.handleCollapseSubtree(message.repoId, message.branchName);
+			return true;
+		case 'expandSubtree':
+			ctx.handleExpandSubtree(message.repoId, message.roots);
+			return true;
+		case 'collapseOtherStacks':
+			ctx.handleCollapseOtherStacks(message.repoId, message.branchName);
 			return true;
 		default:
 			return false;

@@ -25,14 +25,17 @@ import { LANE_WIDTH, NODE_RADIUS_CURRENT, NODE_STROKE } from '../../tree/treeCon
 import { TreeFragmentSvg, type TreeColors } from '../../tree/treeFragment';
 import type {
 	BranchViewModel,
+	CollapsedPlaceholderViewModel,
 	CommitFileChange,
 	DisplayState,
 	IntegrationViewModel,
 	RepositoryViewModel,
+	StackRowViewModel,
 } from '../../types';
 import type { ExtensionMessage, WebviewMessage } from '../../webviewTypes';
 import { buildBranchContext } from '../../contextBuilder';
 import { BranchCard } from './BranchCard';
+import { CollapsedPlaceholder } from './CollapsedPlaceholder';
 import { BranchSummary } from './BranchSummary';
 import { CommitList } from './CommitList';
 import { IntegrationCard } from './IntegrationCard';
@@ -352,23 +355,86 @@ function RepoStack({ repo, ui, treeColors, postMessage, dispatch }: RepoStackPro
 				<UncommittedItem repo={repo} ui={ui} postMessage={postMessage} dispatch={dispatch} treeless />
 			) : null}
 			{repo.untrackedBranch ? <UntrackedItem branchName={repo.untrackedBranch} postMessage={postMessage} /> : null}
-			{repo.branches.map((branch) => (
-				<BranchStackItem
-					key={branch.name}
-					branch={branch}
-					repoId={repo.id}
+			{repo.rows.map((row) => (
+				<StackRow
+					key={rowKey(row)}
+					row={row}
+					repo={repo}
 					ui={ui}
 					treeColors={treeColors}
 					postMessage={postMessage}
 					dispatch={dispatch}
-					uncommittedSlot={
-						showUncommitted && !insertUncommittedAtTop && branch.current ? (
-							<UncommittedItem repo={repo} ui={ui} postMessage={postMessage} dispatch={dispatch} />
-						) : null
-					}
+					showUncommittedHere={Boolean(
+						showUncommitted && !insertUncommittedAtTop && row.kind === 'branch' && row.branch.current,
+					)}
 				/>
 			))}
 		</>
+	);
+}
+
+/** Stable React key for a stack row. A placeholder's collapse roots are unique
+ * across the stack, so they key it without the (unstable) array index. */
+function rowKey(row: StackRowViewModel): string {
+	return row.kind === 'branch' ? `b:${row.branch.name}` : `p:${row.placeholder.roots.join(',')}`;
+}
+
+interface StackRowProps {
+	row: StackRowViewModel;
+	repo: RepositoryViewModel;
+	ui: RepoUiState;
+	treeColors: TreeColors;
+	postMessage: PostMessage;
+	dispatch: React.Dispatch<Action>;
+	showUncommittedHere: boolean;
+}
+
+/** Renders one stack row: a collapsed placeholder or a real branch item. */
+function StackRow({
+	row,
+	repo,
+	ui,
+	treeColors,
+	postMessage,
+	dispatch,
+	showUncommittedHere,
+}: StackRowProps): JSX.Element {
+	if (row.kind === 'placeholder') {
+		return <PlaceholderItem placeholder={row.placeholder} treeColors={treeColors} postMessage={postMessage} />;
+	}
+	return (
+		<BranchStackItem
+			branch={row.branch}
+			repoId={repo.id}
+			ui={ui}
+			treeColors={treeColors}
+			postMessage={postMessage}
+			dispatch={dispatch}
+			uncommittedSlot={
+				showUncommittedHere ? (
+					<UncommittedItem repo={repo} ui={ui} postMessage={postMessage} dispatch={dispatch} />
+				) : null
+			}
+		/>
+	);
+}
+
+interface PlaceholderItemProps {
+	placeholder: CollapsedPlaceholderViewModel;
+	treeColors: TreeColors;
+	postMessage: PostMessage;
+}
+
+/** A collapsed-subtree placeholder row: dashed lane + summary card with [+]. */
+function PlaceholderItem({ placeholder, treeColors, postMessage }: PlaceholderItemProps): JSX.Element {
+	return (
+		<li className="stack-item collapsed-placeholder-item" data-branch="__collapsed__">
+			<TreeFragmentSvg fragment={placeholder.treeFragment} colors={treeColors} />
+			<CollapsedPlaceholder
+				placeholder={placeholder}
+				onExpand={(roots) => postMessage({ type: 'expandSubtree', roots })}
+			/>
+		</li>
 	);
 }
 

@@ -147,7 +147,15 @@ function registerBranchPromptCommands(context: vscode.ExtensionContext, provider
 		vscode.commands.registerCommand('git-spice.branchDelete', (ctx: BranchContext) => {
 			if (ctx?.branchName) void provider.handleBranchDelete(undefined, ctx.branchName);
 		}),
+		registerCollapseOtherStacksCommand(provider),
 	);
+}
+
+/** Registers the right-click "Collapse Other Stacks" branch command (issue #66). */
+function registerCollapseOtherStacksCommand(provider: StackViewProvider): vscode.Disposable {
+	return vscode.commands.registerCommand('git-spice.collapseOtherStacks', (ctx: BranchContext) => {
+		if (ctx?.branchName) provider.handleCollapseOtherStacks(undefined, ctx.branchName);
+	});
 }
 
 /** Registers commit context menu commands. */

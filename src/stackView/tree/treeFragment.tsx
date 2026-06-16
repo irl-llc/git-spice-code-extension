@@ -99,6 +99,7 @@ function getLaneX(lane: number): number {
 
 function renderLaneSegments(data: TreeFragmentData, colors: TreeColors): JSX.Element[] {
 	const isUncommitted = data.nodeStyle === 'uncommitted';
+	const isPlaceholder = data.nodeStyle === 'placeholder';
 	const childForkLaneSet = new Set(data.childForkLanes.map((cf) => cf.lane));
 	const out: JSX.Element[] = [];
 
@@ -107,8 +108,9 @@ function renderLaneSegments(data: TreeFragmentData, colors: TreeColors): JSX.Ele
 		if (!segment) continue;
 		if (!segment.continuesFromAbove && !segment.continuesBelow && !segment.hasNode) continue;
 
-		// Dash lines only at the uncommitted node itself, not pass-through lanes.
-		const isDashed = isUncommitted && segment.hasNode;
+		// Dash the placeholder row's lane (the hidden subtree) and the uncommitted
+		// node, but never the plain pass-through lanes of a real branch row.
+		const isDashed = isPlaceholder || (isUncommitted && segment.hasNode);
 		// Skip top segment on child fork lanes — the fork connector draws the vertical there.
 		const skipTopSegment = childForkLaneSet.has(lane);
 
@@ -289,6 +291,8 @@ function renderIntegrationFork(
 
 function renderNode(data: TreeFragmentData, colors: TreeColors): JSX.Element {
 	const x = getLaneX(data.nodeLane);
+	// A placeholder row has no node circle — the placeholder card carries the [+].
+	if (data.nodeStyle === 'placeholder') return <></>;
 	if (data.nodeStyle === 'current') {
 		return (
 			<circle

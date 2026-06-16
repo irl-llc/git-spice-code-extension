@@ -159,6 +159,11 @@
 				"icon": "$(copy)"
 			},
 			{
+				"command": "git-spice.collapseOtherStacks",
+				"title": "Collapse Other Stacks",
+				"icon": "$(collapse-all)"
+			},
+			{
 				"command": "git-spice.enableRemoteForgeStatus",
 				"title": "Show Remote Forge Status (Beta)"
 			},
@@ -285,6 +290,11 @@
 					"command": "git-spice.branchDelete",
 					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
 					"group": "5_danger@2"
+				},
+				{
+					"command": "git-spice.collapseOtherStacks",
+					"when": "webviewId == 'gitSpice.branches' && webviewSection == 'branch'",
+					"group": "6_collapse@1"
 				},
 				{
 					"command": "git-spice.commitCopySha",

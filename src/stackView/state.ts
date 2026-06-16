@@ -12,235 +12,55 @@ import type {
 	UncommittedState,
 } from './types';
 import { buildTreeFragments as buildTreeFragmentsFromModel, type BranchTreeInput } from './tree/treeModel';
+import { buildStackRows, computeCollapsible } from './stackRows';
+import { toIntegrationViewModel } from './integrationViewModel';
+import type { BranchWithTree, RepoDisplayInput } from './stateTypes';
 
-/** Branch with computed tree position */
-type BranchWithTree = {
-	branch: GitSpiceBranch;
-	tree: TreePosition;
-};
+export type { BranchWithTree, RepoDisplayInput } from './stateTypes';
 
 /** Special name for the uncommitted pseudo-branch. */
 export const UNCOMMITTED_BRANCH_NAME = '__uncommitted__';
 
-/** Input parameters for building a repository display state. */
-export type RepoDisplayInput = {
-	repoId: string;
-	repoName: string;
-	branches: GitSpiceBranch[];
-	error?: string;
-	uncommitted?: UncommittedState;
-	/** Name of the current branch when not tracked by git-spice. */
-	untrackedBranch?: string;
-	/** Parsed integration-branch state, when configured and the binary supports it. */
-	integration?: IntegrationState | null;
-};
-
 /**
- * Builds a single repository's display state from its branch data.
- * Branches are organized in a tree structure based on parent-child relationships.
+ * Builds a single repository's display state from its branch data. Branches are
+ * organized in a tree by parent-child relationships. The integration branch is
+ * excluded from the branch layout here — it is rendered separately as the
+ * integration node (otherwise it becomes a phantom root that shifts lanes).
  */
 export function buildRepoDisplayState(input: RepoDisplayInput): RepositoryViewModel {
-	// `gs ll -a` lists the integration branch itself (with no base, like a second
-	// trunk). It is rendered separately as the integration node, so exclude it
-	// from the branch layout — otherwise it becomes a phantom root that shifts
-	// every real branch into the wrong lane.
 	const integrationName = input.integration?.name;
 	const branchList = integrationName ? input.branches.filter((b) => b.name !== integrationName) : input.branches;
 	const ordered = orderStackWithTree(branchList, new Map(branchList.map((b) => [b.name, b])));
 	const uncommitted = filterEmptyUncommitted(input.uncommitted);
 	const treeFragments = buildTreeFragments(ordered, uncommitted);
 	const integration = toIntegrationViewModel(input.integration, ordered, treeFragments);
+	const collapsible = computeCollapsible(ordered, integrationName);
+	const branches = mapToBranchViewModels(ordered, treeFragments, integration, collapsible);
+	return assembleRepoViewModel(input, { ordered, branches, uncommitted, treeFragments, integration });
+}
 
+/** Precomputed pieces the repo view model is assembled from. */
+type RepoViewModelParts = {
+	ordered: BranchWithTree[];
+	branches: BranchViewModel[];
+	uncommitted?: UncommittedState;
+	treeFragments: Map<string, TreeFragmentData>;
+	integration?: IntegrationViewModel;
+};
+
+/** Assembles the {@link RepositoryViewModel} from the precomputed layout pieces. */
+function assembleRepoViewModel(input: RepoDisplayInput, parts: RepoViewModelParts): RepositoryViewModel {
 	return {
 		id: input.repoId,
 		name: input.repoName,
-		branches: mapToBranchViewModels(ordered, treeFragments, integration),
-		uncommitted,
-		uncommittedTreeFragment: uncommitted ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
+		branches: parts.branches,
+		rows: buildStackRows(parts.ordered, parts.branches, input.collapsed),
+		uncommitted: parts.uncommitted,
+		uncommittedTreeFragment: parts.uncommitted ? parts.treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
 		error: input.error,
 		untrackedBranch: input.untrackedBranch,
-		integration,
+		integration: parts.integration,
 	};
-}
-
-/**
- * Maps a parsed {@link IntegrationState} to the view model, or undefined when
- * no integration branch is configured/supported. Carries the "rebuild"
- * staleness, the tip-branch names (used to mark out-of-integration branches),
- * and the tree fragment for the integration node row.
- */
-export function toIntegrationViewModel(
-	state: IntegrationState | null | undefined,
-	ordered: BranchWithTree[],
-	fragments: Map<string, TreeFragmentData>,
-): IntegrationViewModel | undefined {
-	if (!state) return undefined;
-	const tipNames = state.tips.map((tip) => tip.name);
-	return {
-		name: state.name,
-		needsRebuild: state.needsRebuild,
-		tipNames,
-		treeFragment: applyIntegrationLayout(ordered, fragments, tipNames, state.needsRebuild),
-	};
-}
-
-/**
- * Lays out the integration branch as the mirror of the trunk, returning the
- * integration node's own fragment and MUTATING the per-branch fragments to add
- * each tip's outgoing link up to it.
- *
- * The trunk node (at the bottom) fans connectors UP into the lane of each root
- * branch; the integration node (at the top) fans connectors DOWN into the lane
- * of each integration TIP. A tip that is the top-most branch in its lane links
- * to integration straight up its own lane; a mid-stack tip — one with a branch
- * above it — is a divergence (its normal child and the integration node are
- * both children) and gets its own **bypass lane**, fanning up out of its node
- * and running past the rows above it. Non-tip non-trunk branches keep their ✕
- * (see {@link computeOutOfIntegration}) and contribute no link.
- */
-function applyIntegrationLayout(
-	ordered: BranchWithTree[],
-	fragments: Map<string, TreeFragmentData>,
-	tipNames: string[],
-	needsRebuild: boolean,
-): TreeFragmentData {
-	const origMaxLane = ordered.reduce((m, it) => Math.max(m, it.tree.lane), 0);
-	const ctx: IntegLayoutCtx = {
-		ordered,
-		fragments,
-		needsRebuild,
-		acc: { nextBypass: origMaxLane + 1, integDownToZero: false, integDownForks: [] },
-	};
-	linkTipsToIntegration(ctx, new Set(tipNames));
-
-	const newMaxLane = Math.max(origMaxLane, ctx.acc.nextBypass - 1);
-	extendFragmentsToMaxLane(ordered, fragments, newMaxLane);
-	return buildIntegrationNodeFragment(ctx, newMaxLane);
-}
-
-/** Pads every branch fragment's lane array out to the final max lane. */
-function extendFragmentsToMaxLane(
-	ordered: BranchWithTree[],
-	fragments: Map<string, TreeFragmentData>,
-	maxLane: number,
-): void {
-	for (const it of ordered) {
-		const frag = fragments.get(it.branch.name)!;
-		ensureLane(frag, maxLane);
-		frag.maxLane = maxLane;
-	}
-}
-
-/** Mutable accumulator threaded through the integration layout pass. */
-type IntegLayoutAcc = {
-	/** Next free lane to allocate as a bypass for a mid-stack tip. */
-	nextBypass: number;
-	/** A tip links to the integration node straight up lane 0. */
-	integDownToZero: boolean;
-	/** Down-forks from the integration node into each non-zero tip lane. */
-	integDownForks: IntegrationFork[];
-};
-
-/** Shared inputs threaded through the integration layout helpers. */
-type IntegLayoutCtx = {
-	ordered: BranchWithTree[];
-	fragments: Map<string, TreeFragmentData>;
-	needsRebuild: boolean;
-	acc: IntegLayoutAcc;
-};
-
-/** Records the first (top-most) row index seen for each lane. */
-function topmostRowByLane(ordered: BranchWithTree[]): Map<number, number> {
-	const topmost = new Map<number, number>();
-	ordered.forEach((it, row) => {
-		if (!topmost.has(it.tree.lane)) topmost.set(it.tree.lane, row);
-	});
-	return topmost;
-}
-
-/** Wires each integration tip's outgoing link up to the integration node. */
-function linkTipsToIntegration(ctx: IntegLayoutCtx, tipSet: Set<string>): void {
-	const topmost = topmostRowByLane(ctx.ordered);
-	ctx.ordered.forEach((it, row) => {
-		if (!tipSet.has(it.branch.name)) return;
-		const lane = it.tree.lane;
-		const frag = ctx.fragments.get(it.branch.name)!;
-		const integLane = assignTipIntegrationLane(ctx, frag, topmost.get(lane) === row, lane);
-		if (integLane === 0) ctx.acc.integDownToZero = true;
-		else ctx.acc.integDownForks.push({ lane: integLane, direction: 'down', needsRebuild: ctx.needsRebuild });
-		passIntegrationLaneAboveTip(ctx, integLane, row);
-	});
-}
-
-/**
- * Picks the lane a tip uses to reach the integration node: its own lane when it
- * is top-most there (links straight up), otherwise a fresh bypass lane that fans
- * up out of the node (the mid-stack divergence). Mutates `frag` accordingly.
- */
-function assignTipIntegrationLane(
-	ctx: IntegLayoutCtx,
-	frag: TreeFragmentData,
-	isTopmostInLane: boolean,
-	lane: number,
-): number {
-	if (isTopmostInLane) {
-		frag.lanes[lane] = {
-			...frag.lanes[lane],
-			continuesFromAbove: true,
-			needsRestack: frag.lanes[lane].needsRestack || ctx.needsRebuild,
-		};
-		return lane;
-	}
-	const bypass = ctx.acc.nextBypass++;
-	(frag.integrationForks ??= []).push({ lane: bypass, direction: 'up', needsRebuild: ctx.needsRebuild });
-	return bypass;
-}
-
-/** Marks the integration lane as a pass-through on every row above the tip. */
-function passIntegrationLaneAboveTip(ctx: IntegLayoutCtx, integLane: number, tipRow: number): void {
-	for (let r = 0; r < tipRow; r++) {
-		const above = ctx.fragments.get(ctx.ordered[r].branch.name)!;
-		ensureLane(above, integLane);
-		above.lanes[integLane] = {
-			...above.lanes[integLane],
-			continuesFromAbove: true,
-			continuesBelow: true,
-			needsRestack: above.lanes[integLane].needsRestack || ctx.needsRebuild,
-		};
-	}
-}
-
-/** Builds the lane segments for the integration node's row (only lane 0 holds the node). */
-function buildIntegrationLanes(maxLane: number, acc: IntegLayoutAcc, needsRebuild: boolean): LaneSegment[] {
-	return Array.from({ length: maxLane + 1 }, (_, l) => {
-		const onZero = l === 0;
-		return {
-			continuesFromAbove: false,
-			continuesBelow: onZero && acc.integDownToZero,
-			hasNode: onZero,
-			needsRestack: onZero && acc.integDownToZero && needsRebuild,
-		};
-	});
-}
-
-/** Builds the integration node's own row fragment (lane-0 node fanning down to tips). */
-function buildIntegrationNodeFragment(ctx: IntegLayoutCtx, maxLane: number): TreeFragmentData {
-	return {
-		lanes: buildIntegrationLanes(maxLane, ctx.acc, ctx.needsRebuild),
-		maxLane,
-		nodeLane: 0,
-		childForkLanes: [],
-		nodeStyle: 'integration',
-		nodeNeedsRestack: ctx.needsRebuild,
-		integrationForks: ctx.acc.integDownForks,
-	};
-}
-
-/** Extends a fragment's lane array with empty pass-through slots up to `lane`. */
-function ensureLane(frag: TreeFragmentData, lane: number): void {
-	while (frag.lanes.length <= lane) {
-		frag.lanes.push({ continuesFromAbove: false, continuesBelow: false, hasNode: false, needsRestack: false });
-	}
 }
 
 /** Returns uncommitted state only if it contains changes, otherwise undefined. */
@@ -254,13 +74,22 @@ function filterEmptyUncommitted(uncommitted?: UncommittedState): UncommittedStat
 function mapToBranchViewModels(
 	ordered: BranchWithTree[],
 	fragments: Map<string, TreeFragmentData>,
-	integration?: IntegrationViewModel,
+	integration: IntegrationViewModel | undefined,
+	collapsible: ReadonlySet<string>,
 ): BranchViewModel[] {
 	const mark: IntegrationMarkContext = {
 		tipSet: integration ? new Set(integration.tipNames) : undefined,
 		leafNames: computeLeafNames(ordered),
 	};
-	return ordered.map((item) => createBranchViewModel(item.branch, item.tree, fragments.get(item.branch.name)!, mark));
+	return ordered.map((item) =>
+		createBranchViewModel({
+			branch: item.branch,
+			tree: item.tree,
+			treeFragment: fragments.get(item.branch.name)!,
+			mark,
+			collapsible: collapsible.has(item.branch.name),
+		}),
+	);
 }
 
 /** Inputs for deciding the out-of-integration "X" marker. */
@@ -522,13 +351,18 @@ function mapCommitsToViewModel(commits: GitSpiceBranch['commits']): BranchViewMo
 	return commits.map((c) => ({ sha: c.sha, shortSha: c.sha.slice(0, 8), subject: c.subject }));
 }
 
+/** Inputs to {@link createBranchViewModel}, bundled to stay under the param limit. */
+type BranchViewModelInput = {
+	branch: GitSpiceBranch;
+	tree: TreePosition;
+	treeFragment: TreeFragmentData;
+	mark: IntegrationMarkContext;
+	collapsible: boolean;
+};
+
 /** Creates a branch view model from branch data and tree information. */
-function createBranchViewModel(
-	branch: GitSpiceBranch,
-	tree: TreePosition,
-	treeFragment: TreeFragmentData,
-	mark: IntegrationMarkContext,
-): BranchViewModel {
+function createBranchViewModel(input: BranchViewModelInput): BranchViewModel {
+	const { branch, tree, treeFragment, mark, collapsible } = input;
 	return {
 		name: branch.name,
 		current: branch.current === true,
@@ -538,6 +372,7 @@ function createBranchViewModel(
 		change: branch.change ? toChangeViewModel(branch.change) : undefined,
 		commits: mapCommitsToViewModel(branch.commits),
 		outOfIntegration: computeOutOfIntegration(branch, mark),
+		collapsible: collapsible || undefined,
 	};
 }
 
