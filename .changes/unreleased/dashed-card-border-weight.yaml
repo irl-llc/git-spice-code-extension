@@ -1,0 +1,2 @@
+kind: Fixed
+body: 'The dashed borders on the uncommitted and untracked branch cards rendered much heavier than the swimlane gutter lines; their line weight now matches.'
