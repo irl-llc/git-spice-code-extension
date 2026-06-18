@@ -546,5 +546,6 @@ function toChangeViewModel(change: NonNullable<GitSpiceBranch['change']>): Branc
 		url: change.url,
 		status: change.status,
 		comments: change.comments,
+		inlineComments: change.inlineComments,
 	};
 }

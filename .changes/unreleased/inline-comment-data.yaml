@@ -1,0 +1,2 @@
+kind: Added
+body: 'Internal: parse inline forge comment data from git-spice (per-comment scope, path, line, range, side, author, resolved/stale state) and thread it through to the view model. Inline display in diff interfaces follows in a later release.'

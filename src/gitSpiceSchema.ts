@@ -1,3 +1,8 @@
+import type { InlineComment } from './commentSchema';
+
+export type { InlineComment, InlineCommentRange } from './commentSchema';
+export { parseInlineComments } from './commentSchema';
+
 export type GitSpiceChangeStatus = 'open' | 'closed' | 'merged';
 
 export type GitSpiceBranchLink = Readonly<{
@@ -21,6 +26,13 @@ export type GitSpiceChange = Readonly<{
 	url: string;
 	status?: GitSpiceChangeStatus;
 	comments?: GitSpiceComments;
+	/**
+	 * Per-comment inline comment list, fetched separately via
+	 * `gs branch comment list --json` and attached by Change Request id. The
+	 * count-only {@link GitSpiceComments} above (which drives the badge) is
+	 * independent of this list. Undefined until inline comments are loaded.
+	 */
+	inlineComments?: ReadonlyArray<InlineComment>;
 }>;
 
 export type GitSpicePush = Readonly<{

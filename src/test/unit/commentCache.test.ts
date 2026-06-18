@@ -4,8 +4,14 @@
 
 import * as assert from 'assert';
 
-import { collectComments, mergeCachedComments, type CommentCache } from '../../stackView/commentCache';
-import type { GitSpiceBranch, GitSpiceComments } from '../../gitSpiceSchema';
+import {
+	collectComments,
+	mergeCachedComments,
+	mergeInlineComments,
+	type CommentCache,
+	type InlineCommentCache,
+} from '../../stackView/commentCache';
+import type { GitSpiceBranch, GitSpiceComments, InlineComment } from '../../gitSpiceSchema';
 
 const COMMENTS: GitSpiceComments = { total: 3, resolved: 1, unresolved: 2 };
 
@@ -63,6 +69,30 @@ describe('commentCache', () => {
 			const input = [branch('a', { id: '1' })];
 			mergeCachedComments(input, cache);
 			assert.strictEqual(input[0].change?.comments, undefined);
+		});
+	});
+
+	describe('mergeInlineComments', () => {
+		const INLINE: ReadonlyArray<InlineComment> = [{ kind: 'forge', id: 'c1', scope: 'pr', body: 'hi' }];
+
+		it('attaches inline comments from the cache by change id', () => {
+			const cache: InlineCommentCache = new Map([['1', INLINE]]);
+			const merged = mergeInlineComments([branch('a', { id: '1' })], cache);
+			assert.deepStrictEqual(merged[0].change?.inlineComments, INLINE);
+		});
+
+		it('leaves branches unchanged when the change id is not cached', () => {
+			const cache: InlineCommentCache = new Map([['other', INLINE]]);
+			const merged = mergeInlineComments([branch('a', { id: '1' }), branch('b')], cache);
+			assert.strictEqual(merged[0].change?.inlineComments, undefined);
+			assert.strictEqual(merged[1].change, undefined);
+		});
+
+		it('does not mutate the input branches', () => {
+			const cache: InlineCommentCache = new Map([['1', INLINE]]);
+			const input = [branch('a', { id: '1' })];
+			mergeInlineComments(input, cache);
+			assert.strictEqual(input[0].change?.inlineComments, undefined);
 		});
 	});
 });
