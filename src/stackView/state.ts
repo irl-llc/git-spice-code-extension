@@ -12,28 +12,12 @@ import type {
 	UncommittedState,
 } from './types';
 import { buildTreeFragments as buildTreeFragmentsFromModel, type BranchTreeInput } from './tree/treeModel';
+import type { BranchWithTree, RepoDisplayInput } from './stateTypes';
 
-/** Branch with computed tree position */
-type BranchWithTree = {
-	branch: GitSpiceBranch;
-	tree: TreePosition;
-};
+export type { BranchWithTree, RepoDisplayInput } from './stateTypes';
 
 /** Special name for the uncommitted pseudo-branch. */
 export const UNCOMMITTED_BRANCH_NAME = '__uncommitted__';
-
-/** Input parameters for building a repository display state. */
-export type RepoDisplayInput = {
-	repoId: string;
-	repoName: string;
-	branches: GitSpiceBranch[];
-	error?: string;
-	uncommitted?: UncommittedState;
-	/** Name of the current branch when not tracked by git-spice. */
-	untrackedBranch?: string;
-	/** Parsed integration-branch state, when configured and the binary supports it. */
-	integration?: IntegrationState | null;
-};
 
 /**
  * Builds a single repository's display state from its branch data.
@@ -54,7 +38,7 @@ export function buildRepoDisplayState(input: RepoDisplayInput): RepositoryViewMo
 	return {
 		id: input.repoId,
 		name: input.repoName,
-		branches: mapToBranchViewModels(ordered, treeFragments, integration),
+		branches: mapToBranchViewModels(ordered, treeFragments, integration, input.conflictBranch),
 		uncommitted,
 		uncommittedTreeFragment: uncommitted ? treeFragments.get(UNCOMMITTED_BRANCH_NAME) : undefined,
 		error: input.error,
@@ -255,12 +239,21 @@ function mapToBranchViewModels(
 	ordered: BranchWithTree[],
 	fragments: Map<string, TreeFragmentData>,
 	integration?: IntegrationViewModel,
+	conflictBranch?: string,
 ): BranchViewModel[] {
 	const mark: IntegrationMarkContext = {
 		tipSet: integration ? new Set(integration.tipNames) : undefined,
 		leafNames: computeLeafNames(ordered),
 	};
-	return ordered.map((item) => createBranchViewModel(item.branch, item.tree, fragments.get(item.branch.name)!, mark));
+	return ordered.map((item) =>
+		createBranchViewModel({
+			branch: item.branch,
+			tree: item.tree,
+			treeFragment: fragments.get(item.branch.name)!,
+			mark,
+			conflictInProgress: item.branch.name === conflictBranch,
+		}),
+	);
 }
 
 /** Inputs for deciding the out-of-integration "X" marker. */
@@ -522,13 +515,18 @@ function mapCommitsToViewModel(commits: GitSpiceBranch['commits']): BranchViewMo
 	return commits.map((c) => ({ sha: c.sha, shortSha: c.sha.slice(0, 8), subject: c.subject }));
 }
 
+/** Inputs to {@link createBranchViewModel}, bundled to stay under the param limit. */
+type BranchViewModelInput = {
+	branch: GitSpiceBranch;
+	tree: TreePosition;
+	treeFragment: TreeFragmentData;
+	mark: IntegrationMarkContext;
+	conflictInProgress: boolean;
+};
+
 /** Creates a branch view model from branch data and tree information. */
-function createBranchViewModel(
-	branch: GitSpiceBranch,
-	tree: TreePosition,
-	treeFragment: TreeFragmentData,
-	mark: IntegrationMarkContext,
-): BranchViewModel {
+function createBranchViewModel(input: BranchViewModelInput): BranchViewModel {
+	const { branch, tree, treeFragment, mark, conflictInProgress } = input;
 	return {
 		name: branch.name,
 		current: branch.current === true,
@@ -538,6 +536,7 @@ function createBranchViewModel(
 		change: branch.change ? toChangeViewModel(branch.change) : undefined,
 		commits: mapCommitsToViewModel(branch.commits),
 		outOfIntegration: computeOutOfIntegration(branch, mark),
+		conflictInProgress: conflictInProgress || undefined,
 	};
 }
 

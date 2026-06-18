@@ -152,6 +152,13 @@ export type BranchViewModel = {
 	 * branch is configured (the indicator is suppressed entirely).
 	 */
 	outOfIntegration?: boolean;
+	/**
+	 * True when a rebase/merge is parked mid-operation on this branch and the user
+	 * is resolving conflicts. Drives the red card border (the dominant at-a-glance
+	 * signal). Undefined/false in the normal case. Only the current branch can be
+	 * in this state, since git parks the operation on the working tree.
+	 */
+	conflictInProgress?: boolean;
 };
 
 /**

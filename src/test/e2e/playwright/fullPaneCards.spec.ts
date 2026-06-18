@@ -152,7 +152,37 @@ const SCENARIOS: Scenario[] = [
 			repo.gs('branch', 'checkout', 'feat-b');
 		},
 	},
+	{
+		name: 'conflict-resolution-in-progress card (red border, issue #81)',
+		snapshot: 'conflict-in-progress.png',
+		seed: seedConflictInProgress,
+	},
 ];
+
+/**
+ * Parks a real rebase on a conflict so the current branch's card shows the
+ * red conflict border. feat-a edits `shared.txt`; trunk then edits the same
+ * line, so restacking feat-a onto trunk stops mid-rebase (REBASE_HEAD lives in
+ * the git-dir) — exactly the state {@link detectConflictBranch} flags.
+ */
+function seedConflictInProgress(repo: WorkspaceRepo): void {
+	repo.createBranch({
+		name: 'feat-a',
+		base: TRUNK,
+		commits: [{ message: 'edit shared', files: { 'shared.txt': 'from feature\n' } }],
+	});
+	repo.git('checkout', TRUNK);
+	repo.writeFile('shared.txt', 'from trunk\n');
+	repo.git('add', '.');
+	repo.git('commit', '-q', '-m', 'conflicting trunk edit');
+	repo.git('checkout', 'feat-a');
+	// The rebase conflicts and parks mid-operation; the non-zero exit is expected.
+	try {
+		repo.git('rebase', TRUNK);
+	} catch {
+		// Intended: git stops on the conflict, leaving the rebase in progress.
+	}
+}
 
 for (const scenario of SCENARIOS) {
 	test.describe(`full-pane: ${scenario.name}`, () => {

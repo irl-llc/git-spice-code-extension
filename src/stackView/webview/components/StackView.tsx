@@ -407,7 +407,7 @@ function BranchStackItem({
 				/>
 				<article
 					ref={articleRef}
-					className={`branch-card${branch.current ? ' is-current' : ''}${branch.restack ? ' needs-restack' : ''}`}
+					className={`branch-card${branch.current ? ' is-current' : ''}${branch.restack ? ' needs-restack' : ''}${branch.conflictInProgress ? ' conflict' : ''}`}
 					data-content="true"
 					data-branch={branch.name}
 					data-depth={String(branch.tree.depth)}

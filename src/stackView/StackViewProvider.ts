@@ -258,6 +258,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 				uncommitted: state.uncommitted,
 				untrackedBranch: state.untrackedBranch,
 				integration: state.integration,
+				conflictBranch: state.conflictBranch,
 			};
 			repositories.push(buildRepoDisplayState(input));
 		}

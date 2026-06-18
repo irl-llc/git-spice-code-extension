@@ -257,4 +257,29 @@ describe('state', () => {
 			assert.ok(a1?.tree.ancestorIsLast.includes(false));
 		});
 	});
+
+	describe('conflictInProgress (issue #81)', () => {
+		const branches: GitSpiceBranch[] = [
+			createBranch('main', { ups: [{ name: 'feature' }] }),
+			createBranch('feature', { down: { name: 'main' } }),
+		];
+
+		it('flags only the branch named by conflictBranch', () => {
+			const result = buildRepoDisplayState({
+				repoId: 'r',
+				repoName: 't',
+				branches,
+				conflictBranch: 'feature',
+			});
+
+			assert.strictEqual(result.branches.find((b) => b.name === 'feature')?.conflictInProgress, true);
+			assert.strictEqual(result.branches.find((b) => b.name === 'main')?.conflictInProgress, undefined);
+		});
+
+		it('leaves every branch unflagged when conflictBranch is undefined', () => {
+			const result = buildRepoDisplayState({ repoId: 'r', repoName: 't', branches });
+
+			assert.ok(result.branches.every((b) => b.conflictInProgress === undefined));
+		});
+	});
 });
