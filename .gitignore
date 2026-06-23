@@ -6,6 +6,9 @@ node_modules
 .env
 NOTES.md
 /.claude/settings.local.json
+# Agent worktrees (Claude Code's documented `.claude/worktrees/` convention) are
+# linked checkouts, not tracked content — keep them out of the primary status.
+/.claude/worktrees/
 .gs/
 test-results/
 playwright-report/

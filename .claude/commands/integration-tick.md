@@ -37,22 +37,22 @@ from the repo root:
 # Bootstrap once: configure the singleton integration branch if absent.
 # 'integration show' exits 0 even when unconfigured (the notice is a stderr
 # log, stdout is empty), so test for the configured header on stdout, not $?.
-gs integration show 2>/dev/null | grep -q "^Integration branch:" \
-  || gs integration create integration
+git-spice integration show 2>/dev/null | grep -q "^Integration branch:" \
+  || git-spice integration create integration
 
 # Catch up to trunk and prune tips of merged branches — repo sync's
 # OnBranchRemoved hook removes a merged branch from the tip list automatically.
 # --no-prompt: cleanly-merged branches are deleted without prompting (so their
 # tips get pruned); ambiguous ones are skipped rather than hanging the loop.
-gs repo sync --no-prompt
+git-spice repo sync --no-prompt
 
 # Reset to trunk, merge every configured tip (rerere replays recorded
 # resolutions; accept-incoming — on by default — settles any remainder so the
 # rebuild never blocks), then force-with-lease push.
-gs integration rebuild --push
+git-spice integration rebuild --push
 ```
 
-`gs integration rebuild` never opens a PR for the integration branch; it is a
+`git-spice integration rebuild` never opens a PR for the integration branch; it is a
 throwaway artifact. The downstack of each tip IS submitted, so constituent
 branches stay pushed/up to date.
 
@@ -63,7 +63,7 @@ approve, or delete anything.
 
 (Once a conflict resolver script is configured via
 `spice.integration.autoResolve`, switch the rebuild line to
-`gs integration rebuild --auto-resolve --push`.)
+`git-spice integration rebuild --auto-resolve --push`.)
 
 Report: the integration branch name, the tips it included, and whether the push
 updated the remote or was a no-op.

@@ -66,6 +66,19 @@ git-spice introduces several concepts on top of Git to enable efficient branch s
 
 #### Key Operations
 
+> **Invoke git-spice as `git-spice`, not `gs`.** On dev machines `gs` is
+> Ghostscript (`/opt/homebrew/bin/gs`); git-spice is installed as `git-spice`.
+> The examples below use `gs` as upstream's documented shorthand for
+> readability — when you actually run a command, substitute `git-spice`
+> (e.g. `git-spice up`, `git-spice ll -a --json`). Allowlisted as
+> `Bash(git-spice:*)` in `.claude/settings.local.json`.
+>
+> Tests are the exception: they invoke a **pinned git-spice build at the
+> absolute path `.gs/bin/gs`** (built by `npm run gs:fetch` from
+> `abhinav/git-spice`; see "Pinned `gs` binary for tests" below), reached only
+> via `GIT_SPICE_BIN` — never PATH — so it never resolves to Ghostscript. The
+> `gs` filename there is deliberate; don't "fix" it.
+
 1. **Navigation Commands**:
    - `gs up [n]` - Move up n branches in the stack (default: 1)
    - `gs down [n]` - Move down n branches in the stack (default: 1)
@@ -145,15 +158,15 @@ or cross-clone sync is involved.
 must keep that stack's tip registered so the integration branch includes it:
 
 - After **submitting** a stack for the first time:
-  `gs integration tip add <top-branch>`.
+  `git-spice integration tip add <top-branch>`.
 - After **growing** an existing stack (a new branch on top):
-  `gs integration tip advance` — moves the tip to the new top of the upstack so
+  `git-spice integration tip advance` — moves the tip to the new top of the upstack so
   the integration branch includes the whole stack, not a stale mid-point.
-- Do **not** remove tips on merge. `gs repo sync` (run by the orchestrator each
+- Do **not** remove tips on merge. `git-spice repo sync` (run by the orchestrator each
   tick) prunes a merged branch from the tip list automatically via git-spice's
   `OnBranchRemoved` hook.
 
-`gs integration tip add` requires the branch to be tracked locally — workers
+`git-spice integration tip add` requires the branch to be tracked locally — workers
 already track the branches they create, so no extra step is needed. Tips added
 during a wave are picked up by that same wave's rebuild. Fork PRs are out of
 scope for now.
@@ -313,14 +326,14 @@ scope for now.
 4. **Pinned `gs` binary for tests** (`npm run gs:fetch`):
    - The extension shells out to git-spice via `src/utils/gitSpice.ts`. The executable is resolved by `resolveGitSpiceBinary` (in `src/utils/gitSpiceBinary.ts`) with precedence: the `git-spice.path` setting, then the `GIT_SPICE_BIN` env var, then `git-spice` on PATH. Tests rely on the `GIT_SPICE_BIN` env var (they don't set the setting), so that path keeps working.
    - For deterministic tests against beta features not yet in a stock git-spice release (Ed's integration work), we build a pinned binary from the `ed-irl/integration` branch of `abhinav/git-spice` at the SHA in [.gs-version](.gs-version).
-   - `npm run gs:fetch` clones at that SHA into `.gs/src/` and builds to `.gs/bin/gs`. The script is idempotent — it skips rebuilds when `.gs/.built-sha` already matches `.gs-version`.
+   - `npm run gs:fetch` clones at that SHA into `.gs/src/` and builds to `.gs/bin/gs`. The script is idempotent — it skips rebuilds when `.gs/.built-sha` already matches `.gs-version`. Note: the binary is named `gs` but is always referenced by **absolute path** via `GIT_SPICE_BIN`, never through PATH — so it never collides with a PATH `gs` such as Ghostscript on dev machines.
    - CI sets `GIT_SPICE_BIN=${{ github.workspace }}/.gs/bin/gs` for the E2E job. Local dev: either install the same version on PATH, or `export GIT_SPICE_BIN=$(pwd)/.gs/bin/gs` after running `npm run gs:fetch`.
    - To bump the pin: edit the SHA in `.gs-version` and re-run `npm run gs:fetch`. Renovate ([.github/renovate.json](.github/renovate.json)) opens weekly PRs proposing new SHAs from the `ed-irl/integration` branch of `abhinav/git-spice`.
 
 5. **Visual snapshot tests** (`npm run test:e2e:playwright:docker`):
    - Playwright tests in [src/test/e2e/playwright/](src/test/e2e/playwright/) ending in `.spec.ts` that call `toHaveScreenshot` produce PNG baselines stored next to the spec at `<spec>.snapshots/`. PNGs are git-lfs-tracked via the existing `*.png filter=lfs` rule in `.gitattributes`.
    - **All snapshots are Linux-rendered** so dev (macOS) and CI (ubuntu-latest) compare against the same byte-for-byte baseline. Achieved by running Playwright inside the [Dockerfile](Dockerfile) image (`mcr.microsoft.com/playwright:v1.60.0-jammy` + Go + git-lfs) via [docker-compose.test.yml](docker-compose.test.yml). The native `npm run test:e2e:playwright` script remains for fast iteration on non-snapshot tests; expect it to fail with diff against snapshot baselines on macOS.
-   - **Regenerating snapshots**: `npm run test:e2e:playwright:docker:update`. Inspect every generated PNG (`open src/test/e2e/playwright/*.spec.ts-snapshots/*.png`) before committing — Playwright proves the snapshot is reproducible, NOT that it depicts the correct UI. Diffs from a failing snapshot run land in `test-results/` for review.
+   - **Regenerating snapshots**: `npm run test:e2e:playwright:docker:update`. Commit and submit the regenerated PNGs — do **not** block the PR on a local visual check. The human visual verification happens at **PR review (merge-time)**: the committed PNGs are in the PR diff, and the sole merger inspects them there before merging. Playwright proves a snapshot is reproducible, NOT that it depicts the correct UI — so the merge gate, not the commit, is where "is this the right picture?" gets answered. Diffs from a failing snapshot run land in `test-results/` for review.
    - **VS Code is pinned** in [.vscode-version](.vscode-version) so workbench chrome changes don't appear as snapshot regressions on every VS Code release. Renovate proposes bumps weekly; the bump PR also flags that snapshots need regenerating.
    - **Two viewing modes for snapshots:**
      - **Full editor pane** ([fullPaneCards.spec.ts](src/test/e2e/playwright/fullPaneCards.spec.ts)) — opens the view via `git-spice.openInEditor` command for wide-canvas captures of full branch cards, expanded summaries, uncommitted-card, untracked card, restack-needed state.
@@ -332,7 +345,7 @@ scope for now.
    - **Every user-facing feature MUST have a Playwright test that produces and verifies a screenshot** (`toHaveScreenshot`) of the feature's rendered state. This is non-negotiable for two reasons: reviewers can *see* the change in the PR diff (the PNG is committed), and the baseline catches visual regressions. A change that alters the UI without a committed screenshot baseline is incomplete. (Example: [commentProgressToggle.spec.ts](src/test/e2e/playwright/commentProgressToggle.spec.ts) screenshots the `...`-menu toggle in both states.)
    - **Cover both the happy path AND exception/edge states.** Capture a separate, descriptively-named screenshot per meaningful state — e.g. populated vs. empty, success vs. error/failure, loading, and any distinct on/off or permission states. Do not stop at the happy path; the failure rendering is exactly what regresses unnoticed.
    - **Remote/forge-dependent features MUST be driven by the `shamhub` fake forge** (`.gs/src/internal/forge/shamhub/`), not by mocking. Anything that reads or writes a remote — Change Request status, PR **comment counts**, `stack submit`, `repo sync` — must seed shamhub with the relevant PRs/comments/state and assert the rendered result, including the failure path (e.g. fetch error, unauthenticated). Mocking is not acceptable here; simulate the real forge end-to-end. The shamhub harness is wired in via `startShamhub()` in [fixtures/shamhub.ts](src/test/e2e/playwright/fixtures/shamhub.ts) — see [commentCounts.spec.ts](src/test/e2e/playwright/commentCounts.spec.ts) for the canonical pattern (start shamhub, pass its `env` to `gs`/git and `launchVSCode`, drive init/submit, then `seedComment`).
-   - Regenerate Linux baselines with `npm run test:e2e:playwright:docker:update` and **visually inspect every generated PNG before committing** — Playwright proves a snapshot is *reproducible*, not that it depicts the *correct* UI.
+   - Regenerate Linux baselines with `npm run test:e2e:playwright:docker:update`, then **commit and submit them** — the visual verification is a **PR-review gate, not a commit gate**. The committed PNGs ride in the PR diff for the merger to inspect before merge; Playwright proves a snapshot is *reproducible*, not that it depicts the *correct* UI. A worker must not hold a submission waiting on a local human eyeball.
 
 ### File Organization
 
