@@ -49,7 +49,6 @@ export type WebviewMessage = GlobalWebviewMessage | RepoWebviewMessage;
 
 /** Messages from extension to webview. */
 export type ExtensionMessage =
-	| { type: 'refreshing' }
 	| { type: 'state'; payload: DisplayState; force?: boolean }
 	| { type: 'commitFiles'; repoId?: string; sha: string; files: CommitFileChange[] }
 	| { type: 'branchFiles'; repoId?: string; branchName: string; files: CommitFileChange[] };

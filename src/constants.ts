@@ -23,6 +23,16 @@ export const FILE_WATCHER_DEBOUNCE_MS = 300;
  */
 export const GIT_OP_BACKSTOP_MS = 5000;
 
+/**
+ * Minimum interval (ms) between watcher-driven refreshes (issue #71). Bounds
+ * the refresh rate during git activity the extension cannot gate — terminal
+ * `gs repo sync`/`submit` interleave network transfers with ref writes, and
+ * each inter-write gap longer than the debounce would otherwise refresh.
+ * Leading-edge: a lone change still refreshes immediately; only sustained
+ * storms coalesce to one trailing refresh per interval.
+ */
+export const WATCHER_REFRESH_MIN_INTERVAL_MS = 2000;
+
 /** Delay in ms after branch creation to allow SCM view to update. */
 export const POST_COMMIT_REFRESH_DELAY_MS = 100;
 

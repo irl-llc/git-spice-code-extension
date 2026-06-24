@@ -453,30 +453,6 @@ button {
 	font-size: 0.85rem;
 }
 
-/* Refresh-in-flight indicator: thin top banner with a spinning icon. */
-.refresh-indicator {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	padding: 0.35rem 0.6rem;
-	color: var(--vscode-descriptionForeground);
-	font-size: 0.8rem;
-	border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-treeIndentGuidesStroke));
-}
-
-.refresh-indicator .codicon-loading {
-	animation: refresh-spin 1s linear infinite;
-}
-
-@keyframes refresh-spin {
-	from {
-		transform: rotate(0deg);
-	}
-	to {
-		transform: rotate(360deg);
-	}
-}
-
 /* Context Menu Styles */
 .context-menu {
 	position: fixed;

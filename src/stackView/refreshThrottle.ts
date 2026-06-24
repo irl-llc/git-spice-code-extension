@@ -48,3 +48,67 @@ export function isGitOpMarkerPath(fsPath: string): boolean {
 export function shouldRefreshNow(refreshRequested: boolean, gitOpInProgress: boolean): boolean {
 	return refreshRequested && !gitOpInProgress;
 }
+
+/**
+ * Counts in-flight extension-initiated operations (submit/restack/sync/branch
+ * commands) so the watcher can hold its refreshes for their whole duration
+ * (issue #71). A `gs stack submit` rewrites refs between network pushes that
+ * leave no marker file, so the marker-based hold alone releases in those gaps;
+ * because the extension knows exactly when its own operation runs, it gates
+ * deterministically and refreshes once at the end. Nesting-safe and pure.
+ */
+export class OperationCounter {
+	private depth = 0;
+
+	/** Raises the gate (a new operation started). */
+	begin(): void {
+		this.depth++;
+	}
+
+	/**
+	 * Lowers the gate. Returns true only on the *transition* to idle (the last
+	 * in-flight op ending); returns false when already idle, so a stray end()
+	 * never triggers a spurious refresh/flush.
+	 */
+	end(): boolean {
+		if (this.depth > 0) {
+			this.depth--;
+			return this.depth === 0;
+		}
+		return false;
+	}
+
+	/** True while at least one operation is in flight. */
+	get inProgress(): boolean {
+		return this.depth > 0;
+	}
+}
+
+/**
+ * Leading-edge rate limiter for watcher-driven refreshes (issue #71).
+ *
+ * The marker/gate holds only cover operations we can detect; a git operation
+ * driven from the TERMINAL (e.g. `gs repo sync` between PR merges) interleaves
+ * network transfers with ref writes, and every inter-write gap longer than the
+ * debounce produces another refresh. This limiter bounds that to one refresh
+ * per interval: the FIRST event fires immediately (no added latency for a
+ * lone change), and later events within the interval are deferred to the
+ * interval's end (trailing edge), so a final refresh always lands. Pure —
+ * the caller supplies the clock.
+ */
+export class RefreshRateLimiter {
+	private lastFiredAt = Number.NEGATIVE_INFINITY;
+
+	constructor(private readonly intervalMs: number) {}
+
+	/**
+	 * Attempts to start a refresh at `nowMs`. Returns 0 when allowed (and
+	 * records the firing); otherwise the milliseconds to wait before retrying.
+	 */
+	tryAcquire(nowMs: number): number {
+		const wait = this.lastFiredAt + this.intervalMs - nowMs;
+		if (wait > 0) return wait;
+		this.lastFiredAt = nowMs;
+		return 0;
+	}
+}
