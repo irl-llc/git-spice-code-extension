@@ -49,6 +49,14 @@ export type GitSpiceBranch = Readonly<{
 	commits?: ReadonlyArray<GitSpiceCommit>;
 	change?: GitSpiceChange;
 	push?: GitSpicePush;
+	/**
+	 * Absolute path of the OTHER git worktree this branch is checked out in.
+	 * git-spice emits this only when the branch is "parked" in a different
+	 * worktree than the current one (used to give concurrent agents a level of
+	 * isolation); omitted when the branch is not checked out anywhere else or is
+	 * itself the current branch. The UI surfaces it as a per-worktree badge.
+	 */
+	worktree?: string;
 }>;
 
 export function parseGitSpiceBranches(raw: string): GitSpiceBranch[] {
@@ -100,6 +108,7 @@ function toBranch(input: UnknownRecord): GitSpiceBranch | undefined {
 		commits: readCommits(input.commits),
 		change: readChange(input.change),
 		push: readPush(input.push),
+		worktree: readString(input.worktree),
 	};
 }
 

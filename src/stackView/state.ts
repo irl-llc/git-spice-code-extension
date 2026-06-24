@@ -537,6 +537,7 @@ function createBranchViewModel(input: BranchViewModelInput): BranchViewModel {
 		commits: mapCommitsToViewModel(branch.commits),
 		outOfIntegration: computeOutOfIntegration(branch, mark),
 		conflictInProgress: conflictInProgress || undefined,
+		worktree: branch.worktree,
 	};
 }
 

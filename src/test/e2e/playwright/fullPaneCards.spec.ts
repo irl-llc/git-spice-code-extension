@@ -12,6 +12,10 @@
  * `npm run test:e2e:playwright:docker:update`.
  */
 
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
 import { expect, test, type Frame } from '@playwright/test';
 
 import { createTempRepo, type WorkspaceRepo } from './fixtures/repo';
@@ -19,6 +23,13 @@ import { launchVSCode, type VSCodeInstance } from './fixtures/vscode';
 import { openGitSpiceEditor } from './fixtures/webview';
 
 const TRUNK = 'main';
+
+/**
+ * Fixed absolute path for the parked-worktree scenario. Constant (not the
+ * per-run temp dir) so both the badge basename AND its hash-derived color slot
+ * are byte-stable across snapshot runs. Removed in afterAll.
+ */
+const PARKED_WORKTREE_PATH = join(tmpdir(), 'gs-e2e-worktree-review');
 
 interface Scenario {
 	name: string;
@@ -29,6 +40,8 @@ interface Scenario {
 	 * toggles, expand sections, etc. before the snapshot is captured.
 	 */
 	postOpen?: (frame: Frame) => Promise<void>;
+	/** Extra teardown beyond the temp repo (e.g. an external worktree dir). */
+	cleanupExtra?: () => void;
 }
 
 const SCENARIOS: Scenario[] = [
@@ -157,7 +170,35 @@ const SCENARIOS: Scenario[] = [
 		snapshot: 'conflict-in-progress.png',
 		seed: seedConflictInProgress,
 	},
+	{
+		name: 'branch parked in another worktree shows a worktree badge (issue #111)',
+		snapshot: 'worktree-badge.png',
+		seed: seedParkedWorktree,
+		cleanupExtra: () => rmSync(PARKED_WORKTREE_PATH, { recursive: true, force: true }),
+	},
 ];
+
+/**
+ * Parks feat-a in a separate git worktree so `gs ll -a --json` reports a
+ * `worktree` path on it, driving the worktree badge on feat-a's card. feat-b
+ * (current) stays checked out in the main worktree.
+ */
+function seedParkedWorktree(repo: WorkspaceRepo): void {
+	repo.createBranch({
+		name: 'feat-a',
+		base: TRUNK,
+		commits: [{ message: 'add a', files: { 'a.txt': 'a\n' } }],
+	});
+	repo.createBranch({
+		name: 'feat-b',
+		base: 'feat-a',
+		commits: [{ message: 'add b', files: { 'b.txt': 'b\n' } }],
+	});
+	// Remove any stale dir from a previous run, then park feat-a elsewhere.
+	rmSync(PARKED_WORKTREE_PATH, { recursive: true, force: true });
+	repo.git('worktree', 'add', PARKED_WORKTREE_PATH, 'feat-a');
+	repo.gs('branch', 'checkout', 'feat-b');
+}
 
 /**
  * Parks a real rebase on a conflict so the current branch's card shows the
@@ -199,6 +240,7 @@ for (const scenario of SCENARIOS) {
 		test.afterAll(async () => {
 			await vscode?.close();
 			repo?.cleanup();
+			scenario.cleanupExtra?.();
 		});
 
 		test(`matches snapshot ${scenario.snapshot}`, async () => {

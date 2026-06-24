@@ -129,5 +129,21 @@ describe('gitSpiceSchema', () => {
 			const invalidResult = parseGitSpiceBranches(invalidInput);
 			assert.strictEqual(invalidResult[0].change?.status, undefined);
 		});
+
+		it('should parse the worktree path when a branch is parked elsewhere', () => {
+			const input = '{"name":"feature-a","worktree":"/home/u/repo-wt-a"}';
+			const result = parseGitSpiceBranches(input);
+
+			assert.strictEqual(result.length, 1);
+			assert.strictEqual(result[0].worktree, '/home/u/repo-wt-a');
+		});
+
+		it('should leave worktree undefined when absent or not a string', () => {
+			const absent = parseGitSpiceBranches('{"name":"feature-a"}');
+			assert.strictEqual(absent[0].worktree, undefined);
+
+			const nonString = parseGitSpiceBranches('{"name":"feature-a","worktree":123}');
+			assert.strictEqual(nonString[0].worktree, undefined);
+		});
 	});
 });
