@@ -1,10 +1,5 @@
 import * as assert from 'assert';
-import {
-	WORKTREE_COLOR_COUNT,
-	worktreeColorClass,
-	worktreeColorIndex,
-	worktreeLabel,
-} from '../../utils/worktreeColor';
+import { WORKTREE_COLOR_COUNT, worktreeColorClass, worktreeColorIndex, worktreeLabel } from '../../utils/worktreeColor';
 
 describe('worktreeColor', () => {
 	describe('worktreeColorIndex', () => {
