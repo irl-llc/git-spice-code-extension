@@ -42,6 +42,14 @@ services:
         set -euo pipefail
         npm ci --prefer-offline --no-audit --fund=false
         npm run gs:fetch
+        # Build dist/ in-container from the clean node_modules volume above,
+        # so baselines never depend on a host-built dist/ (empty dist/ = no
+        # activation; a worktree's stale dist/ built against the parent repo's
+        # deps = subtly-wrong renders). The extension's main is ./dist/extension.js
+        # (webpack output); the Playwright .spec.ts files are transpiled on the
+        # fly by Playwright's esbuild, so only `compile` is needed, not
+        # `compile-tests` (out/).
+        npm run compile
         if [ -n "$${PW_FLAGS}" ]; then
           xvfb-run -a npm run test:e2e:playwright -- $${PW_FLAGS}
         else
