@@ -1,0 +1,2 @@
+kind: Added
+body: 'A hover-tooltip legend for the swimlane gutter: pointing at (or focusing) the gutter column reveals a small popover explaining what each lane/node color means — branch lane, current branch, needs-restack/rebuild, and excluded-from-integration. Swatches are derived from the same colors the gutter SVG renders with, so the legend can never drift from what is drawn. Click or Enter/Space pins it open for keyboard and touch users. No omnipresent chrome and no layout shift.'
