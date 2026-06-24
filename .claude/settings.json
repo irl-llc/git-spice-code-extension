@@ -12,6 +12,10 @@
 		"status-pipe@status-pipe": true
 	},
 	"permissions": {
+		"allow": [
+			"Bash(${CLAUDE_PLUGIN_ROOT}/bin/post-comment:*)",
+			"Bash(${CLAUDE_PLUGIN_ROOT}/bin/fetch-comments:*)"
+		],
 		"deny": [
 			"Bash(gh issue comment:*)",
 			"Bash(gh pr comment:*)"
