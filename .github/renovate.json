@@ -18,9 +18,21 @@
     },
     {
       "matchManagers": ["custom.regex"],
-      "matchPackageNames": ["abhinav/git-spice"],
-      "groupName": "gs-version",
-      "commitMessageTopic": "gs pin"
+      "matchDepNames": ["abhinav/git-spice#ed-irl/integration"],
+      "groupName": "gs-integration-version",
+      "commitMessageTopic": "gs integration-branch pin",
+      "prBodyNotes": [
+        ":test_tube: This advances the **beta** `gs` build to the latest commit on `abhinav/git-spice`'s `ed-irl/integration` branch. After merging, run `npm run gs:fetch` locally to rebuild `.gs/bin/gs`."
+      ]
+    },
+    {
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["abhinav/git-spice"],
+      "groupName": "gs-stock-version",
+      "commitMessageTopic": "gs stock release pin",
+      "prBodyNotes": [
+        ":package: This advances the **stock** `gs` build to the latest tagged release of `abhinav/git-spice`. After merging, run `npm run gs:fetch` locally to rebuild the stock binary."
+      ]
     }
   ],
   "customManagers": [
@@ -35,13 +47,22 @@
     },
     {
       "customType": "regex",
-      "description": "Bump pinned gs binary commit",
+      "description": "Bump pinned gs beta binary to abhinav/git-spice's ed-irl/integration branch HEAD",
       "fileMatch": ["^\\.gs-version$"],
       "matchStrings": ["^(?<currentDigest>[0-9a-f]{40})\\s*$"],
-      "depNameTemplate": "abhinav/git-spice",
+      "depNameTemplate": "abhinav/git-spice#ed-irl/integration",
       "packageNameTemplate": "https://github.com/abhinav/git-spice",
       "datasourceTemplate": "git-refs",
-      "currentValueTemplate": "refs/heads/ed-irl/integration"
+      "currentValueTemplate": "ed-irl/integration"
+    },
+    {
+      "customType": "regex",
+      "description": "Bump pinned gs stock binary to abhinav/git-spice's latest release tag",
+      "fileMatch": ["^\\.gs-stock-version$"],
+      "matchStrings": ["^(?<currentValue>v?[0-9][0-9A-Za-z.\\-+]*)\\s*$"],
+      "depNameTemplate": "abhinav/git-spice",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>v\\d+\\.\\d+\\.\\d+)$"
     }
   ]
 }
