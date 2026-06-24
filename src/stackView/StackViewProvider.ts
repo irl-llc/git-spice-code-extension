@@ -6,10 +6,17 @@
 import * as vscode from 'vscode';
 
 import { AsyncCoalescer } from '../utils/asyncCoalescer';
-import { execStackRestack, execStackSubmit } from '../utils/gitSpice';
+import { execBranchCommentList, execStackRestack, execStackSubmit } from '../utils/gitSpice';
 import type { GitSpiceBranch } from '../gitSpiceSchema';
 import type { DiscoveredRepo, RepoDiscovery } from '../repoDiscovery';
-import { collectComments, mergeCachedComments, type CommentCache } from './commentCache';
+import {
+	collectComments,
+	mergeCachedComments,
+	mergeInlineComments,
+	type CommentCache,
+	type InlineCommentCache,
+} from './commentCache';
+import { refreshInlineCommentCache } from './inlineCommentFetch';
 import { buildRepoDisplayState, type RepoDisplayInput } from './state';
 import { fetchRepoState, fetchFolderState, type RepoState } from './repoStateBuilder';
 import type { DisplayState, RepositoryViewModel, UncommittedState } from './types';
@@ -75,6 +82,8 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 	private readonly disposables: vscode.Disposable[] = [];
 	/** PR comment counts cached by Change Request id (see commentCache.ts). */
 	private readonly commentCache: CommentCache = new Map();
+	/** Per-comment inline lists cached by Change Request id (see commentCache.ts). */
+	private readonly inlineCommentCache: InlineCommentCache = new Map();
 	/** When true, the next refresh re-fetches comment counts from the forge. */
 	private commentsDirty = true;
 
@@ -202,6 +211,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		}
 		if (withForgeStatus) {
 			this.updateCommentCache();
+			await this.updateInlineCommentCache();
 			this.commentsDirty = false;
 		}
 		this.pushState(force);
@@ -240,6 +250,25 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 		}
 	}
 
+	/**
+	 * Fetches per-comment inline lists for every branch with a Change Request and
+	 * refreshes the inline-comment cache, then notifies the registered listener
+	 * (the CommentController) so it can re-render diff threads. Runs only on
+	 * forge-enabled refreshes; errors for individual branches are swallowed by
+	 * the fetcher so a single failure never breaks the refresh.
+	 */
+	private async updateInlineCommentCache(): Promise<void> {
+		await refreshInlineCommentCache(execBranchCommentList, this.repoStates.values(), this.inlineCommentCache);
+		this.onInlineCommentsUpdated?.(this.buildDisplayState());
+	}
+
+	/**
+	 * Listener notified after the inline-comment cache is refreshed, with the
+	 * display state that now carries inline comments. The extension host wires
+	 * this to the CommentController so native diff threads stay in sync.
+	 */
+	onInlineCommentsUpdated?: (state: DisplayState) => void;
+
 	pushState(force = false): void {
 		if (this.hosts.size === 0) return;
 		const state = this.buildDisplayState();
@@ -253,7 +282,7 @@ export class StackViewProvider implements vscode.WebviewViewProvider, MessageHan
 			const input: RepoDisplayInput = {
 				repoId: state.rootPath,
 				repoName: state.name,
-				branches: mergeCachedComments(state.branches, this.commentCache),
+				branches: mergeInlineComments(mergeCachedComments(state.branches, this.commentCache), this.inlineCommentCache),
 				error: state.error,
 				uncommitted: state.uncommitted,
 				untrackedBranch: state.untrackedBranch,
