@@ -65,10 +65,17 @@ export class OperationCounter {
 		this.depth++;
 	}
 
-	/** Lowers the gate; returns true when it reaches idle (no ops in flight). */
+	/**
+	 * Lowers the gate. Returns true only on the *transition* to idle (the last
+	 * in-flight op ending); returns false when already idle, so a stray end()
+	 * never triggers a spurious refresh/flush.
+	 */
 	end(): boolean {
-		if (this.depth > 0) this.depth--;
-		return this.depth === 0;
+		if (this.depth > 0) {
+			this.depth--;
+			return this.depth === 0;
+		}
+		return false;
 	}
 
 	/** True while at least one operation is in flight. */

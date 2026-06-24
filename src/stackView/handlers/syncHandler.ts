@@ -27,15 +27,19 @@ export async function handleSync(deps: SyncHandlerDeps): Promise<void> {
 /** Core sync logic: run command, show result, refresh. Gated for issue #71. */
 async function executeSyncCore(deps: SyncHandlerDeps): Promise<void> {
 	deps.gate?.begin();
+	let shouldRefresh = false;
 	try {
 		const result = await execRepoSync(deps.folder, promptBranchDeletion);
 		showSyncResult(result);
-		await deps.refresh();
+		shouldRefresh = true;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		void vscode.window.showErrorMessage(`Unexpected error during repository sync: ${message}`);
 	} finally {
+		// Lower the gate BEFORE the explicit refresh so it coalesces with any
+		// watcher events held during the sync, avoiding a double refresh.
 		deps.gate?.end();
+		if (shouldRefresh) await deps.refresh();
 	}
 }
 

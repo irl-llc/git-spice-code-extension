@@ -116,14 +116,18 @@ async function runProgressBody(
 	setSuccess: (value: boolean) => void,
 ): Promise<void> {
 	deps.gate?.begin();
+	let shouldRefresh = false;
 	try {
 		setSuccess(showResult(await operation(), successMessage));
-		await deps.refresh();
+		shouldRefresh = true;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		void vscode.window.showErrorMessage(`Unexpected error: ${message}`);
 	} finally {
+		// Lower the gate BEFORE the explicit refresh so it coalesces with any
+		// watcher events held during the operation, avoiding a double refresh.
 		deps.gate?.end();
+		if (shouldRefresh) await deps.refresh();
 	}
 }
 

@@ -81,9 +81,9 @@ describe('OperationCounter', () => {
 		assert.strictEqual(ops.inProgress, false);
 	});
 
-	it('never goes negative when end is called while already idle', () => {
+	it('returns false (no idle transition) and never goes negative when end is called while already idle', () => {
 		const ops = new OperationCounter();
-		assert.strictEqual(ops.end(), true);
+		assert.strictEqual(ops.end(), false); // already idle: not a transition, no flush
 		assert.strictEqual(ops.inProgress, false);
 		ops.begin();
 		assert.strictEqual(ops.inProgress, true);
