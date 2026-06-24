@@ -1275,3 +1275,66 @@ button {
 .repo-section.single-repo {
 	border-bottom: none;
 }
+
+/* ==========================================================================
+   Swimlane gutter legend (issue #79)
+   Invisible full-height hover strip over the gutter column; reveals a small
+   legend popover on hover/focus. No omnipresent chrome, no layout shift.
+   ========================================================================== */
+.gutter-legend {
+	position: absolute;
+	left: 0.6rem; /* matches .stack-list padding-left */
+	top: 0.6rem;
+	bottom: 0.6rem;
+	z-index: 3; /* above the pointer-events:none gutter SVGs */
+	cursor: help;
+}
+
+.gutter-legend:focus {
+	outline: none;
+}
+
+.gutter-legend-popover {
+	position: absolute;
+	left: 100%;
+	top: 0;
+	margin-left: 0.25rem;
+	display: none;
+	flex-direction: column;
+	gap: 0.3rem;
+	padding: 0.5rem 0.6rem;
+	min-width: 170px;
+	background: var(--vscode-editorHoverWidget-background, var(--vscode-menu-background));
+	color: var(--vscode-editorHoverWidget-foreground, var(--vscode-menu-foreground));
+	border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-menu-border));
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+	font-size: 0.8rem;
+}
+
+.gutter-legend:hover .gutter-legend-popover,
+.gutter-legend:focus .gutter-legend-popover,
+.gutter-legend:focus-within .gutter-legend-popover,
+.gutter-legend.is-open .gutter-legend-popover {
+	display: flex;
+}
+
+.gutter-legend-title {
+	font-weight: 600;
+	margin-bottom: 0.1rem;
+}
+
+.gutter-legend-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.gutter-legend-swatch {
+	flex: 0 0 auto;
+	overflow: visible;
+}
+
+.gutter-legend-label {
+	white-space: nowrap;
+}

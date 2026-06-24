@@ -33,6 +33,7 @@ import type {
 import type { ExtensionMessage, WebviewMessage } from '../../webviewTypes';
 import { buildBranchContext } from '../../contextBuilder';
 import { BranchCard } from './BranchCard';
+import { GutterLegend } from './GutterLegend';
 import { BranchSummary } from './BranchSummary';
 import { CommitList } from './CommitList';
 import { IntegrationCard } from './IntegrationCard';
@@ -307,6 +308,7 @@ function RepoView({ repo, ui, treeColors, isSingleRepo, postMessage, dispatch }:
 				className="repo-branch-list stack-list"
 				style={{ ['--tree-graph-width' as string]: `${graphWidth}px` } as React.CSSProperties}
 			>
+				{repo.branches.length > 0 ? <GutterLegend colors={treeColors} width={graphWidth} /> : null}
 				<RepoStack repo={repo} ui={ui} treeColors={treeColors} postMessage={postMessage} dispatch={dispatch} />
 			</ul>
 			<RepoErrorEmpty repo={repo} />
