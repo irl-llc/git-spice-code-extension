@@ -303,6 +303,52 @@ button {
 	background-color: var(--vscode-charts-red, #f85149);
 }
 
+/*
+ * Worktree ("anchor") badge: names the other git worktree a branch is parked
+ * in. Icon + basename label. The tag-wt-N color class is chosen deterministically
+ * from the worktree path (see src/utils/worktreeColor.ts). The palette below
+ * spreads 8 slots across the hue wheel so adjacent indices stay distinct; white
+ * text keeps contrast readable on every slot in both light and dark themes.
+ */
+.tag-worktree {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.18rem;
+	text-transform: none;
+	letter-spacing: 0;
+	color: #ffffff;
+}
+
+.tag-worktree .codicon {
+	font-size: 0.7rem;
+	line-height: 1;
+}
+
+.tag-wt-0 {
+	background-color: #1f77b4;
+}
+.tag-wt-1 {
+	background-color: #d62728;
+}
+.tag-wt-2 {
+	background-color: #2ca02c;
+}
+.tag-wt-3 {
+	background-color: #9467bd;
+}
+.tag-wt-4 {
+	background-color: #ff7f0e;
+}
+.tag-wt-5 {
+	background-color: #17becf;
+}
+.tag-wt-6 {
+	background-color: #e377c2;
+}
+.tag-wt-7 {
+	background-color: #8c564b;
+}
+
 .branch-meta {
 	display: flex;
 	gap: 0.45rem;

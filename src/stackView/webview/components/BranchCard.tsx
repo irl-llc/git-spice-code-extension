@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState, type JSX, type ReactNode } from 'react';
 
 import type { GitSpiceChangeStatus, GitSpiceComments } from '../../../gitSpiceSchema';
+import { worktreeColorClass, worktreeLabel } from '../../../utils/worktreeColor';
 import type { BranchViewModel } from '../../types';
 import type { WebviewMessage } from '../../webviewTypes';
 
@@ -132,11 +133,26 @@ interface BranchTagsProps {
 	postMessage: PostMessage;
 }
 
+/**
+ * Badge naming the other git worktree this branch is parked in, colored by a
+ * deterministic per-path palette slot so each worktree reads as visually
+ * distinct. Full path is in the tooltip; the pill shows the basename.
+ */
+function WorktreeBadge({ worktree }: { worktree: string }): JSX.Element {
+	return (
+		<span className={`tag tag-worktree ${worktreeColorClass(worktree)}`} title={`Checked out in worktree ${worktree}`}>
+			<i className="codicon codicon-repo-forked" aria-hidden="true" />
+			<span>{worktreeLabel(worktree)}</span>
+		</span>
+	);
+}
+
 /** The read-only status pills shown before the action buttons. */
 function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
 	const comments = branch.change?.comments;
 	return (
 		<>
+			{branch.worktree ? <WorktreeBadge worktree={branch.worktree} /> : null}
 			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
 			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
 			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}

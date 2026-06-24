@@ -282,4 +282,18 @@ describe('state', () => {
 			assert.ok(result.branches.every((b) => b.conflictInProgress === undefined));
 		});
 	});
+
+	describe('worktree (issue #111)', () => {
+		it('carries the worktree path onto the branch view model', () => {
+			const branches: GitSpiceBranch[] = [
+				createBranch('main', { ups: [{ name: 'feature' }] }),
+				createBranch('feature', { down: { name: 'main' }, worktree: '/home/u/repo-wt-a' }),
+			];
+
+			const result = buildRepoDisplayState(repoInput(branches, undefined, undefined));
+
+			assert.strictEqual(result.branches.find((b) => b.name === 'feature')?.worktree, '/home/u/repo-wt-a');
+			assert.strictEqual(result.branches.find((b) => b.name === 'main')?.worktree, undefined);
+		});
+	});
 });

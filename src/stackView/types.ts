@@ -165,6 +165,13 @@ export type BranchViewModel = {
 	 * in this state, since git parks the operation on the working tree.
 	 */
 	conflictInProgress?: boolean;
+	/**
+	 * Absolute path of the other git worktree this branch is checked out
+	 * ("parked") in, when it differs from the current worktree. Drives the
+	 * worktree badge on the card. Undefined when the branch is not parked
+	 * elsewhere.
+	 */
+	worktree?: string;
 };
 
 /**
