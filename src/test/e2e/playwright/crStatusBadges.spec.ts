@@ -17,6 +17,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { launchVSCode, type VSCodeInstance } from './fixtures/vscode';
 import { seedShamhubStack, type ShamhubStack } from './fixtures/shamhub';
 import { openGitSpiceEditor } from './fixtures/webview';
+import { waitForStableWidth } from './fixtures/stability';
 
 /** Enables remote forge status via the command palette (default is off). */
 async function enableRemoteForgeStatus(workbench: Page): Promise<void> {
@@ -82,6 +83,11 @@ test.describe('CR status badges (shamhub)', () => {
 
 		// OFF (default): no CR-status badges rendered.
 		await expect(webview.locator('.tag-cr')).toHaveCount(0);
+		// Settle the card-row width before capturing: an in-flight async forge
+		// fetch can reflow #repoContainer from 632px to the 680px with-badges
+		// layout after first paint, and toHaveCount(0) passes during that
+		// transient window (issue #78).
+		await waitForStableWidth(repoContainer);
 		await expect(repoContainer).toHaveScreenshot('cr-status-hidden.png');
 
 		// ON: enable remote forge status; "Open" badges fetched from shamhub appear
@@ -89,6 +95,7 @@ test.describe('CR status badges (shamhub)', () => {
 		await enableRemoteForgeStatus(workbench);
 		await expect(webview.locator('.tag-cr-open')).toHaveCount(2);
 		await expect(webview.locator('.tag-cr', { hasText: 'Open' }).first()).toBeVisible();
+		await waitForStableWidth(repoContainer);
 		await expect(repoContainer).toHaveScreenshot('cr-status-open.png');
 	});
 });
@@ -119,6 +126,7 @@ test.describe('CR status badges: merged + closed (shamhub)', () => {
 		await expect(webview.locator('.tag-cr-closed')).toHaveCount(1);
 		await expect(webview.locator('.tag-cr', { hasText: 'Merged' })).toBeVisible();
 		await expect(webview.locator('.tag-cr', { hasText: 'Closed' })).toBeVisible();
+		await waitForStableWidth(repoContainer);
 		await expect(repoContainer).toHaveScreenshot('cr-status-merged-closed.png');
 	});
 });
