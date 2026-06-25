@@ -109,24 +109,37 @@ function recordSample(run: { lastWidth: number; stableCount: number }, width: nu
 	return run.stableCount;
 }
 
-/** Rounded rendered width of `locator` in CSS pixels. */
+/**
+ * Rounded rendered width of `locator` in CSS pixels, or `NaN` when the element
+ * currently reports no bounding box (transiently detached or not yet laid out
+ * mid-reflow). Returning `NaN` rather than throwing keeps `waitForStableWidth`
+ * polling — `NaN !== NaN` resets the stability counter — so a momentary
+ * detachment never fails the test prematurely.
+ */
 async function measureWidth(locator: Locator): Promise<number> {
 	const box = await locator.boundingBox();
-	if (!box) throw new Error('waitForStableWidth: locator has no bounding box');
-	return Math.round(box.width);
+	return box ? Math.round(box.width) : Number.NaN;
 }
 
 /**
  * Spaces width samples by `SAMPLE_INTERVAL_MS`, then yields one animation frame
  * so any pending reflow has both wall-clock time to start and a frame to land
- * before the next measurement.
+ * before the next measurement. If the element is transiently detached during a
+ * reflow, `locator.evaluate` rejects; we fall back to a plain wall-clock delay
+ * so the helper keeps polling instead of crashing the test.
  */
 async function nextSample(locator: Locator): Promise<void> {
-	await locator.evaluate(
-		(_el, intervalMs) =>
-			new Promise<void>((resolve) => {
-				setTimeout(() => requestAnimationFrame(() => resolve()), intervalMs);
-			}),
-		SAMPLE_INTERVAL_MS,
-	);
+	try {
+		await locator.evaluate(
+			(_el, intervalMs) =>
+				new Promise<void>((resolve) => {
+					setTimeout(() => requestAnimationFrame(() => resolve()), intervalMs);
+				}),
+			SAMPLE_INTERVAL_MS,
+		);
+	} catch {
+		// Element detached mid-reflow: wait out the interval (plus ~one frame)
+		// in Node so the next measureWidth still gets a fresh sample.
+		await new Promise((resolve) => setTimeout(resolve, SAMPLE_INTERVAL_MS + 16));
+	}
 }
