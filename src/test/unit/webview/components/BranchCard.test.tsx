@@ -336,9 +336,23 @@ describe('BranchCard', () => {
 	});
 
 	describe('meta and slots', () => {
-		it('renders the CR-status badge with status-specific class and label', () => {
+		it('renders the open CR status as a steady pill tag', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#1', status: 'open' } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const badge = container.querySelector('.tag-cr.tag-cr-open');
+			assert.ok(badge, 'open badge present');
+			assert.strictEqual(container.querySelector('.cr-transient'), null, 'open is not a transient note');
+			assert.ok(screen.getByText('Open'), 'label Open visible');
+		});
+
+		it('renders merged/closed as transient inline notes, not steady pills', () => {
 			const cases = [
-				['open', 'Open'],
 				['merged', 'Merged'],
 				['closed', 'Closed'],
 			] as const;
@@ -351,14 +365,43 @@ describe('BranchCard', () => {
 						setArticleClass={h.setArticleClass}
 					/>,
 				);
-				const badge = container.querySelector(`.tag-cr.tag-cr-${status}`);
-				assert.ok(badge, `badge for ${status} present`);
+				const note = container.querySelector(`.cr-transient.cr-transient-${status}`);
+				assert.ok(note, `transient note for ${status} present`);
+				assert.strictEqual(container.querySelector('.tag-cr'), null, `${status} does not render the steady CR pill`);
 				assert.ok(screen.getByText(label), `label ${label} visible`);
 				cleanup();
 			}
 		});
 
-		it('omits the CR-status badge when change has no status', () => {
+		it('marks the closed transient note as an error-styled call-out', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#1', status: 'closed' } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const note = container.querySelector('.cr-transient-closed');
+			assert.ok(note, 'closed note present');
+			assert.match(note?.getAttribute('title') ?? '', /re-created on the next submit/i);
+		});
+
+		it('marks the merged transient note with a removed-on-next-sync hint', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#1', status: 'merged' } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const note = container.querySelector('.cr-transient-merged');
+			assert.ok(note, 'merged note present');
+			assert.match(note?.getAttribute('title') ?? '', /removed on the next repo sync/i);
+		});
+
+		it('omits the CR affordance entirely when change has no status', () => {
 			const h = harness();
 			const { container } = render(
 				<BranchCard
@@ -368,16 +411,17 @@ describe('BranchCard', () => {
 				/>,
 			);
 			assert.strictEqual(container.querySelector('.tag-cr'), null);
+			assert.strictEqual(container.querySelector('.cr-transient'), null);
 		});
 
-		it('renders an unknown CR status defensively (no crash, raw label)', () => {
+		it('renders an unknown CR status defensively as a steady tag (no crash, raw label)', () => {
 			const h = harness();
 			// Simulate a future CLI/forge status outside the typed set.
 			const change = { id: '#1', status: 'draft' as unknown as 'open' };
 			const { container } = render(
 				<BranchCard branch={makeBranch({ change })} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />,
 			);
-			assert.ok(container.querySelector('.tag-cr.tag-cr-draft'), 'badge still renders for unknown status');
+			assert.ok(container.querySelector('.tag-cr.tag-cr-draft'), 'tag still renders for unknown status');
 			assert.ok(screen.getByText('draft'), 'falls back to the raw status text');
 		});
 
