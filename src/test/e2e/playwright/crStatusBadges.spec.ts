@@ -5,9 +5,10 @@
  *
  * After `gs stack submit`, each branch has an OPEN change request. With remote
  * forge status enabled, each branch card shows an "Open" badge fetched via
- * `gs ll -S`. The merged/closed badge variants are covered by the BranchCard
- * unit tests; their shamhub-driven screenshots arrive once the shamhub helper
- * gains merge/close commands (issue #36 slice 3).
+ * `gs ll -S`. The merged/closed variants render as transient inline call-outs
+ * (not steady pills); their shamhub-driven screenshots are captured by the
+ * "merged + closed" describe block below, which merges one CR and closes
+ * another before launch.
  *
  * Linux-rendered snapshots — regenerate via the Docker compose harness.
  */
@@ -112,13 +113,17 @@ test.describe('CR status badges: merged + closed (shamhub)', () => {
 		const repoContainer = webview.locator('#repoContainer');
 		await webview.locator('.stack-item').first().waitFor({ state: 'visible', timeout: 60_000 });
 
-		// feat1's CR was merged (#1) and feat2's was closed (#2) before launch, so
-		// enabling forge status surfaces a "Merged" and a "Closed" badge.
+		// feat1's CR was merged (#1) and feat2's was closed (#2) before launch.
+		// Merged/closed are transient states (merged disappears on the next sync,
+		// closed is an error re-created on the next submit), so they render as
+		// inline call-outs (.cr-transient), NOT as the steady .tag-cr pill.
 		await enableRemoteForgeStatus(workbench);
-		await expect(webview.locator('.tag-cr-merged')).toHaveCount(1);
-		await expect(webview.locator('.tag-cr-closed')).toHaveCount(1);
-		await expect(webview.locator('.tag-cr', { hasText: 'Merged' })).toBeVisible();
-		await expect(webview.locator('.tag-cr', { hasText: 'Closed' })).toBeVisible();
+		await expect(webview.locator('.cr-transient-merged')).toHaveCount(1);
+		await expect(webview.locator('.cr-transient-closed')).toHaveCount(1);
+		// Neither merged nor closed should render the steady pill treatment.
+		await expect(webview.locator('.tag-cr')).toHaveCount(0);
+		await expect(webview.locator('.cr-transient', { hasText: 'Merged' })).toBeVisible();
+		await expect(webview.locator('.cr-transient', { hasText: 'Closed' })).toBeVisible();
 		await expect(repoContainer).toHaveScreenshot('cr-status-merged-closed.png');
 	});
 });

@@ -1,0 +1,2 @@
+kind: Changed
+body: 'Merged and closed Change Request states now render as transient inline call-outs instead of steady status pills. A merged CR shows a muted "Merged" note (it disappears on the next sync) and a closed CR shows an error-styled "Closed" call-out (it is re-created on the next submit), while the steady pill is now reserved for the open state.'

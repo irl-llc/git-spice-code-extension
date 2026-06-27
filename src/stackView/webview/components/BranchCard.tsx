@@ -108,24 +108,59 @@ function BranchHeader({
 	);
 }
 
-/** Icon + label for each change-request status, shown as a colored badge. */
-const CHANGE_STATUS_DISPLAY: Record<GitSpiceChangeStatus, { icon: string; label: string }> = {
-	open: { icon: 'codicon-git-pull-request', label: 'Open' },
-	merged: { icon: 'codicon-git-merge', label: 'Merged' },
-	closed: { icon: 'codicon-git-pull-request-closed', label: 'Closed' },
+/**
+ * Transient call-outs for non-steady CR states. Unlike `open` (a persistent,
+ * normal status), `merged` and `closed` are brief: a merged PR is removed on the
+ * next `repo sync`, and a closed PR is an error state re-created on the next
+ * `submit`. They read as "what just happened", not a steady status tag — so they
+ * render as inline notes (merged = informational, closed = error), never pills.
+ */
+const CHANGE_TRANSIENT_DISPLAY: Record<'merged' | 'closed', { icon: string; label: string; title: string }> = {
+	merged: {
+		icon: 'codicon-git-merge',
+		label: 'Merged',
+		title: 'Change request merged — this branch is removed on the next repo sync',
+	},
+	closed: {
+		icon: 'codicon-git-pull-request-closed',
+		label: 'Closed',
+		title: 'Change request closed — re-created on the next submit',
+	},
 };
 
-/** Colored badge showing the change-request (PR/MR) status from the forge. */
+/** Steady tag for the normal, active CR status. Only `open` is steady. */
 function ChangeStatusBadge({ status }: { status: GitSpiceChangeStatus }): JSX.Element {
 	// Defensive: a future CLI/forge status outside the known set would otherwise
-	// crash the webview on the destructure — fall back to the raw value.
-	const { icon, label } = CHANGE_STATUS_DISPLAY[status] ?? { icon: 'codicon-git-pull-request', label: status };
+	// crash the webview — fall back to a generic open-style tag with the raw value.
+	const label = status === 'open' ? 'Open' : status;
 	return (
 		<span className={`tag tag-cr tag-cr-${status}`} title={`Change request ${label.toLowerCase()}`}>
+			<i className="codicon codicon-git-pull-request" aria-hidden="true" />
+			<span>{label}</span>
+		</span>
+	);
+}
+
+/**
+ * Transient inline call-out for merged/closed CRs. Distinct from the steady
+ * `tag-cr` pill: a muted note for merged, an error note for closed.
+ */
+function CrTransientNote({ status }: { status: 'merged' | 'closed' }): JSX.Element {
+	const { icon, label, title } = CHANGE_TRANSIENT_DISPLAY[status];
+	return (
+		<span className={`cr-transient cr-transient-${status}`} title={title} role="status">
 			<i className={`codicon ${icon}`} aria-hidden="true" />
 			<span>{label}</span>
 		</span>
 	);
+}
+
+/** Renders the right CR affordance: steady tag for open, transient note for merged/closed. */
+function CrStatus({ status }: { status: GitSpiceChangeStatus }): JSX.Element {
+	if (status === 'merged' || status === 'closed') {
+		return <CrTransientNote status={status} />;
+	}
+	return <ChangeStatusBadge status={status} />;
 }
 
 interface BranchTagsProps {
@@ -154,7 +189,7 @@ function BranchBadges({ branch }: { branch: BranchViewModel }): JSX.Element {
 		<>
 			{branch.worktree ? <WorktreeBadge worktree={branch.worktree} /> : null}
 			{branch.restack ? <span className="tag tag-warning">Restack</span> : null}
-			{branch.change?.status ? <ChangeStatusBadge status={branch.change.status} /> : null}
+			{branch.change?.status ? <CrStatus status={branch.change.status} /> : null}
 			{comments && comments.total > 0 ? <CommentsIndicator comments={comments} /> : null}
 		</>
 	);

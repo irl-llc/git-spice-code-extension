@@ -295,12 +295,32 @@ button {
 	background-color: var(--vscode-charts-green, #3fb950);
 }
 
-.tag-cr-merged {
-	background-color: var(--vscode-charts-purple, #a371f7);
+/*
+ * Transient CR call-outs (merged/closed). NOT steady pills: these states are
+ * brief — merged goes away on the next sync, closed is an error re-created on
+ * the next submit — so they read as an inline "what just happened" note, not a
+ * persistent status tag. No filled background; colored icon + text instead.
+ */
+.cr-transient {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.18rem;
+	font-size: 0.6rem;
+	font-style: italic;
+	letter-spacing: 0;
 }
 
-.tag-cr-closed {
-	background-color: var(--vscode-charts-red, #f85149);
+.cr-transient .codicon {
+	font-size: 0.75rem;
+	line-height: 1;
+}
+
+.cr-transient-merged {
+	color: var(--vscode-charts-purple, #a371f7);
+}
+
+.cr-transient-closed {
+	color: var(--vscode-errorForeground, #f85149);
 }
 
 /*
