@@ -1,0 +1,2 @@
+kind: Added
+body: 'Branch cards now show a worktree badge when a branch is parked (checked out) in another git worktree. The badge displays the worktree name with a stable, deterministically-assigned color so each worktree is visually distinct at a glance.'

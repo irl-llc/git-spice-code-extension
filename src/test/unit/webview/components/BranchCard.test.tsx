@@ -303,6 +303,33 @@ describe('BranchCard', () => {
 			const indicator = container.querySelector('.comments-indicator');
 			assert.ok(indicator?.classList.contains('has-unresolved'));
 		});
+
+		it('renders a worktree badge with basename label and per-path color class when parked', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ worktree: '/home/u/repo-wt-a' })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const badge = container.querySelector('.tag-worktree');
+			assert.ok(badge, 'worktree badge should be present');
+			assert.ok(screen.getByText('repo-wt-a'), 'badge shows the worktree basename');
+			assert.ok(
+				/\btag-wt-[0-7]\b/.test(badge!.className),
+				`badge should carry a palette color class, got "${badge!.className}"`,
+			);
+			assert.strictEqual(badge!.getAttribute('title'), 'Checked out in worktree /home/u/repo-wt-a');
+		});
+
+		it('does not render a worktree badge when the branch is not parked elsewhere', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard branch={makeBranch()} postMessage={h.postMessage} setArticleClass={h.setArticleClass} />,
+			);
+			assert.strictEqual(container.querySelector('.tag-worktree'), null);
+		});
 	});
 
 	describe('header click bubble', () => {
