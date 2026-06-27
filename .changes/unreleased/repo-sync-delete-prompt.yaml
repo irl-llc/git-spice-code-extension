@@ -1,0 +1,2 @@
+kind: Fixed
+body: 'Fixed `gs repo sync` hanging on the branch-deletion confirmation: the prompt-matching regex no longer matched git-spice''s current prompt text (`Delete <branch>?: [y/N]`), so the extension never recognized and answered it. The matcher now accepts both the current and legacy prompt shapes, anchored on the `[y/N]` suffix.'

@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { GIT_SPICE_TIMEOUT_MS } from '../constants';
 import { toErrorMessage } from './error';
 import { getGitSpiceBinary, getWorkspaceFolderPath, NO_OPTIONAL_LOCKS_ENV } from './gitSpice';
+import { BRANCH_DELETE_PROMPT_PATTERN, extractBranchFromPrompt } from './repoSyncPrompt';
 
 export type RepoSyncResult = { value: { deletedBranches: string[]; syncedBranches: number } } | { error: string };
 
@@ -12,12 +13,6 @@ export type RepoSyncResult = { value: { deletedBranches: string[]; syncedBranche
 function parseSyncedBranchCount(output: string): number {
 	const match = output.match(/(\d+) branch(?:es)? synced/i);
 	return match ? Number.parseInt(match[1], 10) : 0;
-}
-
-/** Extracts branch name from a deletion prompt if present. */
-function extractBranchFromPrompt(text: string): string | undefined {
-	const match = text.match(/Delete branch '([^']+)'\? \[y\/N\]/i);
-	return match?.[1];
 }
 
 /** State for tracking repo sync process. */
@@ -59,7 +54,7 @@ function handleSyncStdout(ctx: SyncProcessContext, data: Buffer): void {
 	// Consume the matched portion so repeated data events don't re-trigger.
 	const branchName = extractBranchFromPrompt(state.outputBuffer);
 	if (branchName) {
-		state.outputBuffer = state.outputBuffer.replace(/Delete branch '[^']+'\? \[y\/N\]/i, '');
+		state.outputBuffer = state.outputBuffer.replace(BRANCH_DELETE_PROMPT_PATTERN, '');
 		handleBranchDeletePrompt(branchName, childProcess, state.deletedBranches, promptCallback);
 	}
 }
