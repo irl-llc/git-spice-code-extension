@@ -387,6 +387,20 @@ describe('BranchCard', () => {
 			assert.match(note?.getAttribute('title') ?? '', /re-created on the next submit/i);
 		});
 
+		it('marks the merged transient note with a removed-on-next-sync hint', () => {
+			const h = harness();
+			const { container } = render(
+				<BranchCard
+					branch={makeBranch({ change: { id: '#1', status: 'merged' } })}
+					postMessage={h.postMessage}
+					setArticleClass={h.setArticleClass}
+				/>,
+			);
+			const note = container.querySelector('.cr-transient-merged');
+			assert.ok(note, 'merged note present');
+			assert.match(note?.getAttribute('title') ?? '', /removed on the next repo sync/i);
+		});
+
 		it('omits the CR affordance entirely when change has no status', () => {
 			const h = harness();
 			const { container } = render(

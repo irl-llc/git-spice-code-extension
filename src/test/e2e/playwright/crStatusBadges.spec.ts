@@ -5,9 +5,10 @@
  *
  * After `gs stack submit`, each branch has an OPEN change request. With remote
  * forge status enabled, each branch card shows an "Open" badge fetched via
- * `gs ll -S`. The merged/closed badge variants are covered by the BranchCard
- * unit tests; their shamhub-driven screenshots arrive once the shamhub helper
- * gains merge/close commands (issue #36 slice 3).
+ * `gs ll -S`. The merged/closed variants render as transient inline call-outs
+ * (not steady pills); their shamhub-driven screenshots are captured by the
+ * "merged + closed" describe block below, which merges one CR and closes
+ * another before launch.
  *
  * Linux-rendered snapshots — regenerate via the Docker compose harness.
  */
