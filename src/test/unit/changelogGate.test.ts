@@ -159,6 +159,16 @@ describe('changelogGate', () => {
 			assert.strictEqual(decision.kind, 'skip');
 		});
 
+		it('skips bumps to the pinned git-spice version files (.gs-version / .gs-stock-version)', () => {
+			const decision = evaluateChangelogGate(
+				input({
+					changedPaths: ['.gs-version', '.gs-stock-version'],
+					addedPaths: ['.gs-stock-version'],
+				}),
+			);
+			assert.strictEqual(decision.kind, 'skip');
+		});
+
 		it('still requires a fragment when src/ (non-test) ships alongside test changes', () => {
 			const decision = evaluateChangelogGate(
 				input({
